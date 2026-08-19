@@ -57,7 +57,8 @@ h3{font-size:15px;font-weight:600}
 /* top bar */
 .top{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel);min-height:50px}
 .top .brand{display:flex;align-items:baseline;gap:10px;min-width:0}
-.top .brand h1{font-size:16px;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.top .brand h1,.top .brand .brandbtn{font-family:var(--disp);font-size:16px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;border:0;background:transparent;padding:4px 6px;border-radius:6px;color:var(--ink)}
+.top .brand .brandbtn:hover{background:var(--panel-2)}
 .top .brand input{font-family:var(--disp);font-weight:600;font-size:14px;border:1px solid transparent;background:transparent;border-radius:6px;padding:4px 6px;min-width:0;width:min(34vw,260px)}
 .top .brand input:hover,.top .brand input:focus{border-color:var(--line);background:var(--panel-2)}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
@@ -167,8 +168,181 @@ svg .plan-dim .item{opacity:.45}
   .top .tools .sp{display:none}
 }
 @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+
+/* ===== landing ===== */
+body.landing{overflow:auto}
+#app{height:100%}
+#landing{min-height:100%;background:var(--bg);color:var(--ink)}
+#landing .wrap{max-width:1140px;margin:0 auto;padding:0 24px}
+#landing h2{font-family:var(--disp);font-size:clamp(26px,3vw,36px);letter-spacing:-.02em;text-transform:none;color:var(--ink);font-weight:700;line-height:1.1;margin:0}
+#landing h3{font-family:var(--disp);font-size:18px;font-weight:600;letter-spacing:-.01em;margin:0}
+#landing p{margin:0}
+#landing button.primary{border-radius:9px}
+.lp-nav{display:flex;align-items:center;gap:28px;padding:18px 0}
+.lp-logo{font-family:var(--disp);font-weight:700;font-size:18px;letter-spacing:-.01em;display:flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none}
+.lp-mark{width:22px;height:22px;border:2px solid var(--accent);border-radius:4px;position:relative;flex:none}
+.lp-mark::after{content:"";position:absolute;left:4px;top:4px;width:9px;height:7px;background:var(--accent);border-radius:1px}
+.lp-nav nav{display:flex;gap:22px;margin-left:auto}
+.lp-nav nav a{color:var(--muted);text-decoration:none;font-size:14px}
+.lp-nav nav a:hover{color:var(--ink)}
+.lp-hero{display:grid;grid-template-columns:1.05fr 1fr;gap:56px;align-items:center;padding:48px 0 72px}
+.lp-hero h1{font-family:var(--disp);font-size:clamp(38px,5vw,62px);line-height:1.02;letter-spacing:-.028em;font-weight:700;margin:14px 0 18px;text-wrap:balance}
+.eyebrow{font-family:var(--disp);text-transform:uppercase;letter-spacing:.12em;font-size:11.5px;color:var(--accent);font-weight:600}
+.lede{font-size:18px;line-height:1.5;color:var(--muted);max-width:54ch}
+.lp-form{margin-top:28px}
+.lp-input{display:flex;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 6px 6px 12px;gap:10px}
+.lp-input:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.lp-input input{flex:1;border:0;background:transparent;font-size:16px;padding:10px 0;outline:none;min-width:0}
+.lp-portal{font-family:var(--mono);font-size:11px;color:var(--muted);padding:4px 8px;border-radius:6px;background:var(--panel-2);white-space:nowrap}
+.lp-portal.on{background:var(--accent-soft);color:var(--ink)}
+.lp-portal.bad{background:var(--warn-soft);color:var(--ink)}
+.lp-input button{padding:11px 16px;font-size:15px;white-space:nowrap}
+.lp-alt{display:flex;gap:10px;align-items:center;margin-top:12px;font-size:14px;color:var(--muted);flex-wrap:wrap}
+#landing button.link,#landing label.link{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-size:14px;font-weight:500}
+.lp-trust{display:flex;gap:18px;list-style:none;padding:0;margin:26px 0 0;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.lp-trust li::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok);margin-right:8px;vertical-align:middle}
+.lp-device{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;position:relative}
+.lp-device-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line-2);font-family:var(--disp);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lp-device-bar .dots{display:flex;gap:5px}.lp-device-bar .dots i{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.lp-canvas{position:relative;background:var(--canvas);height:min(540px,64vh)}
+.lp-canvas svg{width:100%;height:100%;display:block}
+.lp-pipe[hidden]{display:none}
+.lp-pipe{position:absolute;left:12px;bottom:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;min-width:230px;box-shadow:var(--shadow)}
+.lp-pipe .st{display:flex;align-items:center;gap:8px;color:var(--muted)}
+.lp-pipe .st i{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--line);display:inline-grid;place-items:center;font-size:9px;font-style:normal;flex:none}
+.lp-pipe .st.run{color:var(--ink)}.lp-pipe .st.run i{border-color:var(--accent);border-top-color:transparent;animation:lp-spin .8s linear infinite}
+.lp-pipe .st.done{color:var(--ink)}.lp-pipe .st.done i{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.lp-pipe .st.done i::before{content:"✓"}
+@keyframes lp-spin{to{transform:rotate(360deg)}}
+.lp-result{position:absolute;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:12px 16px;transform:translateY(105%);transition:transform .45s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;gap:7px}
+.lp-result.show{transform:none}
+.lp-result .k{font-family:var(--disp);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:600}
+.lp-result .k.note{color:var(--warn)}
+.lp-result .t{font-family:var(--disp);font-size:17px;font-weight:600;letter-spacing:-.01em}
+.lp-result .chips{display:flex;gap:6px;flex-wrap:wrap}
+.lp-result .chips span{font-family:var(--mono);font-size:11.5px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:6px;padding:3px 7px}
+.lp-result .row{display:flex;gap:10px;align-items:center;margin-top:4px}
+.lp-result .hint{font-size:12px;line-height:1.4}
+.trace .tr{stroke:var(--accent);stroke-width:4;fill:none;stroke-linejoin:round;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;animation:tr-draw 1s cubic-bezier(.4,0,.2,1) forwards;animation-delay:var(--d,0s)}
+.trace .tr.win{stroke:var(--teal,#6FA8A6);stroke-width:6}
+.trace .fx{fill:var(--accent);fill-opacity:.08;stroke:var(--accent);stroke-width:2;opacity:0;animation:tr-fade .5s forwards;animation-delay:var(--d,0s)}
+.trace .zn{fill:url(#lp-hatch);stroke:var(--muted);stroke-width:1.5;stroke-dasharray:6 4;opacity:0;animation:tr-fade .5s forwards;animation-delay:var(--d,0s)}
+.trace .lb{font-family:var(--disp);font-weight:600;font-size:15px;fill:#1B1F26;paint-order:stroke;stroke:rgba(255,255,255,.9);stroke-width:4;stroke-linejoin:round;opacity:0;animation:tr-fade .5s forwards;animation-delay:var(--d,0s)}
+.trace .dm{font-family:var(--mono);font-size:12px;fill:var(--accent);opacity:0;animation:tr-fade .5s forwards;animation-delay:var(--d,0s)}
+.trace .dim{stroke:var(--accent);stroke-width:1.5;opacity:0;animation:tr-fade .5s forwards;animation-delay:var(--d,0s)}
+.trace image{opacity:0;animation:tr-img 1s forwards}
+.trace.still .tr,.trace.still .fx,.trace.still .zn,.trace.still .lb,.trace.still .dm,.trace.still .dim,.trace.still image{animation:none;stroke-dashoffset:0;opacity:1}
+.trace.still image{opacity:.85}
+@keyframes tr-draw{to{stroke-dashoffset:0}}
+@keyframes tr-fade{to{opacity:1}}
+@keyframes tr-img{to{opacity:.85}}
+:root[data-theme="dark"] .trace image,.trace.dk image{opacity:.7}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .trace image{filter:saturate(.9)}}
+@media (prefers-reduced-motion: reduce){.trace .tr,.trace .fx,.trace .zn,.trace .lb,.trace .dm,.trace .dim,.trace image{animation:none;stroke-dashoffset:0;opacity:1}.trace image{opacity:.85}}
+.lp-section{padding:72px 0;border-top:1px solid var(--line-2)}
+.lp-section .head{display:flex;flex-direction:column;gap:10px;max-width:62ch;margin-bottom:40px}
+.lp-section .head p{color:var(--muted);font-size:17px;line-height:1.5}
+.lp-steps3{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;list-style:none;padding:0;margin:0}
+.lp-steps3 li{display:flex;flex-direction:column;gap:10px}
+.lp-steps3 .n{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:500}
+.lp-steps3 p{color:var(--muted);font-size:15px;line-height:1.5}
+.lp-feat{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.lp-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.lp-card .ill{background:var(--canvas);border-bottom:1px solid var(--line-2);aspect-ratio:16/8}
+.lp-card .ill svg{width:100%;height:100%;display:block}
+.lp-card .body{padding:18px 20px 20px;display:flex;flex-direction:column;gap:8px}
+.lp-card .body p{color:var(--muted);font-size:14.5px;line-height:1.5}
+.lp-example{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;box-shadow:var(--shadow)}
+.lp-example .thumb{background:var(--canvas);border-radius:10px;border:1px solid var(--line-2);height:360px;overflow:hidden}
+.lp-example .thumb svg{width:100%;height:100%}
+.lp-example .meta{display:flex;flex-direction:column;gap:12px}
+.lp-example .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px}
+.lp-example .kv b{font-weight:500;color:var(--muted)}.lp-example .kv span{font-family:var(--mono)}
+.lp-faq{display:grid;grid-template-columns:1fr 1fr;gap:14px 32px}
+.lp-faq details{border-top:1px solid var(--line-2);padding:14px 0}
+.lp-faq summary{cursor:pointer;font-weight:600;font-family:var(--disp);font-size:15px;list-style:none;display:flex;justify-content:space-between;gap:12px}
+.lp-faq summary::after{content:"+";color:var(--muted);font-weight:400}
+.lp-faq details[open] summary::after{content:"–"}
+.lp-faq details p{margin-top:8px;color:var(--muted);font-size:14.5px;line-height:1.55}
+.lp-foot{padding:36px 0 48px;border-top:1px solid var(--line-2);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:var(--muted);font-size:13px}
+.lp-cta{background:var(--ink);color:var(--bg);border-radius:18px;padding:44px 40px;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap}
+#landing .lp-cta h2{color:var(--bg)}
+#landing .lp-cta p{color:var(--bg);opacity:.75;max-width:48ch}
+.lp-cta button{background:var(--bg);color:var(--ink);border:0;padding:12px 18px;font-weight:600;font-size:15px;border-radius:9px}
+@media (max-width:900px){
+  .lp-hero{grid-template-columns:1fr;gap:32px;padding:28px 0 48px}
+  .lp-nav nav{display:none}
+  .lp-canvas{height:min(460px,70vh)}
+  .lp-steps3,.lp-feat,.lp-example,.lp-faq{grid-template-columns:1fr}
+  .lp-example .thumb{height:300px}
+  .lp-input{flex-wrap:wrap;padding:8px}.lp-input input{flex-basis:100%;order:-1;padding:8px 6px}.lp-input button{flex:1}
+  .lp-section{padding:52px 0}
+}
 </style>
-</head><body><div id="root"></div>
+</head><body><div id="landing" class="lp">
+<div class="wrap">
+ <header class="lp-nav"><a class="lp-logo" href="#top" id="top"><span class="lp-mark"></span>Will It Fit</a><nav><a href="#how">How it works</a><a href="#features">What you can do</a><a href="#example">Example</a><a href="#faq">FAQ</a></nav><button class="primary" id="nav-cta">Paste a listing</button></header>
+ <section class="lp-hero">
+  <div class="lp-hero-copy">
+   <p class="eyebrow">For buyers, renters and the people helping them move</p>
+   <h1>Paste a listing. Furnish it before you view it.</h1>
+   <p class="lede">Drop in a Rightmove or Zoopla link. We read the floor plan and hand you an interactive board — real room sizes, doors that swing, furniture you can drag — and a straight answer to “will the sofa fit?”</p>
+   <form id="lp-form" class="lp-form" novalidate>
+    <div class="lp-input"><span class="lp-portal" id="lp-portal">Listing link</span><input id="lp-url" type="url" placeholder="https://www.rightmove.co.uk/properties/…" autocomplete="off" spellcheck="false" aria-label="Property listing link"><button type="submit" class="primary" id="lp-go">Build my floor plan</button></div>
+    <div class="lp-alt"><button type="button" class="link" id="lp-example">Try the example listing</button><span>·</span><label class="link">Upload a floor plan instead<input id="lp-file" type="file" accept="image/*" hidden></label></div>
+   </form>
+   <ul class="lp-trust"><li>Rightmove · Zoopla · OnTheMarket</li><li>Free while in beta</li><li>Your plan stays in your browser</li></ul>
+  </div>
+  <div class="lp-hero-art">
+   <div class="lp-device"><div class="lp-device-bar"><span id="lp-devtitle">Floor plan · Maple House, Chineham</span><span class="dots"><i></i><i></i><i></i></span></div>
+    <div class="lp-canvas" id="lp-canvas"></div>
+    <div class="lp-pipe" id="lp-pipe" hidden></div>
+    <div class="lp-result" id="lp-result"></div>
+   </div>
+  </div>
+ </section>
+</div>
+<section class="lp-section" id="how"><div class="wrap">
+ <div class="head"><p class="eyebrow">How it works</p><h2>Three steps from listing to layout</h2><p>No measuring tape, no graph paper. The numbers come from the agent’s floor plan; the judgement stays with you.</p></div>
+ <ol class="lp-steps3">
+  <li><span class="n">01</span><h3>Paste the link</h3><p>Any Rightmove, Zoopla or OnTheMarket listing with a floor plan. No account, nothing to install.</p></li>
+  <li><span class="n">02</span><h3>We read the plan</h3><p>Walls, doors, windows, the bath and the built-in wardrobe — scaled from the quoted room dimensions so 3.60 m on the plan is 3.60 m on your board.</p></li>
+  <li><span class="n">03</span><h3>Furnish and share</h3><p>Drag real-size furniture, see the gap to every wall, get warned when a door won’t open — then send the board to whoever you’re deciding with.</p></li>
+ </ol>
+</div></section>
+<section class="lp-section" id="features"><div class="wrap">
+ <div class="head"><p class="eyebrow">What you can do</p><h2>Built for the questions you actually ask on a viewing</h2></div>
+ <div class="lp-feat">
+  <div class="lp-card"><div class="ill" id="ill-1"></div><div class="body"><h3>Will the bed fit — and which way?</h3><p>Drop in a king bed and the board shows the gap to every wall. Turn it with one key and compare.</p></div></div>
+  <div class="lp-card"><div class="ill" id="ill-2"></div><div class="body"><h3>Does the door still open?</h3><p>Every door swings on the board. Park a sofa in its arc and you’ll be told, before the removal van does.</p></div></div>
+  <div class="lp-card"><div class="ill" id="ill-3"></div><div class="body"><h3>How big is it, really?</h3><p>Measure any two points, switch between metres and feet, and type in the exact size of the sofa you’re eyeing up.</p></div></div>
+  <div class="lp-card"><div class="ill" id="ill-4"></div><div class="body"><h3>Mind the eaves</h3><p>Low-headroom zones and fixed fittings are marked, so the wardrobe doesn’t end up where you can’t stand.</p></div></div>
+ </div>
+</div></section>
+<section class="lp-section" id="example"><div class="wrap">
+ <div class="head"><p class="eyebrow">Try it on a real listing</p><h2>Maple House, Reading Road, Chineham</h2><p>A one-bed first-floor maisonette from Rightmove, traced from the agent’s floor plan and checked against the quoted dimensions.</p></div>
+ <div class="lp-example"><div class="thumb" id="lp-thumb"></div>
+  <div class="meta"><p class="eyebrow">Rightmove · 87856044</p><h3>1-bed maisonette, Basingstoke RG24</h3>
+   <div class="kv"><b>Floor area</b><span>50.9 m² + 1.6 m² eaves</span><b>Living / kitchen</b><span>6.52 × 4.01 m max</span><b>Bedroom</b><span>3.60 × 4.10 m into bay</span><b>Traced</b><span>6 rooms · 7 doors · 3 windows</span></div>
+   <div class="row"><button class="primary" id="lp-open-example">Open the planner</button><button class="ghost" id="lp-view-listing">View the listing</button></div>
+  </div>
+ </div>
+</div></section>
+<section class="lp-section" id="faq"><div class="wrap">
+ <div class="head"><p class="eyebrow">FAQ</p><h2>Good questions</h2></div>
+ <div class="lp-faq">
+  <details><summary>Do I need an account?</summary><p>No. Your board is saved in your own browser. Share it with a board code or a link — the other person doesn’t need an account either.</p></details>
+  <details><summary>How accurate are the room sizes?</summary><p>We scale the agent’s plan from the dimensions they quote, and it usually agrees to within a few centimetres. Agents’ plans are “for identification only”, so for anything tight, measure on the viewing.</p></details>
+  <details><summary>What if the listing has no floor plan?</summary><p>Upload a photo or scan of one (or sketch it): set the scale with two clicks, trace the rooms in a minute, and carry on as normal.</p></details>
+  <details><summary>Which portals work?</summary><p>Rightmove, Zoopla and OnTheMarket links. In this preview, automatic reading runs for the example listing; other links open the example so you can see the full flow, and uploads are traced by you in the plan editor.</p></details>
+  <details><summary>Is my data private?</summary><p>Yes. The plan and your furniture live in your browser. Nothing is uploaded unless you choose to share a board code or save into a shared page.</p></details>
+  <details><summary>Can two of us work on the same board?</summary><p>Yes — swap board codes, or save into a shared page if you’re using one. Live co-editing is on the list.</p></details>
+ </div>
+</div></section>
+<section class="lp-section"><div class="wrap"><div class="lp-cta"><div><h2>Stop guessing at the viewing.</h2><p>Paste the listing, drag the sofa in, and find out before you fall for the place.</p></div><button id="lp-cta2">Build my floor plan</button></div></div></section>
+<footer class="lp-foot"><div class="wrap" style="display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap"><span>© 2026 Will It Fit · preview build</span><span>Floor plan data © the listing agents · we read, we don’t store</span></div></footer>
+</div>
+<div id="app" hidden><div id="root"></div></div>
 <script id="state" type="application/json">null</script>
 <script id="app">
 (function(){
@@ -179,7 +353,8 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clone=o=>JSON.parse(JSON.stringify(o));
 const FONTS='https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap';
-const KEY='willitfit:draft:v1';
+const KEY='willitfit:draft:v2';
+const LANDING_SRC=(function(){const el=document.getElementById('landing');return el?el.outerHTML:'';})();
 const PLAN_ID='maple-house-2026-08-19b';
 
 /* ---------- palette & library ---------- */
@@ -222,7 +397,7 @@ const SAMPLE={"v":1,"title":"Maple House, Reading Road \u2014 first floor","unit
 /* ---------- app state ---------- */
 let state, hist=[], future=[], sel=null, mode='furnish', view={k:0.8,tx:40,ty:40};
 let readOnly=false, caps={artifact:null,downloads:null}, measure=null, calib=null, issues={}, issueList=[], drag=null, libDrag=null;
-let pointers=new Map(), libTab='Library', saveTimer=null, toastTimer=null, fromLink=false, planUpdated=false;
+let pointers=new Map(), libTab='Library', saveTimer=null, toastTimer=null, fromLink=false, planUpdated=false, planId='maple', planBase=null, plannerReady=false;
 const root=$('#root');
 
 /* ---------- units ---------- */
@@ -272,25 +447,26 @@ function undo(){if(!hist.length)return;future.push(JSON.stringify(state));state=
 function redo(){if(!future.length)return;hist.push(JSON.stringify(state));state=JSON.parse(future.pop());sel=null;changed();}
 function changed(opts){computeIssues();render();if(!(opts&&opts.noPanels))renderPanels();scheduleSave();}
 function embeddedState(){try{return JSON.parse($('#state').textContent||'null');}catch(e){return null;}}
-function baseKey(){const e=embeddedState();return e?(e.savedAt||'embedded'):'plan:'+PLAN_ID;}
-function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{try{localStorage.setItem(KEY,JSON.stringify({base:baseKey(),t:Date.now(),state}));}catch(e){}},400);}
+function draftKey(){return KEY+':'+planId;}
+function baseKey(){const e=embeddedState();return (e&&e.planId===planId)?(e.savedAt||'embedded'):'plan:'+PLAN_ID+':'+planId;}
+function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{try{localStorage.setItem(draftKey(),JSON.stringify({base:baseKey(),t:Date.now(),state}));}catch(e){}},400);}
 function b64url(bytes){let s='';for(let i=0;i<bytes.length;i+=0x8000)s+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
 function unb64url(str){str=str.replace(/-/g,'+').replace(/_/g,'/');while(str.length%4)str+='=';const bin=atob(str);const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);return out;}
 async function encodeState(s){const json=JSON.stringify(s);let bytes=new TextEncoder().encode(json),p='j';if(window.CompressionStream){try{const cs=new CompressionStream('deflate-raw');const w=cs.writable.getWriter();w.write(bytes);w.close();bytes=new Uint8Array(await new Response(cs.readable).arrayBuffer());p='d';}catch(e){}}return p+b64url(bytes);}
 async function decodeState(str){str=str.trim();const p=str[0];let bytes=unb64url(str.slice(1));if(p==='d'){const ds=new DecompressionStream('deflate-raw');const w=ds.writable.getWriter();w.write(bytes);w.close();bytes=new Uint8Array(await new Response(ds.readable).arrayBuffer());}else if(p!=='j')throw new Error('bad code');return JSON.parse(new TextDecoder().decode(bytes));}
 function validState(s){return s&&Array.isArray(s.rooms)&&Array.isArray(s.items)&&Array.isArray(s.openings);}
-async function loadInitial(){
- const m=/[#&]s=([^&]+)/.exec(location.hash||'');
- if(m){try{const s=await decodeState(decodeURIComponent(m[1]));if(validState(s)){fromLink=true;return s;}}catch(e){console.warn('link state unreadable',e);}}
- const emb=embeddedState();const base=emb?(emb.savedAt||'embedded'):'plan:'+PLAN_ID;
- try{const d=JSON.parse(localStorage.getItem(KEY)||'null');if(d&&validState(d.state)){if(d.base===base)return d.state;planUpdated=true;localStorage.removeItem(KEY);}}catch(e){}
- return validState(emb)?emb:clone(SAMPLE);}
+async function sharedFromHash(){const m=/[#&]s=([^&]+)/.exec(location.hash||'');if(!m)return null;try{const s=await decodeState(decodeURIComponent(m[1]));if(validState(s))return s;}catch(e){console.warn('link state unreadable',e);}return null;}
+function loadFor(base,fresh){planUpdated=false;if(fresh)return clone(base);
+ const emb=embeddedState();const embOk=emb&&emb.planId===planId&&validState(emb);const bk=baseKey();
+ try{const d=JSON.parse(localStorage.getItem(draftKey())||'null');if(d&&validState(d.state)){if(d.base===bk)return d.state;planUpdated=true;localStorage.removeItem(draftKey());}}catch(e){}
+ return embOk?clone(emb):clone(base);}
+const BLANK={v:1,title:'My floor plan',units:'m',grid:5,snap:true,wall:14,savedAt:null,rooms:[],openings:[],items:[],underlay:null};
 
 /* ---------- page source for "save to page" ---------- */
 function pageHTML(s){const json=JSON.stringify(s).replace(/</g,'\\u003c');
  return '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Will It Fit</title>'+
  '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="'+FONTS+'">'+
- '<style id="css">'+$('#css').textContent+'</style></head><body><div id="root"></div>'+
+ '<style id="css">'+$('#css').textContent+'</style></head><body>'+LANDING_SRC+'<div id="app" hidden><div id="root"></div></div>'+
  '<script id="state" type="application/json">'+json+'<\/script><script id="app">'+$('#app').textContent+'<\/script></body></html>';}
 
 /* ---------- view helpers ---------- */
@@ -508,7 +684,7 @@ function libDown(e,def){const b=e.currentTarget;b.setPointerCapture(e.pointerId)
 function shell(){root.innerHTML=
  '<div class="top">'+
   '<button class="icon narrow-only" id="btn-lib" title="Library" aria-label="Open library">☰</button>'+
-  '<div class="brand"><h1>Will It Fit</h1><input id="title" type="text" aria-label="Board name" value=""></div>'+
+  '<div class="brand"><button class="brandbtn" id="home" title="Back to the start page">‹ Will It Fit</button><input id="title" type="text" aria-label="Board name" value=""></div>'+
   '<div class="tools"><div class="seg" id="modes"><button data-mode="furnish">Furnish</button><button data-mode="plan">Edit plan</button><button data-mode="measure">Measure</button></div>'+
   '<div class="sp"></div>'+
   '<div class="seg" id="units"><button data-u="m">m</button><button data-u="ft">ft</button></div>'+
@@ -533,6 +709,7 @@ function shell(){root.innerHTML=
  svg.addEventListener('pointermove',e=>{if(drag)return;const w=toWorld(e);const r=roomAt(w.x,w.y);$('#cursorchip').textContent=r?r.name:'';});
  document.addEventListener('keydown',onKey);
  $('#title').addEventListener('change',e=>{pushHistory();state.title=e.target.value;changed();});
+ $('#home').addEventListener('click',()=>{showLanding();});
  $$('#modes button').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
  $$('#units button').forEach(b=>b.addEventListener('click',()=>{state.units=b.dataset.u;changed();}));
  $('#snap').addEventListener('click',()=>{state.snap=!state.snap;changed();});
@@ -685,7 +862,7 @@ async function openShare(){const canSave=!!caps.artifact&&!readOnly;const code=a
  h+='<section><h2>Board code</h2><div class="hint">Paste this into the box on any copy of this page to load the layout. '+(state.underlay&&state.underlay.src?'The floor-plan image is left out of codes and links to keep them short; save to page to keep it.':'')+'</div><textarea id="code" rows="3" readonly>'+esc(code)+'</textarea><div class="row"><button id="copy-code">Copy code</button><span class="hint mono">'+code.length+' chars</span></div></section>';
  h+='<section><h2>Load a board code</h2><textarea id="code-in" rows="2" placeholder="Paste a board code here"></textarea><div class="row"><button id="load-code">Load</button></div></section>';
  if(caps.downloads)h+='<section><h2>Download</h2><div class="row"><button id="dl-json">Board file (.json)</button><button id="dl-png">Picture (.png)</button></div></section>';
- h+='<section><h2>Start over</h2><div class="row"><button id="reset-sample">Reset to the traced plan (fittings only)</button><button id="reset-saved"'+(embeddedState()?'':' disabled')+'>Back to last saved version</button></div></section>';
+ h+='<section><h2>Start over</h2><div class="row"><button id="reset-sample">Reset this plan (fittings only)</button><button id="reset-saved"'+(embeddedState()?'':' disabled')+'>Back to last saved version</button></div></section>';
  openDlg(h);
  $('#dlg-x').addEventListener('click',closeDlg);
  const sp=$('#save-page');if(sp)sp.addEventListener('click',saveToPage);
@@ -694,15 +871,15 @@ async function openShare(){const canSave=!!caps.artifact&&!readOnly;const code=a
  $('#load-code').addEventListener('click',async()=>{try{const s=await decodeState($('#code-in').value);if(!validState(s))throw 0;pushHistory();const u=state.underlay;state=s;if(!state.underlay&&u)state.underlay=u;sel=null;changed();closeDlg();fitView();toast('Board loaded');}catch(e){toast('That code could not be read');}});
  const dj=$('#dl-json');if(dj)dj.addEventListener('click',async()=>{try{await caps.downloads.save({filename:(state.title||'board').replace(/[^\w\- ]+/g,'').trim()+'.json',data:JSON.stringify(state,null,1)});toast('Saved');}catch(e){if(e&&e.code!=='declined')toast('Download not available here');}});
  const dp=$('#dl-png');if(dp)dp.addEventListener('click',exportPNG);
- $('#reset-sample').addEventListener('click',()=>{if(!confirm('Replace everything with the original traced plan? Your furniture will be removed.'))return;pushHistory();state=clone(SAMPLE);sel=null;changed();closeDlg();fitView();});
+ $('#reset-sample').addEventListener('click',()=>{if(!confirm('Reset this plan to how it started? Your furniture will be removed.'))return;pushHistory();state=clone(planBase||SAMPLE);sel=null;changed();closeDlg();fitView();});
  const rs=$('#reset-saved');if(rs)rs.addEventListener('click',()=>{const e=embeddedState();if(!e)return;if(!confirm('Discard your local changes and go back to the last version saved into the page?'))return;pushHistory();state=e;sel=null;changed();closeDlg();fitView();});}
 function stripForShare(s){const c=clone(s);if(c.underlay){c.underlay=Object.assign({},c.underlay,{src:null});if(!c.underlay.src)c.underlay=null;}return c;}
 function shareBase(){try{if(document.referrer&&/^https?:\/\//.test(document.referrer)&&window.self!==window.top)return document.referrer;}catch(e){}return location.href;}
 async function copyText(t){try{await navigator.clipboard.writeText(t);return true;}catch(e){try{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();const ok=document.execCommand('copy');ta.remove();return ok;}catch(e2){return false;}}}
 async function saveToPage(){if(!caps.artifact)return;const btn=$('#save-page');if(btn){btn.disabled=true;btn.textContent='Saving…';}
- const s=clone(state);s.savedAt=new Date().toISOString();
+ const s=clone(state);s.savedAt=new Date().toISOString();s.planId=planId;
  try{sessionStorage.setItem('willitfit:justsaved','1');}catch(e){}
- try{localStorage.removeItem(KEY);}catch(e){}
+ try{localStorage.removeItem(draftKey());}catch(e){}
  try{await caps.artifact.publish(pageHTML(s));state.savedAt=s.savedAt;toast('Saved — reloading');}
  catch(e){const code=e&&e.code;try{sessionStorage.removeItem('willitfit:justsaved');}catch(x){}scheduleSave();
   if(code==='not_writer'||code==='not_granted'||code==='consent_required'||code==='not_declared'||code==='capability_disabled'||code==='capability_removed'){readOnly=true;toast('This view is read-only — use a board code to share instead');closeDlg();}
@@ -723,15 +900,90 @@ async function exportPNG(){try{const b=planBounds();const pad=40;const W=b.w+pad
  catch(e){if(!(e&&e.code==='declined'))toast('Could not make the picture');}}
 
 /* ---------- boot ---------- */
-async function boot(){shell();state=await loadInitial();
- if(!state.units)state.units='m';if(!state.grid)state.grid=5;if(!state.wall)state.wall=12;if(state.snap==null)state.snap=true;
- computeIssues();renderPanels();fitView();
- try{if(sessionStorage.getItem('willitfit:justsaved')){sessionStorage.removeItem('willitfit:justsaved');toast('Saved into the page');}}catch(e){}
- if(fromLink)toast('Loaded the layout from the link');else if(planUpdated)toast('The floor plan was updated — starting from the new plan');
+async function initPlanner(){if(plannerReady)return;plannerReady=true;shell();
  if(window.claude&&typeof window.claude.use==='function'){try{caps.artifact=await window.claude.use('artifact');}catch(e){}try{caps.downloads=await window.claude.use('downloads');}catch(e){}}
  $('#board').addEventListener('pointerdown',()=>{if(window.innerWidth<=920)closeDrawers();},true);}
-boot();
-window.willitfit={pageHTML:()=>pageHTML(Object.assign(clone(state),{savedAt:new Date().toISOString()})),state:()=>state};
+async function openPlan(id,base,opts){opts=opts||{};await initPlanner();planId=id;planBase=clone(base);hist=[];future=[];sel=null;mode='furnish';measure=null;calib=null;libTab='Library';
+ state=loadFor(base,!!opts.fresh);if(!state.units)state.units='m';if(!state.grid)state.grid=5;if(!state.wall)state.wall=14;if(state.snap==null)state.snap=true;
+ showPlanner();computeIssues();renderPanels();fitView();
+ try{if(sessionStorage.getItem('willitfit:justsaved')){sessionStorage.removeItem('willitfit:justsaved');toast('Saved into the page');}}catch(e){}
+ if(opts.fromLink)toast('Loaded the layout from the link');else if(planUpdated)toast('This plan was updated — starting from the new version');
+ if(opts.file)loadUnderlay(opts.file);}
+function showPlanner(){document.body.classList.remove('landing');$('#landing').hidden=true;$('#app').hidden=false;render();}
+function showLanding(){document.body.classList.add('landing');$('#app').hidden=true;$('#landing').hidden=false;window.scrollTo(0,0);}
+window.willitfit={pageHTML:()=>pageHTML(Object.assign(clone(state),{savedAt:new Date().toISOString(),planId})),state:()=>state,open:openPlan};
+/* ===================== landing / product front end ===================== */
+const EXAMPLE={planId:'maple',title:'Maple House, Reading Road, Chineham',sub:'1-bed first-floor maisonette · Basingstoke RG24',portal:'Rightmove',id:'87856044',url:'https://www.rightmove.co.uk/properties/87856044',price:'£230,000 · sold STC',area:'50.9 m² + 1.6 m² eaves',rooms:6,doors:7,windows:3};
+function detectPortal(url){url=(url||'').trim();if(!url)return null;let m;
+ if((m=/rightmove\.co\.uk\/properties\/(\d+)/i.exec(url)))return {portal:'Rightmove',id:m[1]};
+ if((m=/zoopla\.co\.uk\/(?:for-sale|to-rent|new-homes)\/details\/(\d+)/i.exec(url)))return {portal:'Zoopla',id:m[1]};
+ if((m=/onthemarket\.com\/details\/(\d+)/i.exec(url)))return {portal:'OnTheMarket',id:m[1]};
+ if(/^https?:\/\//i.test(url)||/\.(co\.uk|com)\b/i.test(url))return {portal:'Other',id:null};
+ return null;}
+/* Server hand-off point. In the shipped product this calls the tracing service:
+   POST /api/trace {url} -> {listing, plan} with the floor plan image, rooms, openings and fittings.
+   In this preview the example listing is pre-traced; any other listing opens the example in preview mode. */
+async function resolveListing(url){const p=detectPortal(url)||{portal:'Other',id:null};const exact=p.portal==='Rightmove'&&p.id===EXAMPLE.id;return {exact,portal:p.portal,id:p.id,listing:EXAMPLE,plan:SAMPLE};}
+function traceSVG(still){const u=SAMPLE.underlay;const k=1;let o='';const vb='-40 -90 750 990';
+ o+='<svg class="trace'+(still?' still':'')+'" viewBox="'+vb+'" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><defs><pattern id="lp-hatch" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="14" stroke="var(--muted)" stroke-width="2" opacity=".6"/></pattern><clipPath id="lp-clip"><rect x="-34" y="-84" width="714" height="960"/></clipPath></defs>';
+ if(u&&u.src)o+='<image clip-path="url(#lp-clip)" href="'+u.src+'" x="'+u.x+'" y="'+u.y+'" width="'+(u.iw*u.cmPerPx)+'" height="'+(u.ih*u.cmPerPx)+'" preserveAspectRatio="none"/>';
+ let d=0.9;SAMPLE.rooms.forEach((r,i)=>{o+='<rect class="tr" pathLength="1" x="'+r.x+'" y="'+r.y+'" width="'+r.w+'" height="'+r.d+'" style="--d:'+(d+i*0.22).toFixed(2)+'s"/>';});
+ d+=SAMPLE.rooms.length*0.22;SAMPLE.openings.forEach((op,i)=>{const t=SAMPLE.wall;const tr='translate('+op.x+' '+op.y+') rotate('+op.rot+')';const dd=(d+i*0.12).toFixed(2)+'s';
+  if(op.kind==='door'){const sg=op.flip?-1:1;o+='<g transform="'+tr+'"><path class="tr" pathLength="1" style="--d:'+dd+'" d="M 0 0 L 0 '+(sg*op.w)+' A '+op.w+' '+op.w+' 0 0 '+(sg>0?0:1)+' '+op.w+' 0"/></g>';}
+  else o+='<g transform="'+tr+'"><line class="tr win" pathLength="1" style="--d:'+dd+'" x1="0" y1="0" x2="'+op.w+'" y2="0"/></g>';});
+ d+=SAMPLE.openings.length*0.12+0.2;SAMPLE.items.forEach((it,i)=>{const pts=toWorldPoly(it,outlineLocal(it)).map(p=>p.join(',')).join(' ');o+='<polygon class="'+(it.zone?'zn':'fx')+'" points="'+pts+'" style="--d:'+(d+i*0.07).toFixed(2)+'s"/>';});
+ d+=SAMPLE.items.length*0.07+0.2;
+ const groups={};SAMPLE.rooms.forEach(r=>{const key=r.name;(groups[key]=groups[key]||[]).push(r);});
+ Object.keys(groups).forEach((name,i)=>{const r=groups[name].slice().sort((a,b)=>b.w*b.d-a.w*a.d)[0];if(r.w<120||r.d<60)return;o+='<text class="lb" x="'+(r.x+14)+'" y="'+(r.y+26)+'" style="--d:'+(d+i*0.1).toFixed(2)+'s">'+esc(name)+'</text>';});
+ d+=0.5;
+ // dimension lines (living width, bedroom depth)
+ o+='<g style="--d:'+d.toFixed(2)+'s"><line class="dim" style="--d:'+d.toFixed(2)+'s" x1="0" y1="-68" x2="652" y2="-68"/><line class="dim" style="--d:'+d.toFixed(2)+'s" x1="0" y1="-76" x2="0" y2="-60"/><line class="dim" style="--d:'+d.toFixed(2)+'s" x1="652" y1="-76" x2="652" y2="-60"/><text class="dm" style="--d:'+d.toFixed(2)+'s" x="326" y="-74" text-anchor="middle">6.52 m</text></g>';
+ o+='<g><line class="dim" style="--d:'+(d+0.1).toFixed(2)+'s" x1="690" y1="415" x2="690" y2="824"/><line class="dim" style="--d:'+(d+0.1).toFixed(2)+'s" x1="682" y1="415" x2="698" y2="415"/><line class="dim" style="--d:'+(d+0.1).toFixed(2)+'s" x1="682" y1="824" x2="698" y2="824"/><text class="dm" style="--d:'+(d+0.1).toFixed(2)+'s" x="700" y="624" transform="rotate(90 700 624)" text-anchor="middle">4.10 m into bay</text></g>';
+ o+='</svg>';return o;}
+const PIPE=[['Fetching the listing',500],['Finding the floor plan',1100],['Reading walls, doors and windows',3300],['Checking the quoted dimensions',4300],['Placing fixed fittings',5100],['Ready',5600]];
+let pipeTimers=[];
+function runPipeline(res){const pipe=$('#lp-pipe'),result=$('#lp-result'),canvas=$('#lp-canvas');pipeTimers.forEach(clearTimeout);pipeTimers=[];result.classList.remove('show');
+ $('#lp-devtitle').textContent=(res.portal!=='Other'?res.portal+(res.id?' · '+res.id:''):'Listing')+' · reading floor plan';
+ pipe.hidden=false;pipe.innerHTML=PIPE.map((p,i)=>'<div class="st" data-i="'+i+'"><i></i><span>'+p[0]+'</span></div>').join('');
+ canvas.innerHTML=traceSVG(false);
+ const reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;const speed=reduce?0.15:1;
+ PIPE.forEach((p,i)=>{pipeTimers.push(setTimeout(()=>{$$('.st',pipe).forEach((el,j)=>{el.classList.toggle('done',j<=i);el.classList.toggle('run',j===i+1);});if(i===0){$$('.st',pipe)[0].classList.add('done');}},p[1]*speed));});
+ $$('.st',pipe)[0].classList.add('run');
+ pipeTimers.push(setTimeout(()=>{pipe.hidden=true;$('#lp-devtitle').textContent='Floor plan · '+res.listing.title;
+  result.innerHTML=(res.exact?'<span class="k">Found your listing</span>':'<span class="k note">Preview mode · showing our example</span><span class="hint muted">Automatic reading of other listings runs on our server, which isn’t connected in this preview. Here’s the full flow on Maple House — or upload your floor plan and trace it yourself.</span>')+
+   '<span class="t">'+esc(res.listing.title)+'</span><div class="chips"><span>'+esc(res.listing.sub)+'</span><span>'+esc(res.listing.area)+'</span><span>'+res.listing.rooms+' rooms</span><span>'+res.listing.doors+' doors</span><span>'+res.listing.windows+' windows</span></div>'+
+   '<div class="row"><button class="primary" id="lp-open">Open the planner</button><button class="ghost" id="lp-again">Try another link</button></div>';
+  result.classList.add('show');$('#lp-open').addEventListener('click',()=>openPlan('maple',SAMPLE));$('#lp-again').addEventListener('click',()=>{result.classList.remove('show');$('#lp-url').focus();$('#lp-url').select();$('#lp-devtitle').textContent='Floor plan · Maple House, Chineham';});
+ },(PIPE[PIPE.length-1][1]+350)*speed));}
+function illSVG(n){const W=320,H=160;let o='<svg viewBox="0 0 320 160" xmlns="http://www.w3.org/2000/svg" style="font-family:var(--mono);font-size:10px">';
+ o+='<defs><pattern id="ig" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="var(--grid)" stroke-width="1"/></pattern><pattern id="ih" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="var(--muted)" stroke-width="1.2" opacity=".6"/></pattern></defs><rect width="320" height="160" fill="url(#ig)"/>';
+ const room=(x,y,w,h)=>'<rect x="'+(x-7)+'" y="'+(y-7)+'" width="'+(w+14)+'" height="'+(h+14)+'" fill="var(--wall)"/><rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="var(--floor-oak)"/>';
+ if(n===1){o+=room(60,22,200,118);o+='<rect x="120" y="30" width="78" height="100" rx="2" fill="#EDE6D6" stroke="var(--accent)" stroke-width="1.5"/><line x1="120" y1="34" x2="198" y2="34" stroke="rgba(20,24,32,.45)" stroke-width="3"/><rect x="128" y="40" width="26" height="14" rx="3" fill="none" stroke="rgba(20,24,32,.45)"/><rect x="164" y="40" width="26" height="14" rx="3" fill="none" stroke="rgba(20,24,32,.45)"/>';
+  o+='<line x1="60" y1="80" x2="120" y2="80" stroke="var(--accent)" stroke-dasharray="4 3"/><text x="90" y="75" text-anchor="middle" fill="var(--accent)">0.75 m</text><line x1="198" y1="80" x2="260" y2="80" stroke="var(--accent)" stroke-dasharray="4 3"/><text x="229" y="75" text-anchor="middle" fill="var(--accent)">1.36 m</text><circle cx="159" cy="18" r="5" fill="var(--panel)" stroke="var(--accent)" stroke-width="1.5"/>';}
+ if(n===2){o+=room(40,22,240,118);o+='<rect x="38" y="56" width="10" height="48" fill="var(--floor)"/><path d="M 48 56 A 48 48 0 0 1 96 104" fill="none" stroke="var(--muted)" stroke-dasharray="4 3"/><line x1="48" y1="56" x2="96" y2="56" stroke="var(--wall)" stroke-width="2"/>';
+  o+='<rect x="70" y="78" width="110" height="50" fill="#9EACBD" stroke="var(--warn)" stroke-width="2"/><rect x="70" y="78" width="110" height="12" fill="none" stroke="rgba(20,24,32,.45)"/><text x="125" y="110" text-anchor="middle" fill="#1B1F26" font-family="var(--sans)" font-size="10">3-seat sofa</text>';
+  o+='<rect x="190" y="30" width="84" height="18" rx="4" fill="var(--warn-soft)"/><rect x="190" y="30" width="3" height="18" fill="var(--warn)"/><text x="200" y="42" fill="var(--ink)" font-family="var(--sans)">blocks a door</text>';}
+ if(n===3){o+=room(60,22,200,118);o+='<line x1="70" y1="130" x2="250" y2="130" stroke="var(--warn)" stroke-width="1.5"/><circle cx="70" cy="130" r="3" fill="var(--warn)"/><circle cx="250" cy="130" r="3" fill="var(--warn)"/><text x="160" y="122" text-anchor="middle" fill="var(--warn)" font-weight="600" font-size="12">3.60 m</text>';
+  o+='<rect x="90" y="40" width="60" height="50" fill="var(--panel)" stroke="var(--line)" rx="4"/><text x="96" y="54" fill="var(--muted)" font-size="8">WIDTH (CM)</text><text x="96" y="76" fill="var(--ink)" font-size="14">210</text><rect x="160" y="40" width="60" height="50" fill="var(--panel)" stroke="var(--line)" rx="4"/><text x="166" y="54" fill="var(--muted)" font-size="8">DEPTH (CM)</text><text x="166" y="76" fill="var(--ink)" font-size="14">95</text>';
+  o+='<rect x="228" y="40" width="26" height="22" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="241" y="55" text-anchor="middle" fill="var(--ink)">m</text><rect x="228" y="66" width="26" height="22" rx="4" fill="var(--panel)" stroke="var(--line)"/><text x="241" y="81" text-anchor="middle" fill="var(--muted)">ft</text>';}
+ if(n===4){o+=room(40,22,240,118);o+='<rect x="180" y="90" width="100" height="50" fill="url(#ih)" stroke="var(--muted)" stroke-dasharray="5 4"/><text x="230" y="118" text-anchor="middle" fill="var(--muted)" font-family="var(--sans)">low headroom</text>';
+  o+='<rect x="40" y="40" width="60" height="100" fill="#8F6B4B" stroke="rgba(20,24,32,.55)"/><text x="70" y="94" text-anchor="middle" fill="#F6F7F4" font-family="var(--sans)" transform="rotate(-90 70 94)">Built-in wardrobe</text>';
+  o+='<rect x="150" y="70" width="70" height="40" fill="#D6B27E" stroke="var(--warn)" stroke-width="2"/><text x="185" y="94" text-anchor="middle" fill="#1B1F26" font-family="var(--sans)">Desk</text>';}
+ return o+'</svg>';}
+function initLanding(){const urlEl=$('#lp-url');
+ $('#lp-canvas').innerHTML=traceSVG(false);$('#lp-thumb').innerHTML=traceSVG(true);[1,2,3,4].forEach(n=>{$('#ill-'+n).innerHTML=illSVG(n);});
+ const upd=()=>{const p=detectPortal(urlEl.value);const el=$('#lp-portal');if(!urlEl.value.trim()){el.textContent='Listing link';el.className='lp-portal';}else if(!p){el.textContent='Not a listing link';el.className='lp-portal bad';}else{el.textContent=p.portal==='Other'?'Link':p.portal+(p.id?' · '+p.id:'');el.className='lp-portal on';}};
+ urlEl.addEventListener('input',upd);
+ $('#lp-form').addEventListener('submit',async e=>{e.preventDefault();const v=urlEl.value.trim();if(!v){urlEl.focus();return;}if(!detectPortal(v)){upd();urlEl.focus();return;}const res=await resolveListing(v);if(window.innerWidth<=900)$('#lp-canvas').scrollIntoView({behavior:'smooth',block:'center'});runPipeline(res);});
+ $('#lp-example').addEventListener('click',()=>{urlEl.value=EXAMPLE.url;upd();$('#lp-form').requestSubmit();});
+ $('#lp-file').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;e.target.value='';openPlan('upload',BLANK,{fresh:true,file:f});});
+ $('#lp-open-example').addEventListener('click',()=>openPlan('maple',SAMPLE));
+ $('#lp-view-listing').addEventListener('click',()=>{window.open(EXAMPLE.url,'_blank','noopener');});
+ ['nav-cta','lp-cta2'].forEach(id=>$('#'+id).addEventListener('click',()=>{window.scrollTo({top:0,behavior:'smooth'});setTimeout(()=>urlEl.focus(),300);}));}
+async function start(){const shared=await sharedFromHash();if(shared){await openPlan('shared',shared,{fresh:true,fromLink:true});initLanding();return;}
+ showLanding();initLanding();}
+start();
+
 })();
 </script>
 </body></html>
