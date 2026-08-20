@@ -818,7 +818,10 @@ function parseDimsText(text){
  const pm=/(£|€|\$)\s?(\d[\d,]*(?:\.\d\d)?)/.exec(t);
  if(pm)out.price=pm[1]+pm[2];
  for(const line of t.split(/[\n\r]+/)){const s=line.trim();
-  if(s.length>=4&&/[a-z]{3}/i.test(s)&&!/^https?:/i.test(s)&&s.replace(/[^0-9]/g,'').length<s.length/3){out.name=s.slice(0,70);break;}}
+  if(s.length>=4&&/[a-z]{3}/i.test(s)&&!/^https?:/i.test(s)&&s.replace(/[^0-9]/g,'').length<s.length/3){
+   /* trim the size/price tail off single-line pastes: "Sofa W: 226cm D: 96cm" -> "Sofa" */
+   const nm=s.replace(/\s*[\(\-–·|,]*\s*(?:[HWDL]\s*[:x×]|width|depth|height|length|dimensions?|size\b|\d+(?:[.,]\d+)?\s*(?:cm|mm|m)\b|£|€|\$).*$/i,'').trim();
+   out.name=(nm.length>=4?nm:s).slice(0,70);break;}}
  if(dims.w==null||dims.d==null)return null;
  out.w=Math.round(dims.w);out.d=Math.round(dims.d);
  if(dims.h!=null)out.h=Math.round(dims.h);
