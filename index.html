@@ -236,6 +236,11 @@ body.landing{overflow:auto}
 @keyframes tr-draw{to{stroke-dashoffset:0}}
 @keyframes tr-fade{to{opacity:1}}
 @keyframes tr-img{to{opacity:.85}}
+.lp-scan{position:absolute;inset:0;display:grid;place-items:center;overflow:hidden;background:#fff}
+.lp-scan img{max-width:94%;max-height:94%;object-fit:contain}
+.lp-scan i{position:absolute;left:0;right:0;top:4%;height:3px;background:var(--accent);box-shadow:0 0 16px var(--accent);opacity:.85;animation:lp-scanline 1.4s ease-in-out infinite alternate}
+@keyframes lp-scanline{from{top:4%}to{top:94%}}
+@media (prefers-reduced-motion: reduce){.lp-scan i{animation:none;top:50%}}
 :root[data-theme="dark"] .trace image,.trace.dk image{opacity:.7}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .trace image{filter:saturate(.9)}}
 @media (prefers-reduced-motion: reduce){.trace .tr,.trace .fx,.trace .zn,.trace .lb,.trace .dm,.trace .dim,.trace image{animation:none;stroke-dashoffset:0;opacity:1}.trace image{opacity:.85}}
@@ -291,7 +296,7 @@ body.landing{overflow:auto}
     <div class="lp-input"><span class="lp-portal" id="lp-portal">Listing link</span><input id="lp-url" type="url" placeholder="https://www.rightmove.co.uk/properties/…" autocomplete="off" spellcheck="false" aria-label="Property listing link"><button type="submit" class="primary" id="lp-go">Build my floor plan</button></div>
     <div class="lp-alt"><button type="button" class="link" id="lp-example">Try the example listing</button><span>·</span><label class="link">Upload a floor plan instead<input id="lp-file" type="file" accept="image/*" hidden></label></div>
    </form>
-   <ul class="lp-trust"><li>Rightmove · Zoopla · OnTheMarket</li><li>Free while in beta</li><li>Your plan stays in your browser</li></ul>
+   <ul class="lp-trust"><li>Rightmove · Zoopla · or upload a plan</li><li>Traced in your browser — nothing stored</li><li>Free while in beta</li></ul>
   </div>
   <div class="lp-hero-art">
    <div class="lp-device"><div class="lp-device-bar"><span id="lp-devtitle">Floor plan · Maple House, Chineham</span><span class="dots"><i></i><i></i><i></i></span></div>
@@ -306,7 +311,7 @@ body.landing{overflow:auto}
  <div class="head"><p class="eyebrow">How it works</p><h2>Three steps from listing to layout</h2><p>No measuring tape, no graph paper. The numbers come from the agent’s floor plan; the judgement stays with you.</p></div>
  <ol class="lp-steps3">
   <li><span class="n">01</span><h3>Paste the link</h3><p>Any Rightmove, Zoopla or OnTheMarket listing with a floor plan. No account, nothing to install.</p></li>
-  <li><span class="n">02</span><h3>We read the plan</h3><p>Walls, doors, windows, the bath and the built-in wardrobe — scaled from the quoted room dimensions so 3.60 m on the plan is 3.60 m on your board.</p></li>
+  <li><span class="n">02</span><h3>We read the plan</h3><p>Your browser fetches the listing, finds the agent’s floor plan and traces the walls, rooms and doors — scaled from the quoted floor area, so 3.60 m on the plan is 3.60 m on your board.</p></li>
   <li><span class="n">03</span><h3>Furnish and share</h3><p>Drag real-size furniture, see the gap to every wall, get warned when a door won’t open — then send the board to whoever you’re deciding with.</p></li>
  </ol>
 </div></section>
@@ -333,8 +338,8 @@ body.landing{overflow:auto}
  <div class="lp-faq">
   <details><summary>Do I need an account?</summary><p>No. Your board is saved in your own browser. Share it with a board code or a link — the other person doesn’t need an account either.</p></details>
   <details><summary>How accurate are the room sizes?</summary><p>We scale the agent’s plan from the dimensions they quote, and it usually agrees to within a few centimetres. Agents’ plans are “for identification only”, so for anything tight, measure on the viewing.</p></details>
-  <details><summary>What if the listing has no floor plan?</summary><p>Upload a photo or scan of one (or sketch it): set the scale with two clicks, trace the rooms in a minute, and carry on as normal.</p></details>
-  <details><summary>Which portals work?</summary><p>Rightmove, Zoopla and OnTheMarket links. In this preview, automatic reading runs for the example listing; other links open the example so you can see the full flow, and uploads are traced by you in the plan editor.</p></details>
+  <details><summary>What if the listing has no floor plan?</summary><p>Upload a photo or scan of one and we’ll auto-trace it. If the drawing is too unusual to trace, it stays as a background image: set the scale with two clicks and trace the rooms in a minute.</p></details>
+  <details><summary>Which portals work?</summary><p>Rightmove and Zoopla read automatically — we fetch the listing in your browser, find the floor plan and trace it on the spot. Other portals are hit and miss. If a link won’t read (portals do sometimes block), upload the floor plan image and we trace that instead.</p></details>
   <details><summary>Is my data private?</summary><p>Yes. The plan and your furniture live in your browser. Nothing is uploaded unless you choose to share a board code or save into a shared page.</p></details>
   <details><summary>Can two of us work on the same board?</summary><p>Yes — swap board codes, or save into a shared page if you’re using one. Live co-editing is on the list.</p></details>
  </div>
@@ -912,6 +917,642 @@ async function openPlan(id,base,opts){opts=opts||{};await initPlanner();planId=i
 function showPlanner(){document.body.classList.remove('landing');$('#landing').hidden=true;$('#app').hidden=false;render();}
 function showLanding(){document.body.classList.add('landing');$('#app').hidden=true;$('#landing').hidden=false;window.scrollTo(0,0);}
 window.willitfit={pageHTML:()=>pageHTML(Object.assign(clone(state),{savedAt:new Date().toISOString(),planId})),state:()=>state,open:openPlan};
+/* ===================== Will It Fit — floor plan auto-tracer =====================
+   Pure client-side CV: ImageData in, planner-ready rooms/doors/scale out.
+   Method: binarize -> thick-wall mask (morphological opening) -> exterior flood
+   (barrier = anything drawn, closed to seal small gaps) -> distance transform of
+   free interior -> room cores -> priority-flood watershed -> valley classification
+   by physical gap measurement (door vs same-room joint) -> rectangle decomposition.
+   Scale: quoted floor area if the listing has one, else median door gap = 76 cm.
+================================================================================= */
+function autotraceFloorplan(img, opts){
+ opts=opts||{};
+ const W=img.width, H=img.height, N=W*H, px=img.data;
+ const idx=(x,y)=>y*W+x;
+
+ /* ---- 1. luminance (alpha composited onto white) ---- */
+ const lum=new Uint8Array(N);
+ for(let i=0,j=0;i<N;i++,j+=4){const a=px[j+3]/255;lum[i]=(px[j]*0.299+px[j+1]*0.587+px[j+2]*0.114)*a+255*(1-a);}
+
+ /* ---- 2. thresholds: Otsu (clamped) for walls, near-white for "anything drawn" ---- */
+ const hist=new Float64Array(256);
+ for(let i=0;i<N;i++)hist[lum[i]]++;
+ let sum=0;for(let t=0;t<256;t++)sum+=t*hist[t];
+ let sumB=0,wB=0,maxVar=0,otsu=127;
+ for(let t=0;t<256;t++){wB+=hist[t];if(!wB)continue;const wF=N-wB;if(!wF)break;sumB+=t*hist[t];
+  const mB=sumB/wB,mF=(sum-sumB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>maxVar){maxVar=v;otsu=t;}}
+ const th=Math.max(80,Math.min(185,otsu));
+ const dark=new Uint8Array(N);
+ let darkCount=0;
+ for(let i=0;i<N;i++){if(lum[i]<th){dark[i]=1;darkCount++;}}
+ if(darkCount<N*0.005||darkCount>N*0.65)return {ok:false,reason:'not a line drawing'};
+
+ /* ---- helpers ---- */
+ const BIG=1e9;
+ function dtToSet(mask){ // chamfer distance to nearest mask==1
+  const dt=new Float32Array(N);
+  for(let i=0;i<N;i++)dt[i]=mask[i]?0:BIG;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=idx(x,y);if(!dt[i])continue;let v=dt[i];
+   if(x>0)v=Math.min(v,dt[i-1]+1);if(y>0)v=Math.min(v,dt[i-W]+1);
+   if(x>0&&y>0)v=Math.min(v,dt[i-W-1]+1.4);if(x<W-1&&y>0)v=Math.min(v,dt[i-W+1]+1.4);dt[i]=v;}
+  for(let y=H-1;y>=0;y--)for(let x=W-1;x>=0;x--){const i=idx(x,y);if(!dt[i])continue;let v=dt[i];
+   if(x<W-1)v=Math.min(v,dt[i+1]+1);if(y<H-1)v=Math.min(v,dt[i+W]+1);
+   if(x<W-1&&y<H-1)v=Math.min(v,dt[i+W+1]+1.4);if(x>0&&y<H-1)v=Math.min(v,dt[i+W-1]+1.4);dt[i]=v;}
+  return dt;}
+ function dilate(mask,r){const dt=dtToSet(mask);const out=new Uint8Array(N);for(let i=0;i<N;i++)out[i]=dt[i]<=r?1:0;return out;}
+ function erode(mask,r){const inv=new Uint8Array(N);for(let i=0;i<N;i++)inv[i]=mask[i]?0:1;const dt=dtToSet(inv);const out=new Uint8Array(N);for(let i=0;i<N;i++)out[i]=dt[i]>r?1:0;return out;}
+
+ /* ---- 3. thick walls only: opening removes text/furniture/door-arc thin lines.
+        Radius adapts to the plan's wall thickness (p80 of half-thickness). ---- */
+ let openR=1.4;
+ {const inv=new Uint8Array(N);for(let i=0;i<N;i++)inv[i]=dark[i]?0:1;
+  const dIn=dtToSet(inv);
+  const halves=[];
+  for(let i=0;i<N;i+=7)if(dark[i])halves.push(dIn[i]);
+  if(halves.length>50){halves.sort((a,b)=>a-b);
+   const p80=halves[(halves.length*0.8)|0];
+   openR=Math.max(1.4,Math.min(3.4,p80*0.5));}}
+ let wall=dilate(erode(dark,openR),openR+0.5);
+ let wallCount=0;for(let i=0;i<N;i++)wallCount+=wall[i];
+ if(wallCount<darkCount*0.18){wall=dark;} // thin-wall CAD plan: keep everything
+
+ /* ---- 4. exterior flood fill. Barrier = drawn LINES and EDGES (dark pixels or
+        local gradient), so tinted room fills and coloured page backgrounds stay
+        open. Sheet/card frames spanning the whole image are erased so the flood
+        can reach the page background. ---- */
+ const q=new Int32Array(N);let qh=0,qt=0;
+ const barrier0=new Uint8Array(N);
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=idx(x,y);
+  if(lum[i]<150){barrier0[i]=1;continue;}
+  const l=lum[i];
+  let g=0;
+  if(x>0)g=Math.max(g,Math.abs(l-lum[i-1]));
+  if(x<W-1)g=Math.max(g,Math.abs(l-lum[i+1]));
+  if(y>0)g=Math.max(g,Math.abs(l-lum[i-W]));
+  if(y<H-1)g=Math.max(g,Math.abs(l-lum[i+W]));
+  if(g>22)barrier0[i]=1;}
+ /* frame erasure: a thin connected barrier component spanning nearly the whole
+    image is a sheet border, not a wall */
+ {const flab=new Int32Array(N);flab.fill(-1);let nf=0;
+  for(let s=0;s<N;s++){
+   if(flab[s]>=0||!barrier0[s])continue;
+   let x0=W,y0=H,x1=0,y1=0,area=0;
+   qh=0;qt=0;q[qt++]=s;flab[s]=nf;
+   while(qh<qt){const i=q[qh++];const x=i%W,y=(i/W)|0;area++;
+    if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;
+    if(x>0&&barrier0[i-1]&&flab[i-1]<0){flab[i-1]=nf;q[qt++]=i-1;}
+    if(x<W-1&&barrier0[i+1]&&flab[i+1]<0){flab[i+1]=nf;q[qt++]=i+1;}
+    if(y>0&&barrier0[i-W]&&flab[i-W]<0){flab[i-W]=nf;q[qt++]=i-W;}
+    if(y<H-1&&barrier0[i+W]&&flab[i+W]<0){flab[i+W]=nf;q[qt++]=i+W;}}
+   if((x1-x0)>=0.88*W&&(y1-y0)>=0.88*H&&area<=0.03*(x1-x0)*(y1-y0)){
+    for(let i=0;i<N;i++)if(flab[i]===nf)barrier0[i]=0;}
+   nf++;}}
+ const rc=Math.max(6,Math.round(0.012*Math.max(W,H)));
+ const barrier=erode(dilate(barrier0,rc),rc); // closing seals archways/drawing breaks
+ const exterior=new Uint8Array(N);
+ qh=0;qt=0;
+ for(let x=0;x<W;x++){for(const y of [0,H-1]){const i=idx(x,y);if(!barrier[i]&&!exterior[i]){exterior[i]=1;q[qt++]=i;}}}
+ for(let y=0;y<H;y++){for(const x of [0,W-1]){const i=idx(x,y);if(!barrier[i]&&!exterior[i]){exterior[i]=1;q[qt++]=i;}}}
+ while(qh<qt){const i=q[qh++];const x=i%W,y=(i/W)|0;
+  if(x>0&&!barrier[i-1]&&!exterior[i-1]){exterior[i-1]=1;q[qt++]=i-1;}
+  if(x<W-1&&!barrier[i+1]&&!exterior[i+1]){exterior[i+1]=1;q[qt++]=i+1;}
+  if(y>0&&!barrier[i-W]&&!exterior[i-W]){exterior[i-W]=1;q[qt++]=i-W;}
+  if(y<H-1&&!barrier[i+W]&&!exterior[i+W]){exterior[i+W]=1;q[qt++]=i+W;}}
+
+ /* ---- 5. free interior ---- */
+ const wallD=dilate(wall,1.1);
+ const free=new Uint8Array(N);let freeCount=0;      // segmentation: thick walls block
+ let freeAreaCount=0;                               // area estimate: anything open
+ for(let i=0;i<N;i++){
+  if(exterior[i])continue;
+  if(!wallD[i]){free[i]=1;freeCount++;}
+  if(!dark[i])freeAreaCount++;}
+ if(freeCount<N*0.03)return {ok:false,reason:'no enclosed rooms found'};
+
+ /* ---- 6. distance transform of free space ---- */
+ const obstacle=new Uint8Array(N);
+ for(let i=0;i<N;i++)obstacle[i]=free[i]?0:1;
+ const dt=dtToSet(obstacle);
+
+ /* free-space run length through (cx,cy) along an axis */
+ function freeRun(cx,cy,horiz,cap){
+  if(cx<0||cy<0||cx>=W||cy>=H)return {len:0,a:0,b:0};
+  if(!free[idx(cx,cy)])return {len:0,a:0,b:0};
+  let a=horiz?cx:cy,b=a;
+  if(horiz){while(a>0&&free[idx(a-1,cy)]&&cx-a<cap)a--;while(b<W-1&&free[idx(b+1,cy)]&&b-cx<cap)b++;}
+  else{while(a>0&&free[idx(cx,a-1)]&&cy-a<cap)a--;while(b<H-1&&free[idx(cx,b+1)]&&b-cy<cap)b++;}
+  return {len:b-a+1,a,b};}
+
+ /* ---- 7. provisional scale ---- */
+ let cmPerPx=opts.areaCm2?Math.sqrt(opts.areaCm2/freeAreaCount):Math.sqrt(600000/freeAreaCount);
+ cmPerPx=Math.max(0.2,Math.min(20,cmPerPx));
+
+ const GAP_FIX=5; // AA + wall dilation slack eaten from each measured gap
+
+ /* ---- 8. analyse at a given scale: cores -> saddle sweep -> doors/merges -> masks.
+    Saddle sweep: activate free pixels in order of descending dt with union-find.
+    The pixel that first connects two cored regions IS the bottleneck between them:
+    its dt is the passage half-width and its position is the passage centre. ---- */
+ function analyse(cmPP){
+  const coreTh=36/cmPP; // half-width for a room to seed itself (72 cm wide after wall slack)
+  const minCore=20;     // the dt bar already guarantees a real open pocket; keep tiny lobbies
+  /* cores */
+  const coreLabel=new Int32Array(N);coreLabel.fill(-1);
+  let nCores0=0;const sizes=[];
+  for(let s=0;s<N;s++){
+   if(coreLabel[s]>=0||!free[s]||dt[s]<coreTh)continue;
+   let size=0;qh=0;qt=0;q[qt++]=s;coreLabel[s]=nCores0;
+   while(qh<qt){const i=q[qh++];size++;const x=i%W,y=(i/W)|0;
+    if(x>0&&coreLabel[i-1]<0&&free[i-1]&&dt[i-1]>=coreTh){coreLabel[i-1]=nCores0;q[qt++]=i-1;}
+    if(x<W-1&&coreLabel[i+1]<0&&free[i+1]&&dt[i+1]>=coreTh){coreLabel[i+1]=nCores0;q[qt++]=i+1;}
+    if(y>0&&coreLabel[i-W]<0&&free[i-W]&&dt[i-W]>=coreTh){coreLabel[i-W]=nCores0;q[qt++]=i-W;}
+    if(y<H-1&&coreLabel[i+W]<0&&free[i+W]&&dt[i+W]>=coreTh){coreLabel[i+W]=nCores0;q[qt++]=i+W;}}
+   sizes.push(size);nCores0++;}
+  const keep=new Int32Array(nCores0);let nCores=0;
+  for(let l=0;l<nCores0;l++)keep[l]=sizes[l]>=minCore?nCores++:-1;
+  if(!nCores)return null;
+  for(let i=0;i<N;i++)coreLabel[i]=coreLabel[i]>=0?keep[coreLabel[i]]:-1;
+  if(opts.debug){const cxs=new Float64Array(nCores),cys=new Float64Array(nCores),cns=new Float64Array(nCores);
+   for(let i=0;i<N;i++){const l=coreLabel[i];if(l<0)continue;cxs[l]+=i%W;cys[l]+=(i/W)|0;cns[l]++;}
+   for(let l=0;l<nCores;l++)console.log('core',l,'at',Math.round(cxs[l]/cns[l]),Math.round(cys[l]/cns[l]),'px',cns[l]);}
+
+  /* saddle sweep */
+  const parent=new Int32Array(N);parent.fill(-1); // -1 inactive; else uf parent (self = root)
+  const rootCore=new Int32Array(N);               // valid at roots
+  const find=i=>{while(parent[i]!==i){parent[i]=parent[parent[i]];i=parent[i];}return i;};
+  const gParent=new Int32Array(nCores);for(let g2=0;g2<nCores;g2++)gParent[g2]=g2;
+  const gFind=a=>{while(gParent[a]!==a){gParent[a]=gParent[gParent[a]];a=gParent[a];}return a;};
+  const MERGE_W=130, DOOR_MIN=46;
+  const capPx=Math.round(500/cmPP);
+  const seenPair=new Set();
+  const doorCands=[],pinholes=[];
+  /* snap a saddle to the narrowest free run in its neighbourhood: the physical gap */
+  function snapToGap(p){
+   const px0=p%W,py0=(p/W)|0;const win=Math.round(30/cmPP);
+   let best=null;
+   for(let yy=Math.max(1,py0-win);yy<=Math.min(H-2,py0+win);yy+=2)
+    for(let xx=Math.max(1,px0-win);xx<=Math.min(W-2,px0+win);xx+=2){
+     const i2=idx(xx,yy);if(!free[i2])continue;
+     const rH=freeRun(xx,yy,true,capPx),rV=freeRun(xx,yy,false,capPx);
+     const horiz=rH.len<=rV.len;const run=horiz?rH:rV;
+     if(run.len<8)continue;
+     if(!best||run.len<best.run.len)best={x:xx,y:yy,horiz,run};}
+   return best;}
+  /* bucket free px by descending dt (0.5 px resolution) */
+  {const nb2=[];let maxB=0;
+   const bOf=new Int32Array(N);
+   for(let i=0;i<N;i++){if(!free[i])continue;const b=Math.min(4000,(dt[i]*2)|0);bOf[i]=b;if(b>maxB)maxB=b;}
+   const counts=new Int32Array(maxB+2);
+   let nFree=0;
+   for(let i=0;i<N;i++)if(free[i]){counts[bOf[i]]++;nFree++;}
+   const starts=new Int32Array(maxB+2);
+   {let acc=0;for(let b=maxB;b>=0;b--){starts[b]=acc;acc+=counts[b];}}
+   const order=new Int32Array(nFree);
+   {const fill=new Int32Array(maxB+2);
+    for(let i=0;i<N;i++)if(free[i]){const b=bOf[i];order[starts[b]+fill[b]++]=i;}}
+   for(let oi=0;oi<nFree;oi++){
+    const i=order[oi];
+    parent[i]=i;rootCore[i]=coreLabel[i];
+    const x=i%W,y=(i/W)|0;
+    for(const n of [x>0?i-1:-1,x<W-1?i+1:-1,y>0?i-W:-1,y<H-1?i+W:-1]){
+     if(n<0||parent[n]<0)continue;
+     const ra=find(i),rb=find(n);
+     if(ra===rb)continue;
+     const A=rootCore[ra],B=rootCore[rb];
+     if(A>=0&&B>=0&&A!==B){
+      const gA=gFind(A),gB=gFind(B);
+      if(gA!==gB){
+       const key=gA<gB?gA+':'+gB:gB+':'+gA;
+       if(!seenPair.has(key)){
+        seenPair.add(key);
+        const snap=snapToGap(i);
+        const wPhys=snap?(snap.run.len+GAP_FIX)*cmPP:0;
+        if(opts.debug)console.log('saddle',A,'-',B,'at',x,y,'wEst',Math.round(2*(dt[i]+3)*cmPP),'wPhys',Math.round(wPhys));
+        if(wPhys>=MERGE_W){gParent[gB>gA?gB:gA]=gA<gB?gA:gB;}
+        else if(wPhys>=DOOR_MIN)doorCands.push({a:A,b:B,px:idx(snap.x,snap.y),snap});
+        else if(snap)pinholes.push({px:idx(snap.x,snap.y),r:snap.run.len+3});
+       }}}
+     parent[rb]=ra;
+     rootCore[ra]=A>=0?A:B;
+    }}}
+
+  /* doors from the snapped gaps */
+  const doors=[];
+  for(const d of doorCands){
+   if(gFind(d.a)===gFind(d.b))continue; // absorbed by an open-plan merge after all
+   const {x,y,horiz,run}=d.snap;
+   doors.push({a:d.a,b:d.b,horiz,gapPx:run.len+GAP_FIX,px:d.px,
+    x:horiz?run.a-2:x,y:horiz?y:run.a-2});}
+
+  /* groups */
+  const groupOf=new Int32Array(nCores);let nGroups=0;
+  {const seen=new Map();
+   for(let l=0;l<nCores;l++){const r=gFind(l);if(!seen.has(r))seen.set(r,nGroups++);groupOf[l]=seen.get(r);}}
+  /* groups with a door to another group, or built from an open-plan merge of
+     several cores, are real rooms; a lone doorless group is a legend box or
+     sealed text block — unless the whole plan is a single space */
+  const connected=new Set();
+  for(const d of doors){connected.add(groupOf[d.a]);connected.add(groupOf[d.b]);}
+  {const coreCount=new Int32Array(nGroups);
+   for(let l=0;l<nCores;l++)coreCount[groupOf[l]]++;
+   for(let g2=0;g2<nGroups;g2++)if(coreCount[g2]>=2)connected.add(g2);}
+
+  /* final region masks: priority flood from cores, blocked at door gaps so
+     rooms don't spill through their doorways */
+  const blocked=new Uint8Array(N);
+  const blockAt=(p,r)=>{const px0=p%W,py0=(p/W)|0;
+   for(let yy=Math.max(0,py0-r);yy<=Math.min(H-1,py0+r);yy++)
+    for(let xx=Math.max(0,px0-r);xx<=Math.min(W-1,px0+r);xx++)
+     blocked[idx(xx,yy)]=1;};
+  for(const d of doors)blockAt(d.px,Math.ceil(d.gapPx/2)+2);
+  for(const p of pinholes)blockAt(p.px,p.r);
+  const label=new Int32Array(N);
+  for(let i=0;i<N;i++)label[i]=coreLabel[i];
+  {const maxD2=Math.ceil(coreTh)+1;
+   const buckets=[];for(let b=0;b<=maxD2;b++)buckets.push([]);
+   const inQ=new Uint8Array(N);
+   const bOf2=i=>Math.max(0,Math.min(maxD2,Math.floor(dt[i])));
+   for(let i=0;i<N;i++){
+    if(label[i]<0)continue;const x=i%W,y=(i/W)|0;
+    for(const n of [x>0?i-1:-1,x<W-1?i+1:-1,y>0?i-W:-1,y<H-1?i+W:-1])
+     if(n>=0&&free[n]&&!blocked[n]&&label[n]<0&&!inQ[n]){inQ[n]=1;buckets[bOf2(n)].push(n);}}
+   for(let b=maxD2;b>=0;b--){
+    const bk=buckets[b];
+    for(let z=0;z<bk.length;z++){
+     const i=bk[z];if(label[i]>=0)continue;
+     const x=i%W,y=(i/W)|0;let best=-1,bd=-1;
+     for(const n of [x>0?i-1:-1,x<W-1?i+1:-1,y>0?i-W:-1,y<H-1?i+W:-1])
+      if(n>=0&&label[n]>=0&&dt[n]>bd){bd=dt[n];best=label[n];}
+     if(best<0)continue;
+     label[i]=best;
+     for(const n of [x>0?i-1:-1,x<W-1?i+1:-1,y>0?i-W:-1,y<H-1?i+W:-1])
+      if(n>=0&&free[n]&&!blocked[n]&&label[n]<0){const nb=bOf2(n);if(nb>=b){bk.push(n);}else if(!inQ[n]){inQ[n]=1;buckets[nb].push(n);}}}}}
+  /* fill the door-blocked pixels back in (plain BFS from labelled neighbours)
+     so masks reach their walls and rooms don't get notches at doorways */
+  {qh=0;qt=0;
+   for(let i=0;i<N;i++){
+    if(label[i]<0||!free[i])continue;const x=i%W,y=(i/W)|0;
+    for(const n of [x>0?i-1:-1,x<W-1?i+1:-1,y>0?i-W:-1,y<H-1?i+W:-1])
+     if(n>=0&&free[n]&&blocked[n]&&label[n]<0){label[n]=label[i];q[qt++]=n;}}
+   while(qh<qt){const i=q[qh++];const x=i%W,y=(i/W)|0;
+    for(const n of [x>0?i-1:-1,x<W-1?i+1:-1,y>0?i-W:-1,y<H-1?i+W:-1])
+     if(n>=0&&free[n]&&blocked[n]&&label[n]<0){label[n]=label[i];q[qt++]=n;}}}
+  return {seg:{label,nLab:nCores},groupOf,nGroups,doors,connected};
+ }
+
+ let A=analyse(cmPerPx);
+ if(!A)return {ok:false,reason:'no rooms detected'};
+
+ /* ---- 11. finalize scale (iterate: better scale -> better thresholds -> better doors) ---- */
+ let scaleSource='listing';
+ if(!opts.areaCm2){
+  scaleSource='assumed';
+  for(let it=0;it<3;it++){
+   const widths=A.doors.map(d=>d.gapPx*cmPerPx).filter(w=>w>44&&w<135).sort((a,b)=>a-b);
+   if(!widths.length)break;
+   const med=widths[(widths.length-1)>>1];
+   const f=75/med; // internal door gaps on UK agent plans centre on ~75 cm
+   if(!(f>0.45&&f<2.2))break;
+   scaleSource='door';
+   if(Math.abs(f-1)<0.02)break;
+   cmPerPx*=f;
+   const A2=analyse(cmPerPx);
+   if(!A2)break;
+   A=A2;
+  }
+ }
+
+ /* ---- 12. rectangle decomposition per group ---- */
+ const {seg,groupOf,nGroups}=A;
+ const gmask=new Int32Array(N);gmask.fill(-1);
+ const gArea=new Array(nGroups).fill(0);
+ for(let i=0;i<N;i++){const l=seg.label[i];if(l>=0){gmask[i]=groupOf[l];gArea[groupOf[l]]++;}}
+ function largestRect(g,taken){
+  const hgt=new Int32Array(W);let best=null,bestA=0;
+  for(let y=0;y<H;y++){
+   for(let x=0;x<W;x++){const i=idx(x,y);hgt[x]=(gmask[i]===g&&!taken[i])?hgt[x]+1:0;}
+   const stack=[];
+   for(let x=0;x<=W;x++){const h=x<W?hgt[x]:0;let lx=x;
+    while(stack.length&&stack[stack.length-1][1]>=h){const [sxx,sh]=stack.pop();const a=sh*(x-sxx);
+     if(a>bestA){bestA=a;best={x:sxx,y:y-sh+1,w:x-sxx,h:sh};}lx=sxx;}
+    stack.push([lx,h]);}}
+  return best;}
+ const MIN_DIM=46/cmPerPx; // rects thinner than ~46 cm are drawing junk
+ const roomsOut=[];
+ for(let g=0;g<nGroups;g++){
+  if(gArea[g]*cmPerPx*cmPerPx<15000)continue; // < 1.5 m^2
+  const taken=new Uint8Array(N);const rects=[];let covered=0;
+  for(let k=0;k<4;k++){
+   const r=largestRect(g,taken);if(!r)break;
+   if(Math.min(r.w,r.h)<MIN_DIM){if(!rects.length&&Math.min(r.w,r.h)*cmPerPx>34)rects.push(r);break;}
+   if(rects.length&&r.w*r.h*cmPerPx*cmPerPx<4000)break; // extra rects < 0.4 m^2
+   rects.push(r);covered+=r.w*r.h;
+   for(let y=r.y;y<r.y+r.h;y++)taken.fill(1,idx(r.x,y),idx(r.x+r.w,y));
+   if(covered>=gArea[g]*0.9)break;}
+  if(rects.length)roomsOut.push({gi:g,rects,area:gArea[g]});}
+ if(!roomsOut.length)return {ok:false,reason:'no usable rooms'};
+
+ /* ---- 13. wrapper + isolated-box cleanup ---- */
+ const bboxOf=r=>{let x0=BIG,y0=BIG,x1=-BIG,y1=-BIG;for(const c of r.rects){x0=Math.min(x0,c.x);y0=Math.min(y0,c.y);x1=Math.max(x1,c.x+c.w);y1=Math.max(y1,c.y+c.h);}return {x0,y0,x1,y1};};
+ const totalArea=roomsOut.reduce((s,r)=>s+r.area,0);
+ const drop=new Set();
+ for(const r of roomsOut){
+  if(r.area<totalArea*0.25)continue;const B=bboxOf(r);let inside=0;
+  for(const o of roomsOut){if(o===r)continue;const b=bboxOf(o);
+   const ox=Math.max(0,Math.min(B.x1,b.x1)-Math.max(B.x0,b.x0));
+   const oy=Math.max(0,Math.min(B.y1,b.y1)-Math.max(B.y0,b.y0));
+   if(ox*oy>=(b.x1-b.x0)*(b.y1-b.y0)*0.6)inside++;}
+  if(inside>=2){
+   const bboxA=(B.x1-B.x0)*(B.y1-B.y0);
+   if(r.area<bboxA*0.55)drop.add(r.gi);}}
+ /* doorless, mergeless groups are sealed text/legend boxes, not rooms */
+ if(A.nGroups>2)for(const r of roomsOut)if(!A.connected.has(r.gi))drop.add(r.gi);
+ const rooms2=roomsOut.filter(r=>!drop.has(r.gi));
+ if(!rooms2.length)return {ok:false,reason:'no usable rooms'};
+
+ /* ---- 14. convert to cm, snap edges ---- */
+ const PAD=1.0;
+ let out=[];let ri=1;
+ for(const r of rooms2){
+  for(const c of r.rects){
+   out.push({gi:r.gi,x:(c.x-PAD)*cmPerPx,y:(c.y-PAD)*cmPerPx,w:(c.w+2*PAD)*cmPerPx,d:(c.h+2*PAD)*cmPerPx,areaPx:r.area});}}
+ function snapVals(vals,tol){vals.sort((a,b)=>a-b);const outv=[];let grp=[vals[0]];
+  for(let i=1;i<vals.length;i++){if(vals[i]-grp[grp.length-1]<=tol)grp.push(vals[i]);else{outv.push(grp);grp=[vals[i]];}}
+  outv.push(grp);const m=new Map();for(const g of outv){const mean=g.reduce((s,v)=>s+v,0)/g.length;for(const v of g)m.set(v,mean);}return m;}
+ if(out.length>1){
+  const tol=7;
+  const xs=[],ys=[];
+  for(const r of out){xs.push(r.x,r.x+r.w);ys.push(r.y,r.y+r.d);}
+  const mx=snapVals(xs,tol),my=snapVals(ys,tol);
+  for(const r of out){const x0=mx.get(r.x),x1=mx.get(r.x+r.w),y0=my.get(r.y),y1=my.get(r.y+r.d);
+   r.x=x0;r.w=x1-x0;r.y=y0;r.d=y1-y0;}}
+
+ /* ---- 15. names and colours ---- */
+ const giMeta=new Map();
+ {let n2=2;
+  const byArea=[...new Set(out.map(r=>r.gi))].map(g=>({g,a:out.filter(r=>r.gi===g)[0].areaPx})).sort((a,b)=>b.a-a.a);
+  byArea.forEach((e,k)=>{
+   const aM2=e.a*cmPerPx*cmPerPx/10000;
+   let nm,col;
+   if(k===0){nm='Living space';col='oak';}
+   else if(aM2<2.5){nm='Store';col='dark';}
+   else{nm='Room '+(n2);col='plain';}
+   if(nm!=='Living space'&&nm!=='Store')n2++;
+   giMeta.set(e.g,{name:nm,color:col});});}
+ const roomsFinal=out.map(r=>({id:'r'+(ri++),name:giMeta.get(r.gi).name,color:giMeta.get(r.gi).color,
+  x:Math.round(r.x*10)/10,y:Math.round(r.y*10)/10,w:Math.round(r.w*10)/10,d:Math.round(r.d*10)/10}));
+
+ /* ---- 16. doors -> planner openings ---- */
+ const doors=[];let di=1;
+ const kept=new Set(rooms2.map(r=>r.gi));
+ for(const d of A.doors){
+  const ga=A.groupOf[d.a],gb=A.groupOf[d.b];
+  if(!kept.has(ga)&&!kept.has(gb))continue;
+  const wcm=Math.max(56,Math.min(115,Math.round(d.gapPx*cmPerPx)));
+  doors.push({id:'ad'+(di++),kind:'door',
+   x:Math.round(d.x*cmPerPx*10)/10,y:Math.round(d.y*cmPerPx*10)/10,
+   w:wcm,rot:d.horiz?0:90,flip:false});}
+
+ const totM2=rooms2.reduce((s,r)=>s+r.area,0)*cmPerPx*cmPerPx/10000;
+ const res={ok:true,rooms:roomsFinal,openings:doors,cmPerPx,scaleSource,
+  stats:{roomGroups:new Set(roomsFinal.map(r=>r.name)).size,rects:roomsFinal.length,doors:doors.length,areaM2:Math.round(totM2*10)/10}};
+ if(opts.debug)res.debug={W,H,gmask,nGroups};
+ return res;
+}
+
+/* ===================== Will It Fit — live listing resolver =====================
+   Fetches a Rightmove/Zoopla/other listing through public CORS proxies, finds
+   the floor plan image + listing facts, traces the plan with autotraceFloorplan,
+   and returns a planner-ready plan. Everything runs in the visitor's browser.
+================================================================================= */
+function wfFetchT(url,opts,ms){return new Promise((res,rej)=>{const ctl=new AbortController();
+ const t=setTimeout(()=>{ctl.abort();rej(new Error('timeout'));},ms||20000);
+ fetch(url,Object.assign({signal:ctl.signal},opts||{})).then(r=>{clearTimeout(t);res(r);},e=>{clearTimeout(t);rej(e);});});}
+
+/* run tasks with staggered starts; first success wins */
+function wfHedged(items,run,stagger,deadline){
+ return new Promise((resolve,reject)=>{
+  let done=false,failed=0,started=0;const errs=[];
+  const overall=setTimeout(()=>{if(!done){done=true;reject(new Error('all sources timed out'));}},deadline||60000);
+  const fire=()=>{if(done||started>=items.length)return;
+   const item=items[started++];
+   run(item).then(v=>{if(!done){done=true;clearTimeout(overall);resolve(v);}},
+    e=>{errs.push(item.name+': '+e.message);failed++;
+     if(failed>=items.length&&!done){done=true;clearTimeout(overall);reject(new Error(errs.join(' | ')));}
+     else fire();});
+   if(started<items.length)setTimeout(fire,stagger||3500);};
+  fire();});}
+
+const WF_PROXIES={
+ corssh:{name:'corssh',u:x=>'https://proxy.cors.sh/'+x},
+ allorigins:{name:'allorigins',u:x=>'https://api.allorigins.win/raw?url='+encodeURIComponent(x)},
+ codetabs:{name:'codetabs',u:x=>'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(x)},
+ jinaHtml:{name:'jinaHtml',u:x=>'https://r.jina.ai/'+x,headers:{'x-return-format':'html'}},
+ jinaMd:{name:'jinaMd',u:x=>'https://r.jina.ai/'+x},
+};
+function wfValidListing(t,portal){
+ if(!t||t.length<2000)return false;
+ if(/Just a moment|cf-chl|challenge-platform|Attention Required|Access denied|are you a human/i.test(t.slice(0,4000)))return false;
+ if(portal==='Rightmove')return /__PAGE_MODEL|property-floorplan|rightmove/i.test(t);
+ if(portal==='Zoopla')return /floorPlan|zoocdn|zoopla/i.test(t);
+ return /<title|floor.?plan/i.test(t);}
+function wfFetchListingHTML(url,portal){
+ const P=WF_PROXIES;
+ /* the jina reader can hit a bot challenge on the first render and succeed on a
+    retry once its browser cache warms up, so it appears twice for Zoopla */
+ const chain=portal==='Zoopla'?[P.jinaHtml,P.corssh,P.allorigins,P.jinaHtml,P.codetabs,P.jinaHtml]
+  :[P.corssh,P.allorigins,P.jinaHtml,P.codetabs,P.jinaMd];
+ return wfHedged(chain,p=>wfFetchT(p.u(url),{headers:p.headers||{}},p.name.indexOf('jina')===0?40000:16000)
+  .then(r=>{if(!r.ok)throw new Error('http '+r.status);return r.text();})
+  .then(t=>{if(!wfValidListing(t,portal))throw new Error('unusable response');return t;}),4000,90000);}
+
+/* ---------- Rightmove: devalue-encoded window.__PAGE_MODEL ---------- */
+function wfParseDevalue(html){
+ const i=html.indexOf('window.__PAGE_MODEL');if(i<0)return null;
+ const s0=html.indexOf('{"data":"',i);if(s0<0)return null;
+ const s=s0+9;let j=s;
+ while(j<html.length){
+  if(html[j]==='"'){let bs=0,k=j-1;while(html[k]==='\\'){bs++;k--;}if(bs%2===0)break;}
+  j++;}
+ try{
+  const arr=JSON.parse(JSON.parse('"'+html.slice(s,j)+'"'));
+  const cache=new Map();
+  const resolve=(ix,depth)=>{
+   if(depth>24)return null;
+   if(ix<0)return undefined;
+   if(cache.has(ix))return cache.get(ix);
+   const v=arr[ix];
+   if(v===null||typeof v!=='object'){cache.set(ix,v);return v;}
+   if(Array.isArray(v)){const out=[];cache.set(ix,out);
+    for(const e of v)out.push(typeof e==='number'?resolve(e,depth+1):e);return out;}
+   const out={};cache.set(ix,out);
+   for(const k in v)out[k]=typeof v[k]==='number'?resolve(v[k],depth+1):v[k];
+   return out;};
+  return resolve(0,0);
+ }catch(e){return null;}}
+function wfAreaFromText(t){
+ if(!t)return null;
+ let m=/([\d,]+(?:\.\d+)?)\s*(?:sq\.?\s?m\b|sqm\b|m²|square met)/i.exec(t);
+ if(m){const v=parseFloat(m[1].replace(/,/g,''));if(v>8&&v<2000)return v;}
+ m=/([\d,]+(?:\.\d+)?)\s*(?:sq\.?\s?ft|sqft|ft²|square f)/i.exec(t);
+ if(m){const v=parseFloat(m[1].replace(/,/g,''))*0.092903;if(v>8&&v<2000)return v;}
+ return null;}
+function wfParseRightmove(html){
+ const out={portal:'Rightmove'};
+ const model=wfParseDevalue(html);
+ const pd=model&&model.propertyData;
+ if(pd){
+  if(pd.address&&pd.address.displayAddress)out.title=pd.address.displayAddress;
+  if(pd.prices&&pd.prices.primaryPrice&&/£|€/.test(pd.prices.primaryPrice))out.price=pd.prices.primaryPrice;
+  if(typeof pd.bedrooms==='number'&&pd.bedrooms>=0&&pd.bedrooms<30)out.beds=pd.bedrooms;
+  if(typeof pd.propertySubType==='string')out.subType=pd.propertySubType;
+  if(Array.isArray(pd.floorplans)&&pd.floorplans.length){
+   const fp=pd.floorplans.filter(f=>f&&typeof f.url==='string'&&/(jpe?g|png|gif|webp)(\?|$)/i.test(f.url));
+   if(fp.length){out.floorplan=fp[0].url;out.floorplanCount=fp.length;}}
+  if(Array.isArray(pd.sizings)){
+   for(const s of pd.sizings){if(!s)continue;
+    const v=s.maximumSize||s.minimumSize;
+    if(s.unit==='sqm'&&v>8&&v<2000){out.areaSqm=v;break;}
+    if(s.unit==='sqft'&&v>80&&v<20000){out.areaSqm=v*0.092903;}}}
+  if(!out.areaSqm&&pd.text&&typeof pd.text.description==='string')out.areaSqm=wfAreaFromText(pd.text.description);
+ }
+ if(!out.title){const m=/<title>([^<]+)<\/title>/i.exec(html);
+  if(m){const t=m[1];const inIx=t.indexOf(' in ');out.title=inIx>0?t.slice(inIx+4).trim():t.trim();
+   const bm=/(\d+)\s+bed/i.exec(t);if(bm&&out.beds==null)out.beds=+bm[1];}}
+ if(!out.price){const m=/primaryPrice[^£€]{0,200}?([£€][\d,]+)/.exec(html);if(m)out.price=m[1];}
+ if(!out.floorplan){
+  const m=/https:\/\/media\.rightmove\.co\.uk\/[^"'\s\\)]*property-floorplan\/[^"'\s\\)]*\.(?:jpe?g|png|gif)/i.exec(html);
+  if(m)out.floorplan=m[0].replace('/dir/property-floorplan/','/property-floorplan/').replace(/_max_\d+x\d+(?=\.\w+$)/,'');}
+ if(!out.areaSqm)out.areaSqm=wfAreaFromText(html.slice(0,400000));
+ return out;}
+
+/* ---------- Zoopla: RSC flight data ---------- */
+function wfParseZoopla(html){
+ const out={portal:'Zoopla'};
+ const norm=html.replace(/\\{1,2}"/g,'"');
+ {const seen=new Set();const files=[];
+  const re=/"filename":"([0-9a-f]{16,}\.(?:jpe?g|png|gif))"/gi;
+  let ix=norm.indexOf('floorPlan');
+  while(ix>=0){
+   const win=norm.slice(ix,ix+4000);
+   let m;re.lastIndex=0;
+   while((m=re.exec(win))){if(!seen.has(m[1])){seen.add(m[1]);files.push(m[1]);}}
+   ix=norm.indexOf('floorPlan',ix+9);}
+  if(files.length){out.floorplan='https://lc.zoocdn.com/'+files[0];out.floorplanCount=files.length;
+   out.floorplanAlt='https://lid.zoocdn.com/u/2400/1800/'+files[0];}}
+ {let m=/"floorArea":\{[^{}]*?"value":([\d.]+)[^{}]*?"units[^"]*":"?(sq(?:_|\s?)?(?:feet|ft|metres|m))/i.exec(norm);
+  if(m){const v=parseFloat(m[1]);out.areaSqm=/f/i.test(m[2])?v*0.092903:v;}
+  if(!out.areaSqm){m=/"sizeSqft":(\d+)/.exec(norm);if(m){const v=+m[1];if(v>80&&v<20000){out.areaSqm=v*0.092903;out.areaEstimated=true;}}}}
+ {const m=/"numBedrooms":(\d+)/.exec(norm);if(m)out.beds=+m[1];}
+ {const m=/<title>([^<]+?)\s*-\s*Zoopla<\/title>/i.exec(html)||/<title>([^<]+)<\/title>/i.exec(html);
+  if(m){let t=m[1];
+   const pm=/([£€][\d,]+(?:\s*pcm)?)/.exec(t);if(pm)out.price=pm[1];
+   const bm=/,\s*(\d+)\s+bed\s+(.*?)\s+(?:for sale|to rent)/i.exec(t);
+   if(bm){if(out.beds==null)out.beds=+bm[1];out.subType=bm[2];t=t.slice(0,bm.index);}
+   else{const fm=/\s+(?:for sale|to rent)/i.exec(t);if(fm)t=t.slice(0,fm.index);}
+   out.title=t.replace(/,\s*$/,'').trim();}}
+ if(out.areaSqm&&!(out.areaSqm>8&&out.areaSqm<2000))delete out.areaSqm;
+ return out;}
+
+/* ---------- anything else: og tags + a floorplan-looking image URL ---------- */
+function wfParseGeneric(html,portal){
+ const out={portal:portal||'Listing'};
+ {const m=/property="og:title"\s+content="([^"]+)"/i.exec(html)||/<title>([^<]+)<\/title>/i.exec(html);
+  if(m)out.title=m[1].trim();}
+ {const m=/([£€][\d,]{4,})/.exec(html);if(m)out.price=m[1];}
+ {const re=/https?:\\?\/\\?\/[^"'\s\\)>]*(?:floor[-_]?plan|fpl|_FLP_?)[^"'\s\\)>]*\.(?:jpe?g|png|gif|webp)/gi;
+  let m,best=null;
+  while((m=re.exec(html))){const u=m[0].replace(/\\\//g,'/');if(!best||u.length<best.length)best=u;}
+  if(best)out.floorplan=best;}
+ out.areaSqm=wfAreaFromText(html.slice(0,400000));
+ return out;}
+
+/* ---------- floor plan image -> canvas ---------- */
+function wfFetchPlanImage(url){
+ const sources=[
+  {name:'weserv',u:'https://images.weserv.nl/?url='+encodeURIComponent(url)+'&w=1400&output=jpg'},
+  {name:'direct',u:url},
+  {name:'corssh',u:'https://proxy.cors.sh/'+url},
+  {name:'allorigins',u:'https://api.allorigins.win/raw?url='+encodeURIComponent(url)},
+ ];
+ return wfHedged(sources,s=>wfFetchT(s.u,{},20000)
+  .then(r=>{if(!r.ok)throw new Error('http '+r.status);return r.blob();})
+  .then(b=>{if(!b.type.startsWith('image')&&b.size<2000)throw new Error('not an image');
+   return new Promise((res,rej)=>{const im=new Image();const ou=URL.createObjectURL(b);
+    im.onload=()=>{URL.revokeObjectURL(ou);res(im);};
+    im.onerror=()=>{URL.revokeObjectURL(ou);rej(new Error('undecodable image'));};
+    im.src=ou;});}),3000,60000)
+ .then(img=>{
+  const max=1280;const sc=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+  const c=document.createElement('canvas');
+  c.width=Math.round(img.naturalWidth*sc);c.height=Math.round(img.naturalHeight*sc);
+  const ctx=c.getContext('2d',{willReadFrequently:true});
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);
+  ctx.drawImage(img,0,0,c.width,c.height);
+  return {canvas:c,ctx,dataURL:c.toDataURL('image/jpeg',0.82)};});}
+
+/* ---------- a local image file -> canvas (for the upload path) ---------- */
+function wfLocalImage(file){return new Promise((res,rej)=>{const rd=new FileReader();
+ rd.onload=()=>{const img=new Image();
+  img.onload=()=>{const max=1280;const sc=Math.min(1,max/Math.max(img.width,img.height));
+   const c=document.createElement('canvas');c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);
+   const ctx=c.getContext('2d',{willReadFrequently:true});
+   ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);
+   res({canvas:c,ctx,dataURL:c.toDataURL('image/jpeg',0.82)});};
+  img.onerror=()=>rej(new Error('unreadable image'));img.src=rd.result;};
+ rd.onerror=()=>rej(new Error('unreadable file'));rd.readAsDataURL(file);});}
+
+/* ---------- trace + plan assembly ---------- */
+function wfBuildPlan(meta,imgPack,trace){
+ const c=imgPack.canvas;
+ const cmPerPx=trace&&trace.ok?trace.cmPerPx:((meta.areaSqm?Math.sqrt(meta.areaSqm*10000/(c.width*c.height*0.45)):900/c.width));
+ const plan={v:1,title:meta.title||'My floor plan',units:'m',grid:5,snap:true,wall:14,savedAt:null,
+  rooms:trace&&trace.ok?trace.rooms:[],
+  openings:trace&&trace.ok?trace.openings:[],
+  items:[],
+  underlay:{src:imgPack.dataURL,iw:c.width,ih:c.height,x:0,y:0,cmPerPx:cmPerPx,opacity:0.5,show:true,locked:true}};
+ return plan;}
+
+function wfHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))>>>0;return h.toString(36);}
+
+/* ---------- the whole pipeline ---------- */
+async function resolveListingLive(url,onStage){
+ const p=detectPortal(url)||{portal:'Other',id:null};
+ const portal=p.portal==='Other'?'Listing':p.portal;
+ onStage(0);
+ let html;
+ try{html=await wfFetchListingHTML(url,p.portal);}
+ catch(e){throw {code:'fetch',portal,detail:e.message};}
+ onStage(1);
+ let meta;
+ if(p.portal==='Rightmove')meta=wfParseRightmove(html);
+ else if(p.portal==='Zoopla')meta=wfParseZoopla(html);
+ else meta=wfParseGeneric(html,portal);
+ if(!meta.floorplan){const g=wfParseGeneric(html,portal);if(g.floorplan)meta.floorplan=g.floorplan;
+  if(!meta.floorplan)throw {code:'nofloorplan',portal,meta};}
+ onStage(2);
+ let imgPack;
+ try{imgPack=await wfFetchPlanImage(meta.floorplan);}
+ catch(e){
+  if(meta.floorplanAlt){try{imgPack=await wfFetchPlanImage(meta.floorplanAlt);}catch(e2){throw {code:'image',portal,meta,detail:e2.message};}}
+  else throw {code:'image',portal,meta,detail:e.message};}
+ onStage(3,{dataURL:imgPack.dataURL});
+ await new Promise(r=>setTimeout(r,60)); // let the UI paint before the heavy sync trace
+ let trace=null;
+ try{
+  const im=imgPack.ctx.getImageData(0,0,imgPack.canvas.width,imgPack.canvas.height);
+  trace=autotraceFloorplan(im,{areaCm2:meta.areaSqm?meta.areaSqm*10000:undefined});
+ }catch(e){trace={ok:false,reason:'trace error: '+e.message};}
+ onStage(4);
+ const plan=wfBuildPlan(meta,imgPack,trace);
+ const planId=(p.portal==='Rightmove'?'rm-':p.portal==='Zoopla'?'zp-':'li-')+(p.id||wfHash(url));
+ onStage(5);
+ return {listing:meta,plan,planId,portal,id:p.id,url,
+  traced:!!(trace&&trace.ok),traceStats:trace&&trace.ok?trace.stats:null,
+  scaleSource:trace&&trace.ok?trace.scaleSource:(meta.areaSqm?'listing':'unknown'),
+  traceFail:trace&&!trace.ok?trace.reason:null};}
+
+
 /* ===================== landing / product front end ===================== */
 const EXAMPLE={planId:'maple',title:'Maple House, Reading Road, Chineham',sub:'1-bed first-floor maisonette · Basingstoke RG24',portal:'Rightmove',id:'87856044',url:'https://www.rightmove.co.uk/properties/87856044',price:'£230,000 · sold STC',area:'50.9 m² + 1.6 m² eaves',rooms:6,doors:7,windows:3};
 function detectPortal(url){url=(url||'').trim();if(!url)return null;let m;
@@ -920,10 +1561,8 @@ function detectPortal(url){url=(url||'').trim();if(!url)return null;let m;
  if((m=/onthemarket\.com\/details\/(\d+)/i.exec(url)))return {portal:'OnTheMarket',id:m[1]};
  if(/^https?:\/\//i.test(url)||/\.(co\.uk|com)\b/i.test(url))return {portal:'Other',id:null};
  return null;}
-/* Server hand-off point. In the shipped product this calls the tracing service:
-   POST /api/trace {url} -> {listing, plan} with the floor plan image, rooms, openings and fittings.
-   In this preview the example listing is pre-traced; any other listing opens the example in preview mode. */
-async function resolveListing(url){const p=detectPortal(url)||{portal:'Other',id:null};const exact=p.portal==='Rightmove'&&p.id===EXAMPLE.id;return {exact,portal:p.portal,id:p.id,listing:EXAMPLE,plan:SAMPLE};}
+/* The example listing stays pre-traced (hand-checked against the agent's dims);
+   every other link runs the live in-browser pipeline: fetch -> find plan -> trace. */
 function traceSVG(still){const u=SAMPLE.underlay;const k=1;let o='';const vb='-40 -90 750 990';
  o+='<svg class="trace'+(still?' still':'')+'" viewBox="'+vb+'" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><defs><pattern id="lp-hatch" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="14" stroke="var(--muted)" stroke-width="2" opacity=".6"/></pattern><clipPath id="lp-clip"><rect x="-34" y="-84" width="714" height="960"/></clipPath></defs>';
  if(u&&u.src)o+='<image clip-path="url(#lp-clip)" href="'+u.src+'" x="'+u.x+'" y="'+u.y+'" width="'+(u.iw*u.cmPerPx)+'" height="'+(u.ih*u.cmPerPx)+'" preserveAspectRatio="none"/>';
@@ -950,11 +1589,113 @@ function runPipeline(res){const pipe=$('#lp-pipe'),result=$('#lp-result'),canvas
  PIPE.forEach((p,i)=>{pipeTimers.push(setTimeout(()=>{$$('.st',pipe).forEach((el,j)=>{el.classList.toggle('done',j<=i);el.classList.toggle('run',j===i+1);});if(i===0){$$('.st',pipe)[0].classList.add('done');}},p[1]*speed));});
  $$('.st',pipe)[0].classList.add('run');
  pipeTimers.push(setTimeout(()=>{pipe.hidden=true;$('#lp-devtitle').textContent='Floor plan · '+res.listing.title;
-  result.innerHTML=(res.exact?'<span class="k">Found your listing</span>':'<span class="k note">Preview mode · showing our example</span><span class="hint muted">Automatic reading of other listings runs on our server, which isn’t connected in this preview. Here’s the full flow on Maple House — or upload your floor plan and trace it yourself.</span>')+
+  result.innerHTML=(res.exact?'<span class="k">Found your listing</span>':'<span class="k">The example listing</span>')+
    '<span class="t">'+esc(res.listing.title)+'</span><div class="chips"><span>'+esc(res.listing.sub)+'</span><span>'+esc(res.listing.area)+'</span><span>'+res.listing.rooms+' rooms</span><span>'+res.listing.doors+' doors</span><span>'+res.listing.windows+' windows</span></div>'+
    '<div class="row"><button class="primary" id="lp-open">Open the planner</button><button class="ghost" id="lp-again">Try another link</button></div>';
   result.classList.add('show');$('#lp-open').addEventListener('click',()=>openPlan('maple',SAMPLE));$('#lp-again').addEventListener('click',()=>{result.classList.remove('show');$('#lp-url').focus();$('#lp-url').select();$('#lp-devtitle').textContent='Floor plan · Maple House, Chineham';});
  },(PIPE[PIPE.length-1][1]+350)*speed));}
+
+/* ===== live pipeline (any real Rightmove/Zoopla/other listing) ===== */
+const LIVE_PIPE=['Fetching the listing','Finding the floor plan','Downloading the plan image','Tracing walls, rooms and doors','Setting the scale','Ready'];
+let liveBusy=false;
+function pipeShow(stages){const pipe=$('#lp-pipe');pipe.hidden=false;pipe.innerHTML=stages.map((p,i)=>'<div class="st" data-i="'+i+'"><i></i><span>'+p+'</span></div>').join('');}
+function pipeSet(i){$$('.st',$('#lp-pipe')).forEach((el,j)=>{el.classList.toggle('done',j<i||i>=LIVE_PIPE.length);el.classList.toggle('run',j===i&&i<LIVE_PIPE.length);});}
+function livePlanSVG(r){const plan=r.plan;const u=plan.underlay;
+ let x0,y0,x1,y1;
+ if(plan.rooms.length){x0=y0=Infinity;x1=y1=-Infinity;
+  plan.rooms.forEach(rm=>{x0=Math.min(x0,rm.x);y0=Math.min(y0,rm.y);x1=Math.max(x1,rm.x+rm.w);y1=Math.max(y1,rm.y+rm.d);});
+  x0-=plan.wall;y0-=plan.wall;x1+=plan.wall;y1+=plan.wall;}
+ else{x0=0;y0=0;x1=u.iw*u.cmPerPx;y1=u.ih*u.cmPerPx;}
+ const wid=x1-x0,hei=y1-y0;
+ const vb=(x0-50)+' '+(y0-100)+' '+(wid+160)+' '+(hei+170);
+ let o='<svg class="trace" viewBox="'+vb+'" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">';
+ if(u&&u.src)o+='<image href="'+u.src+'" x="'+u.x+'" y="'+u.y+'" width="'+(u.iw*u.cmPerPx)+'" height="'+(u.ih*u.cmPerPx)+'" preserveAspectRatio="none"/>';
+ let d=0.7;
+ plan.rooms.forEach((rm,i)=>{o+='<rect class="tr" pathLength="1" x="'+rm.x+'" y="'+rm.y+'" width="'+rm.w+'" height="'+rm.d+'" style="--d:'+(d+i*0.14).toFixed(2)+'s"/>';});
+ d+=plan.rooms.length*0.14;
+ plan.openings.forEach((op,i)=>{const tr='translate('+op.x+' '+op.y+') rotate('+op.rot+')';const dd=(d+i*0.1).toFixed(2)+'s';
+  const sg=op.flip?-1:1;o+='<g transform="'+tr+'"><path class="tr" pathLength="1" style="--d:'+dd+'" d="M 0 0 L 0 '+(sg*op.w)+' A '+op.w+' '+op.w+' 0 0 '+(sg>0?0:1)+' '+op.w+' 0"/></g>';});
+ d+=plan.openings.length*0.1+0.2;
+ const groups={};plan.rooms.forEach(rm=>{const k=rm.name;(groups[k]=groups[k]||[]).push(rm);});
+ Object.keys(groups).forEach((name,i)=>{const rm=groups[name].slice().sort((a,b)=>b.w*b.d-a.w*a.d)[0];if(rm.w<130||rm.d<70)return;
+  o+='<text class="lb" x="'+(rm.x+12)+'" y="'+(rm.y+26)+'" style="--d:'+(d+i*0.08).toFixed(2)+'s">'+esc(name)+'</text>';});
+ d+=0.4;
+ const dm=d.toFixed(2)+'s';
+ o+='<g><line class="dim" style="--d:'+dm+'" x1="'+x0+'" y1="'+(y0-56)+'" x2="'+x1+'" y2="'+(y0-56)+'"/><line class="dim" style="--d:'+dm+'" x1="'+x0+'" y1="'+(y0-64)+'" x2="'+x0+'" y2="'+(y0-48)+'"/><line class="dim" style="--d:'+dm+'" x1="'+x1+'" y1="'+(y0-64)+'" x2="'+x1+'" y2="'+(y0-48)+'"/><text class="dm" style="--d:'+dm+'" x="'+((x0+x1)/2)+'" y="'+(y0-62)+'" text-anchor="middle">'+(wid/100).toFixed(2)+' m</text></g>';
+ o+='<g><line class="dim" style="--d:'+dm+'" x1="'+(x1+56)+'" y1="'+y0+'" x2="'+(x1+56)+'" y2="'+y1+'"/><line class="dim" style="--d:'+dm+'" x1="'+(x1+48)+'" y1="'+y0+'" x2="'+(x1+64)+'" y2="'+y0+'"/><line class="dim" style="--d:'+dm+'" x1="'+(x1+48)+'" y1="'+y1+'" x2="'+(x1+64)+'" y2="'+y1+'"/><text class="dm" style="--d:'+dm+'" x="'+(x1+66)+'" y="'+((y0+y1)/2)+'" transform="rotate(90 '+(x1+66)+' '+((y0+y1)/2)+')" text-anchor="middle">'+(hei/100).toFixed(2)+' m</text></g>';
+ return o+'</svg>';}
+function liveResultCard(r){
+ const chips=[];
+ if(r.listing.beds!=null)chips.push(r.listing.beds+' bed'+(r.listing.subType?' '+r.listing.subType.toLowerCase():''));
+ else if(r.listing.subType)chips.push(r.listing.subType);
+ if(r.listing.price)chips.push(r.listing.price);
+ if(r.listing.areaSqm)chips.push((Math.round(r.listing.areaSqm*10)/10)+' m²'+(r.listing.areaEstimated?' (est.)':''));
+ else if(r.traceStats)chips.push('~'+r.traceStats.areaM2+' m² traced');
+ if(r.traceStats)chips.push(r.traceStats.roomGroups+' room'+(r.traceStats.roomGroups===1?'':'s')+' · '+r.traceStats.doors+' door'+(r.traceStats.doors===1?'':'s'));
+ if(r.listing.floorplanCount>1)chips.push('plan 1 of '+r.listing.floorplanCount);
+ let hint='';
+ if(!r.traced)hint='We found the floor plan but couldn’t trace the rooms automatically. It’s loaded as a background image — set the scale and trace over it in Edit plan.';
+ else if(r.scaleSource==='door')hint='Sizes are scaled from standard door widths. Check one known measurement: Edit plan → Calibrate scale.';
+ else if(r.scaleSource==='assumed')hint='We couldn’t verify the scale. Check one known measurement: Edit plan → Calibrate scale.';
+ else hint='Scaled from the listing’s quoted floor area. Agents’ plans are approximate — for tight fits, measure on the viewing.';
+ return '<span class="k">'+(r.traced?'Traced your listing':'Found your listing')+'</span>'+
+  '<span class="t">'+esc(r.listing.title||'Listing')+'</span>'+
+  '<div class="chips">'+chips.map(c=>'<span>'+esc(c)+'</span>').join('')+'</div>'+
+  (hint?'<span class="hint muted">'+esc(hint)+'</span>':'')+
+  '<div class="row"><button class="primary" id="lp-open-live">Open the planner</button><button class="ghost" id="lp-again">Try another link</button></div>';}
+function liveErrorCard(err){
+ const M={
+  fetch:['That listing wouldn’t load','The portal (or our free readers) may be blocking requests right now. Try again in a minute — or upload the floor plan image and we’ll trace that instead.'],
+  nofloorplan:['No floor plan on that listing','We fetched the listing but couldn’t find a floor plan image in it. If you have the plan, upload it and we’ll trace it.'],
+  image:['Couldn’t download the floor plan','We found the plan but its image wouldn’t download. Try again — or save the image from the listing and upload it here.'],
+ };
+ const [t,h]=M[err.code]||M.fetch;
+ return '<span class="k note">'+esc(t)+'</span><span class="hint muted">'+esc(h)+'</span>'+
+  '<div class="row"><button class="primary" id="lp-upload-instead">Upload the floor plan</button><button class="ghost" id="lp-see-example">See the example</button><button class="ghost" id="lp-again">Try another link</button></div>';}
+function wireResultButtons(r){
+ const result=$('#lp-result');
+ const again=$('#lp-again');if(again)again.addEventListener('click',()=>{result.classList.remove('show');$('#lp-url').focus();$('#lp-url').select();$('#lp-devtitle').textContent='Floor plan · Maple House, Chineham';$('#lp-canvas').innerHTML=traceSVG(false);});
+ const open=$('#lp-open-live');if(open&&r)open.addEventListener('click',async()=>{
+  await openPlan(r.planId,r.plan,{fresh:false});
+  if(!r.traced){mode='plan';libTab='Plan';renderPanels();render();}});
+ const up=$('#lp-upload-instead');if(up)up.addEventListener('click',()=>$('#lp-file').click());
+ const ex=$('#lp-see-example');if(ex)ex.addEventListener('click',()=>{runPipeline({exact:false,portal:'Rightmove',id:EXAMPLE.id,listing:EXAMPLE,plan:SAMPLE});});}
+async function runLive(url){
+ if(liveBusy)return;liveBusy=true;const go=$('#lp-go');go.disabled=true;
+ const pipe=$('#lp-pipe'),result=$('#lp-result'),canvas=$('#lp-canvas');
+ pipeTimers.forEach(clearTimeout);pipeTimers=[];result.classList.remove('show');
+ const p=detectPortal(url)||{portal:'Other',id:null};
+ $('#lp-devtitle').textContent=(p.portal!=='Other'?p.portal+(p.id?' · '+p.id:''):'Listing')+' · reading the floor plan';
+ pipeShow(LIVE_PIPE);pipeSet(0);
+ try{
+  const r=await resolveListingLive(url,(i,extra)=>{pipeSet(i);
+   if(extra&&extra.dataURL)canvas.innerHTML='<div class="lp-scan"><img src="'+extra.dataURL+'" alt=""><i></i></div>';});
+  pipeSet(LIVE_PIPE.length);
+  canvas.innerHTML=livePlanSVG(r);
+  setTimeout(()=>{pipe.hidden=true;},600);
+  $('#lp-devtitle').textContent='Floor plan · '+(r.listing.title||'your listing');
+  result.innerHTML=liveResultCard(r);
+  result.classList.add('show');
+  wireResultButtons(r);
+ }catch(err){
+  pipe.hidden=true;
+  canvas.innerHTML=traceSVG(true);
+  $('#lp-devtitle').textContent='Floor plan · Maple House, Chineham';
+  result.innerHTML=liveErrorCard(err&&err.code?err:{code:'fetch'});
+  result.classList.add('show');
+  wireResultButtons(null);
+  if(window.console&&err)console.warn('resolve failed',err);
+ }finally{liveBusy=false;go.disabled=false;}}
+async function openTracedUpload(f){
+ let pack;
+ try{pack=await wfLocalImage(f);}
+ catch(e){await openPlan('upload',BLANK,{fresh:true,file:f});return;}
+ let trace=null;
+ try{trace=autotraceFloorplan(pack.ctx.getImageData(0,0,pack.canvas.width,pack.canvas.height),{});}catch(e){trace=null;}
+ const plan=wfBuildPlan({title:'Uploaded floor plan'},pack,trace);
+ await openPlan('upload-'+wfHash(f.name+':'+f.size),plan,{fresh:true});
+ if(trace&&trace.ok){toast('Traced '+trace.stats.roomGroups+' rooms and '+trace.stats.doors+' doors — check the scale: Edit plan → Calibrate scale');}
+ else{mode='plan';libTab='Plan';renderPanels();render();toast('Couldn’t trace this image automatically — set the scale and trace the rooms in Edit plan');}}
 function illSVG(n){const W=320,H=160;let o='<svg viewBox="0 0 320 160" xmlns="http://www.w3.org/2000/svg" style="font-family:var(--mono);font-size:10px">';
  o+='<defs><pattern id="ig" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="var(--grid)" stroke-width="1"/></pattern><pattern id="ih" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="var(--muted)" stroke-width="1.2" opacity=".6"/></pattern></defs><rect width="320" height="160" fill="url(#ig)"/>';
  const room=(x,y,w,h)=>'<rect x="'+(x-7)+'" y="'+(y-7)+'" width="'+(w+14)+'" height="'+(h+14)+'" fill="var(--wall)"/><rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="var(--floor-oak)"/>';
@@ -974,9 +1715,12 @@ function initLanding(){const urlEl=$('#lp-url');
  $('#lp-canvas').innerHTML=traceSVG(false);$('#lp-thumb').innerHTML=traceSVG(true);[1,2,3,4].forEach(n=>{$('#ill-'+n).innerHTML=illSVG(n);});
  const upd=()=>{const p=detectPortal(urlEl.value);const el=$('#lp-portal');if(!urlEl.value.trim()){el.textContent='Listing link';el.className='lp-portal';}else if(!p){el.textContent='Not a listing link';el.className='lp-portal bad';}else{el.textContent=p.portal==='Other'?'Link':p.portal+(p.id?' · '+p.id:'');el.className='lp-portal on';}};
  urlEl.addEventListener('input',upd);
- $('#lp-form').addEventListener('submit',async e=>{e.preventDefault();const v=urlEl.value.trim();if(!v){urlEl.focus();return;}if(!detectPortal(v)){upd();urlEl.focus();return;}const res=await resolveListing(v);if(window.innerWidth<=900)$('#lp-canvas').scrollIntoView({behavior:'smooth',block:'center'});runPipeline(res);});
+ $('#lp-form').addEventListener('submit',e=>{e.preventDefault();const v=urlEl.value.trim();if(!v){urlEl.focus();return;}const p=detectPortal(v);if(!p){upd();urlEl.focus();return;}
+  if(window.innerWidth<=900)$('#lp-canvas').scrollIntoView({behavior:'smooth',block:'center'});
+  if(p.portal==='Rightmove'&&p.id===EXAMPLE.id){runPipeline({exact:true,portal:p.portal,id:p.id,listing:EXAMPLE,plan:SAMPLE});return;}
+  runLive(v);});
  $('#lp-example').addEventListener('click',()=>{urlEl.value=EXAMPLE.url;upd();$('#lp-form').requestSubmit();});
- $('#lp-file').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;e.target.value='';openPlan('upload',BLANK,{fresh:true,file:f});});
+ $('#lp-file').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;e.target.value='';openTracedUpload(f);});
  $('#lp-open-example').addEventListener('click',()=>openPlan('maple',SAMPLE));
  $('#lp-view-listing').addEventListener('click',()=>{window.open(EXAMPLE.url,'_blank','noopener');});
  ['nav-cta','lp-cta2'].forEach(id=>$('#'+id).addEventListener('click',()=>{window.scrollTo({top:0,behavior:'smooth'});setTimeout(()=>urlEl.focus(),300);}));}
@@ -986,4 +1730,5 @@ start();
 
 })();
 </script>
+
 </body></html>
