@@ -124,6 +124,8 @@ svg .room{stroke:none}
 svg .item .body{stroke:rgba(20,24,32,.55);stroke-width:1.2;vector-effect:non-scaling-stroke}
 svg .item .shdw,svg .item .sheen{stroke:none;pointer-events:none}
 svg .item.locked .shdw,svg .item.zone .shdw{display:none}
+.bmlet{display:inline-block;border:1.5px dashed var(--accent);border-radius:8px;padding:6px 12px;color:var(--ink);background:var(--accent-soft);text-decoration:none;font-size:12.5px;font-weight:600;cursor:grab;align-self:flex-start}
+.bmlet:active{cursor:grabbing}
 svg .item.sel .body{stroke:var(--accent);stroke-width:2}
 svg .item.bad .body{stroke:var(--warn);stroke-width:2}
 svg .item .deco{fill:none;stroke:rgba(20,24,32,.45);vector-effect:non-scaling-stroke;stroke-width:1.2}
@@ -774,6 +776,9 @@ function renderPanels(){ $('#title').value=state.title||'';
 
 /* ---------- "from a shop": paste a product link or its size text ---------- */
 let shopText='',shopDraft=null,shopMsg='',shopBusy=false;
+/* bookmarklet: runs on the shop's own page (so nothing can block it), grabs the
+   text around any "…cm" sizes + title + url, and hands it to the live site */
+const WF_BOOKMARKLET="javascript:(function(){var t=document.body?document.body.innerText:'';var w=[],re=/\\d+(?:[.,]\\d+)?\\s*cm/gi,m,n=0;while((m=re.exec(t))&&n<3){var s=Math.max(0,m.index-500);w.push(t.slice(s,Math.min(t.length,m.index+500)));re.lastIndex=m.index+500;n++;}var og=document.querySelector('meta[property=\"og:title\"]');var p={u:location.href.slice(0,500),t:((og&&og.content)||document.title||'').slice(0,120),x:(w.join('\\n')||t.slice(0,3000)).slice(0,6000)};window.open('https://cookej123.github.io/will-it-fit/'+'\\x23shopadd='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(p))))),'_blank');})();";
 function parseDimsText(text){
  const t=String(text||'');
  const out={};
@@ -817,11 +822,25 @@ function parseDimsText(text){
  if(dims.w!=null&&dims.d==null&&/diamet/i.test(t))dims.d=dims.w;
  const pm=/(£|€|\$)\s?(\d[\d,]*(?:\.\d\d)?)/.exec(t);
  if(pm)out.price=pm[1]+pm[2];
+ /* fallback name: first sensible line, with any size/price tail trimmed off */
  for(const line of t.split(/[\n\r]+/)){const s=line.trim();
   if(s.length>=4&&/[a-z]{3}/i.test(s)&&!/^https?:/i.test(s)&&s.replace(/[^0-9]/g,'').length<s.length/3){
-   /* trim the size/price tail off single-line pastes: "Sofa W: 226cm D: 96cm" -> "Sofa" */
    const nm=s.replace(/\s*[\(\-–·|,]*\s*(?:[HWDL]\s*[:x×]|width|depth|height|length|dimensions?|size\b|\d+(?:[.,]\d+)?\s*(?:cm|mm|m)\b|£|€|\$).*$/i,'').trim();
    out.name=(nm.length>=4?nm:s).slice(0,70);break;}}
+ /* multi-line paste (a copied page): the product name is usually the best-looking
+    line shortly BEFORE the first dimensions, after the nav junk */
+ if(t.split(/[\n\r]+/).length>3){
+  const di=t.search(/(width|depth|height|[HWDL]\s*[:x×])\s*[:=.]?\s*\d/i);
+  if(di>0){
+   const win=t.slice(Math.max(0,di-1000),di).split(/[\n\r]+/);
+   let best='';
+   for(const line of win){const s=line.trim();
+    if(s.length<6||s.length>80)continue;
+    if(!/[a-z]{3}/i.test(s))continue;
+    if(/[:£€$]|\bcm\b|\d{3}|skip to|cookie|menu|search|basket|checkout|sign in|account|wish ?list|delivery|returns|review|rating|in stock|add to|colour|color\b|select|quantity|share|https?:/i.test(s))continue;
+    if(s.replace(/[^0-9]/g,'').length>2)continue;
+    if(s.length>best.length)best=s;}
+   if(best)out.name=best.slice(0,70);}}
  if(dims.w==null||dims.d==null)return null;
  out.w=Math.round(dims.w);out.d=Math.round(dims.d);
  if(dims.h!=null)out.h=Math.round(dims.h);
@@ -849,8 +868,8 @@ async function doShopRead(){
   if(dims&&dims.w){
    shopDraft={name:(fetched&&fetched.name)||(pasted&&pasted.name)||'Item from a shop',
     w:dims.w,d:dims.d,h:dims.h,price:(fetched&&fetched.price)||(pasted&&pasted.price)||'',link:um[0]};}
-  else if(failed)shopMsg='That shop would not let us read the page. Copy the size text from it (e.g. "W: 226cm D: 96cm") and paste that here instead.';
-  else shopMsg='Read the page but could not find sizes on it. Copy the dimensions text from the product page and paste that here.';
+  else if(failed)shopMsg='That shop blocks remote reading. Easiest fix: on the product page press Ctrl+A then Ctrl+C (select all, copy), come back and paste the lot here - we will find the sizes. Or drag the bookmark button below to your bookmarks bar and click it on the product page.';
+  else shopMsg='Read the page but could not find sizes on it. On the product page press Ctrl+A then Ctrl+C and paste everything here - we will dig the sizes out.';
   renderLibrary();return;}
  if(pasted&&pasted.w){shopDraft=pasted;if(um)shopDraft.link=um[0];}
  else if(um)shopMsg='Links cannot be fetched in this copy of the planner. Copy the size text off the product page and paste it here (keeping the link in the paste is fine).';
@@ -886,6 +905,8 @@ function renderLibrary(){const p=$('#pane-Library');const q=libQuery.trim().toLo
   if(shopDraft.price||shopDraft.link)h+='<div class="hint">'+(shopDraft.price?esc(shopDraft.price)+' · ':'')+(shopDraft.link?'link saved with the item':'')+'</div>';
   h+='<div class="row"><button class="primary" id="shop-addb">Add to the board</button><button class="ghost" id="shop-swap" title="Swap width and depth">Swap W/D</button><button class="ghost" id="shop-cancel">Cancel</button></div></div>';
  }
+ h+='<div class="hint" style="margin-top:2px">Shops that block reading (Next, IKEA…): drag this button to your bookmarks bar, then click it while you are on the product page —</div>';
+ h+='<a id="shop-bm" class="bmlet" href="#" title="Drag me to your bookmarks bar">+ Add to Will It Fit</a>';
  h+='</div>';
  h+='<div class="cat"><h2>Custom</h2><button id="custom-add">+ Custom item (enter any size)</button></div>';
  p.innerHTML=h;
@@ -893,6 +914,8 @@ function renderLibrary(){const p=$('#pane-Library');const q=libQuery.trim().toLo
   si.addEventListener('input',e=>{shopText=e.target.value;});
   si.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();doShopRead();}});
   $('#shop-go').addEventListener('click',doShopRead);
+  const bm=$('#shop-bm');bm.setAttribute('href',WF_BOOKMARKLET);
+  bm.addEventListener('click',e=>{e.preventDefault();toast('Drag the button to your bookmarks bar, then click it on a shop’s product page');});
   if(shopDraft){
    $('#shop-nm').addEventListener('change',e=>{shopDraft.name=e.target.value;});
    $('#shop-w').addEventListener('change',e=>{shopDraft.w=+e.target.value||shopDraft.w;});
@@ -1923,7 +1946,46 @@ function initLanding(){const urlEl=$('#lp-url');
  $('#lp-open-example').addEventListener('click',()=>openPlan('maple',SAMPLE));
  $('#lp-view-listing').addEventListener('click',()=>{window.open(EXAMPLE.url,'_blank','noopener');});
  ['nav-cta','lp-cta2'].forEach(id=>$('#'+id).addEventListener('click',()=>{window.scrollTo({top:0,behavior:'smooth'});setTimeout(()=>urlEl.focus(),300);}));}
-async function start(){const shared=await sharedFromHash();if(shared){await openPlan('shared',shared,{fresh:true,fromLink:true});initLanding();return;}
+/* ===== bookmarklet receiver: #shopadd=<b64 json {u,t,x}> ===== */
+function shopFromHash(){const m=/[#&]shopadd=([^&]+)/.exec(location.hash||'');if(!m)return null;
+ try{
+  const p=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
+  history.replaceState(null,'',location.pathname+location.search);
+  const d=parseDimsText(p.x||'');
+  const name=((p.t||'').split(/\s*[|–—]\s*/)[0]||'').trim().slice(0,70);
+  if(d&&d.w)return {ok:true,name:name||d.name||'Item from a shop',w:d.w,d:d.d,h:d.h,price:d.price,link:p.u};
+  return {ok:false,name:name||'that page',link:p.u,text:p.x||''};
+ }catch(e){return null;}}
+function recentDrafts(){const out=[];
+ try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);
+  if(k&&k.indexOf(KEY+':')===0){const d=JSON.parse(localStorage.getItem(k)||'null');
+   if(d&&d.state&&validState(d.state))out.push({planId:k.slice(KEY.length+1),t:d.t||0,state:d.state});}}}catch(e){}
+ out.sort((a,b)=>b.t-a.t);return out.slice(0,3);}
+function showShopBanner(item){
+ const result=$('#lp-result');
+ const chips=item.ok?[Math.round(item.w)+' × '+Math.round(item.d)+' cm',item.price||null].filter(Boolean):[];
+ const drafts=recentDrafts();
+ result.innerHTML='<span class="k">'+(item.ok?'Read from the shop':'Almost — sizes not found')+'</span>'+
+  '<span class="t">'+esc(item.name)+'</span>'+
+  (chips.length?'<div class="chips">'+chips.map(c=>'<span>'+esc(c)+'</span>').join('')+'</div>':'')+
+  '<span class="hint muted">'+(item.ok
+    ?'It is waiting in the Library ("From a shop") of whichever plan you open next.'
+    :'The paste is waiting in the Library ("From a shop") — open a plan, check it and press Read it.')+'</span>'+
+  '<div class="row">'+drafts.map((d,i)=>'<button class="primary" data-r="'+i+'">Continue: '+esc((d.state.title||'my plan').slice(0,24))+'</button>').join('')+
+  '<button class="ghost" id="shop-ex-open">Open the example</button></div>';
+ result.classList.add('show');
+ drafts.forEach((d,i)=>{$('[data-r="'+i+'"]',result).addEventListener('click',()=>openPlan(d.planId,d.state,{fresh:false}));});
+ $('#shop-ex-open').addEventListener('click',()=>openPlan('maple',SAMPLE));}
+async function start(){
+ const shopIt=shopFromHash();
+ if(shopIt){
+  if(shopIt.ok)shopDraft=shopIt;
+  else{shopText=(shopIt.link?shopIt.link+'\n':'')+shopIt.text;shopMsg='Check the paste and press Read it.';}
+  showLanding();initLanding();
+  $('#lp-devtitle').textContent='From a shop';
+  showShopBanner(shopIt);
+  return;}
+ const shared=await sharedFromHash();if(shared){await openPlan('shared',shared,{fresh:true,fromLink:true});initLanding();return;}
  showLanding();initLanding();}
 start();
 
