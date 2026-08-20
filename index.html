@@ -9,20 +9,20 @@
   --bg:#EEF0EC; --panel:#FFFFFF; --panel-2:#F6F7F4; --ink:#1B1F26; --muted:#5E6673; --line:#D5D9D2; --line-2:#E6E9E3;
   --accent:#1F5FBF; --accent-soft:#DCE6F8; --on-accent:#FFFFFF; --warn:#C8491B; --warn-soft:#FBE5DC; --ok:#2E7D4F;
   --floor:#E9E5DA; --floor-oak:#E3D3B4; --floor-tile:#DEE4E4; --floor-dark:#C9C4BA; --wall:#23272E; --grid:#D9DDD5; --grid-major:#C8CDC4;
-  --canvas:#E4E6E1; --shadow:0 8px 24px rgba(20,24,32,.12);
+  --canvas:#E4E6E1; --shadow:0 8px 24px rgba(20,24,32,.12); --item-shadow:rgba(20,24,32,.15);
   --sans:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,sans-serif; --disp:'Archivo','IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
   --bg:#151A21; --panel:#1C222B; --panel-2:#222932; --ink:#E6E9EE; --muted:#9AA4B2; --line:#2E3742; --line-2:#273039;
   --accent:#7FA9F2; --accent-soft:#22355A; --on-accent:#0F1620; --warn:#F08A66; --warn-soft:#4A2A20; --ok:#6CC594;
   --floor:#2B323C; --floor-oak:#3A3529; --floor-tile:#28343A; --floor-dark:#20252C; --wall:#DDE2E9; --grid:#222A34; --grid-major:#2B343F;
-  --canvas:#111519; --shadow:0 8px 24px rgba(0,0,0,.45);
+  --canvas:#111519; --shadow:0 8px 24px rgba(0,0,0,.45); --item-shadow:rgba(0,0,0,.5);
 }}
 :root[data-theme="dark"]{
   --bg:#151A21; --panel:#1C222B; --panel-2:#222932; --ink:#E6E9EE; --muted:#9AA4B2; --line:#2E3742; --line-2:#273039;
   --accent:#7FA9F2; --accent-soft:#22355A; --on-accent:#0F1620; --warn:#F08A66; --warn-soft:#4A2A20; --ok:#6CC594;
   --floor:#2B323C; --floor-oak:#3A3529; --floor-tile:#28343A; --floor-dark:#20252C; --wall:#DDE2E9; --grid:#222A34; --grid-major:#2B343F;
-  --canvas:#111519; --shadow:0 8px 24px rgba(0,0,0,.45);
+  --canvas:#111519; --shadow:0 8px 24px rgba(0,0,0,.45); --item-shadow:rgba(0,0,0,.5);
 }
 *,*::before,*::after{box-sizing:border-box}
 html,body{height:100%;margin:0}
@@ -122,6 +122,8 @@ svg .dims{font-family:var(--mono);fill:var(--muted)}
 svg .wall{fill:var(--wall)}
 svg .room{stroke:none}
 svg .item .body{stroke:rgba(20,24,32,.55);stroke-width:1.2;vector-effect:non-scaling-stroke}
+svg .item .shdw,svg .item .sheen{stroke:none;pointer-events:none}
+svg .item.locked .shdw,svg .item.zone .shdw{display:none}
 svg .item.sel .body{stroke:var(--accent);stroke-width:2}
 svg .item.bad .body{stroke:var(--warn);stroke-width:2}
 svg .item .deco{fill:none;stroke:rgba(20,24,32,.45);vector-effect:non-scaling-stroke;stroke-width:1.2}
@@ -369,8 +371,8 @@ const LIB=[
  {cat:'Bedroom',items:[
   {name:'Single bed',w:90,d:190,color:'linen',deco:'bed'},{name:'Double bed',w:135,d:190,color:'linen',deco:'bed'},
   {name:'King bed',w:150,d:200,color:'linen',deco:'bed'},{name:'Super king bed',w:180,d:200,color:'linen',deco:'bed'},
-  {name:'Bedside table',w:45,d:40,color:'oak'},{name:'Wardrobe',w:100,d:60,color:'walnut'},{name:'Wardrobe 150',w:150,d:60,color:'walnut'},
-  {name:'Wardrobe 200',w:200,d:60,color:'walnut'},{name:'Chest of drawers',w:80,d:45,color:'oak'},{name:'Dressing table',w:100,d:45,color:'oak'},
+  {name:'Bedside table',w:45,d:40,color:'oak'},{name:'Wardrobe',w:100,d:60,color:'walnut',deco:'ward'},{name:'Wardrobe 150',w:150,d:60,color:'walnut',deco:'ward'},
+  {name:'Wardrobe 200',w:200,d:60,color:'walnut',deco:'ward'},{name:'Chest of drawers',w:80,d:45,color:'oak'},{name:'Dressing table',w:100,d:45,color:'oak'},
   {name:'Cot',w:60,d:120,color:'oak',deco:'bed'},{name:'Ottoman',w:100,d:45,color:'fabric'}]},
  {cat:'Living',items:[
   {name:'2-seat sofa',w:160,d:90,color:'fabric',deco:'sofa'},{name:'3-seat sofa',w:210,d:95,color:'fabric',deco:'sofa'},
@@ -501,7 +503,7 @@ function groupBounds(grp){let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity,
 function render(){ if(!world)return; const k=view.k,t=state.wall,px=v=>v/k; let o='';
  const u=state.underlay;
  const vr=svg.getBoundingClientRect();const vx=(-view.tx)/k,vy=(-view.ty)/k,vw=vr.width/k,vh=vr.height/k;const gm=k<1.2?50:10;
- o+='<defs><pattern id="g1" width="'+gm+'" height="'+gm+'" patternUnits="userSpaceOnUse"><path d="M'+gm+' 0H0V'+gm+'" fill="none" stroke="var(--grid)" stroke-width="'+(1/k)+'"/></pattern><pattern id="g2" width="100" height="100" patternUnits="userSpaceOnUse"><rect width="100" height="100" fill="url(#g1)"/><path d="M100 0H0V100" fill="none" stroke="var(--grid-major)" stroke-width="'+(1/k)+'"/></pattern><pattern id="hatch" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="14" stroke="var(--muted)" stroke-width="2" opacity=".6"/></pattern></defs>';
+ o+='<defs><pattern id="g1" width="'+gm+'" height="'+gm+'" patternUnits="userSpaceOnUse"><path d="M'+gm+' 0H0V'+gm+'" fill="none" stroke="var(--grid)" stroke-width="'+(1/k)+'"/></pattern><pattern id="g2" width="100" height="100" patternUnits="userSpaceOnUse"><rect width="100" height="100" fill="url(#g1)"/><path d="M100 0H0V100" fill="none" stroke="var(--grid-major)" stroke-width="'+(1/k)+'"/></pattern><pattern id="hatch" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="14" stroke="var(--muted)" stroke-width="2" opacity=".6"/></pattern><linearGradient id="sheen" x1="0" y1="0" x2="0.6" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.20"/><stop offset="0.55" stop-color="#fff" stop-opacity="0.03"/><stop offset="1" stop-color="#000" stop-opacity="0.07"/></linearGradient></defs>';
  o+='<rect x="'+vx+'" y="'+vy+'" width="'+vw+'" height="'+vh+'" fill="url(#g2)"/>';
  const uSVG=(u&&u.src&&u.show)?'<image href="'+u.src+'" x="'+u.x+'" y="'+u.y+'" width="'+(u.iw*u.cmPerPx)+'" height="'+(u.ih*u.cmPerPx)+'" opacity="'+u.opacity+'" preserveAspectRatio="none" data-kind="underlay" data-id="u" style="pointer-events:'+(mode==='plan'&&!u.locked?'auto':'none')+'"/>':'';
  if(mode!=='plan')o+=uSVG;
@@ -547,13 +549,30 @@ function render(){ if(!world)return; const k=view.k,t=state.wall,px=v=>v/k; let 
  world.innerHTML=o;applyView();}
 
 function decoSVG(it){const w=it.w,d=it.d;switch(it.deco){
- case 'bed':{const pw=Math.min(w*0.4,70),ph=Math.min(d*0.2,45);const g=w>120?Math.max(8,(w-2*pw)/3):(w-pw)/2;let s='<line class="deco" x1="'+(-w/2)+'" y1="'+(-d/2+4)+'" x2="'+(w/2)+'" y2="'+(-d/2+4)+'" style="stroke-width:3"/>';
-  if(w>120){s+='<rect class="deco" x="'+(-w/2+g)+'" y="'+(-d/2+12)+'" width="'+pw+'" height="'+ph+'" rx="6"/><rect class="deco" x="'+(w/2-g-pw)+'" y="'+(-d/2+12)+'" width="'+pw+'" height="'+ph+'" rx="6"/>';}
-  else s+='<rect class="deco" x="'+(-pw/2)+'" y="'+(-d/2+12)+'" width="'+pw+'" height="'+ph+'" rx="6"/>';
-  s+='<line class="deco" x1="'+(-w/2)+'" y1="'+(-d/2+ph+26)+'" x2="'+(w/2)+'" y2="'+(-d/2+ph+26)+'"/>';return s;}
- case 'sofa':{const bd=Math.min(22,d*0.25),ad=Math.min(16,w*0.1);let s='<rect class="deco" x="'+(-w/2)+'" y="'+(-d/2)+'" width="'+w+'" height="'+bd+'"/>';
-  if(it.shape!=='L')s+='<rect class="deco" x="'+(-w/2)+'" y="'+(-d/2+bd)+'" width="'+ad+'" height="'+(d-bd)+'"/><rect class="deco" x="'+(w/2-ad)+'" y="'+(-d/2+bd)+'" width="'+ad+'" height="'+(d-bd)+'"/>';return s;}
- case 'chair':return '<rect class="deco" x="'+(-w/2)+'" y="'+(-d/2)+'" width="'+w+'" height="'+Math.min(10,d*0.25)+'"/>';
+ case 'bed':{const pw=Math.min(w*0.38,68),ph=Math.min(d*0.18,42);const g=w>120?Math.max(10,(w-2*pw)/3):(w-pw)/2;
+  let s='<line class="deco" x1="'+(-w/2)+'" y1="'+(-d/2+4)+'" x2="'+(w/2)+'" y2="'+(-d/2+4)+'" style="stroke-width:3"/>';
+  if(w>120){s+='<rect class="deco" x="'+(-w/2+g)+'" y="'+(-d/2+11)+'" width="'+pw+'" height="'+ph+'" rx="8"/><rect class="deco" x="'+(w/2-g-pw)+'" y="'+(-d/2+11)+'" width="'+pw+'" height="'+ph+'" rx="8"/>';}
+  else s+='<rect class="deco" x="'+(-pw/2)+'" y="'+(-d/2+11)+'" width="'+pw+'" height="'+ph+'" rx="8"/>';
+  /* duvet with a turned-back corner */
+  const dy=-d/2+ph+22,fold=Math.min(34,w*0.22);
+  s+='<path class="deco" d="M '+(-w/2+6)+' '+dy+' H '+(w/2-6)+' V '+(d/2-7)+' Q '+(w/2-6)+' '+(d/2-4)+' '+(w/2-9)+' '+(d/2-4)+' H '+(-w/2+9)+' Q '+(-w/2+6)+' '+(d/2-4)+' '+(-w/2+6)+' '+(d/2-7)+' Z"/>';
+  s+='<path class="deco" d="M '+(w/2-6-fold)+' '+dy+' L '+(w/2-6)+' '+(dy+fold)+'"/>';
+  return s;}
+ case 'sofa':{const bd=Math.min(20,d*0.24),ad=Math.min(15,w*0.09);
+  let s='<rect class="deco" x="'+(-w/2+2)+'" y="'+(-d/2+2)+'" width="'+(w-4)+'" height="'+bd+'" rx="7"/>';
+  if(it.shape!=='L'){
+   s+='<rect class="deco" x="'+(-w/2+2)+'" y="'+(-d/2+bd)+'" width="'+ad+'" height="'+(d-bd-4)+'" rx="6"/><rect class="deco" x="'+(w/2-ad-2)+'" y="'+(-d/2+bd)+'" width="'+ad+'" height="'+(d-bd-4)+'" rx="6"/>';
+   /* seat cushion splits */
+   const sw2=w-2*ad-8,n=Math.max(1,Math.round(sw2/72));
+   for(let i=1;i<n;i++){const x=-w/2+ad+4+sw2*i/n;s+='<line class="deco" x1="'+x+'" y1="'+(-d/2+bd+4)+'" x2="'+x+'" y2="'+(d/2-6)+'"/>';}
+   s+='<line class="deco" x1="'+(-w/2+ad+4)+'" y1="'+(-d/2+bd+3)+'" x2="'+(w/2-ad-4)+'" y2="'+(-d/2+bd+3)+'" style="opacity:.6"/>';}
+  return s;}
+ case 'chair':{const bd=Math.min(10,d*0.22);
+  return '<rect class="deco" x="'+(-w/2+2)+'" y="'+(-d/2+2)+'" width="'+(w-4)+'" height="'+bd+'" rx="5"/><rect class="deco" x="'+(-w/2+6)+'" y="'+(-d/2+bd+4)+'" width="'+(w-12)+'" height="'+(d-bd-10)+'" rx="6" style="opacity:.7"/>';}
+ case 'ward':{let s='<line class="deco" x1="0" y1="'+(-d/2+3)+'" x2="0" y2="'+(d/2-3)+'"/>';
+  s+='<circle class="deco" cx="-7" cy="0" r="2.2"/><circle class="deco" cx="7" cy="0" r="2.2"/>';
+  for(let x=-w/2+12;x<w/2-10;x+=14)s+='<line class="deco" x1="'+x+'" y1="'+(-d/2+5)+'" x2="'+x+'" y2="'+(-d/2+Math.min(16,d*0.3))+'" style="opacity:.5"/>';
+  return s;}
  case 'bath':return '<rect class="deco" x="'+(-w/2+8)+'" y="'+(-d/2+8)+'" width="'+(w-16)+'" height="'+(d-16)+'" rx="'+(d/2-8)+'"/><circle class="deco" cx="'+(-w/2+22)+'" cy="0" r="3"/>';
  case 'shower':return '<line class="deco" x1="'+(-w/2)+'" y1="'+(-d/2)+'" x2="'+(w/2)+'" y2="'+(d/2)+'"/><line class="deco" x1="'+(w/2)+'" y1="'+(-d/2)+'" x2="'+(-w/2)+'" y2="'+(d/2)+'"/><circle class="deco" cx="0" cy="0" r="5"/>';
  case 'wc':return '<ellipse class="deco" cx="0" cy="'+(d/2-d*0.33)+'" rx="'+(w/2-5)+'" ry="'+(d*0.3)+'"/><rect class="deco" x="'+(-w/2+3)+'" y="'+(-d/2+3)+'" width="'+(w-6)+'" height="'+(d*0.28)+'"/>';
@@ -566,9 +585,22 @@ function decoSVG(it){const w=it.w,d=it.d;switch(it.deco){
 
 function itemSVG(it,k){const fill=it.zone?'url(#hatch)':(COLORS[it.color]||it.color||COLORS.oak);const tc=it.zone?'var(--muted)':textColorFor(fill);const w=it.w,d=it.d;
  const s=sel&&sel.kind==='item'&&sel.id===it.id,bad=!!issues[it.id];
- let body;if(it.shape==='round')body='<ellipse class="body" cx="0" cy="0" rx="'+w/2+'" ry="'+d/2+'" fill="'+fill+'"/>';
- else if(it.shape==='L')body='<polygon class="body" points="'+outlineLocal(it).map(p=>p.join(',')).join(' ')+'" fill="'+fill+'"/>';
- else body='<rect class="body" x="'+(-w/2)+'" y="'+(-d/2)+'" width="'+w+'" height="'+d+'" fill="'+fill+'"/>';
+ const soft=it.deco==='sofa'||it.deco==='bed'||it.deco==='chair';
+ const rx=(soft&&it.shape!=='round')?Math.min(9,Math.min(w,d)*0.1):0;
+ const mk=(cls,fl2,dx,dy)=>{const trs=dx?' transform="translate('+dx+' '+dy+')"':'';
+  if(it.shape==='round')return '<ellipse class="'+cls+'" cx="0" cy="0" rx="'+w/2+'" ry="'+d/2+'" fill="'+fl2+'"'+trs+'/>';
+  if(it.shape==='L')return '<polygon class="'+cls+'" points="'+outlineLocal(it).map(p=>p.join(',')).join(' ')+'" fill="'+fl2+'"'+trs+'/>';
+  return '<rect class="'+cls+'" x="'+(-w/2)+'" y="'+(-d/2)+'" width="'+w+'" height="'+d+'"'+(rx?' rx="'+rx+'"':'')+' fill="'+fl2+'"'+trs+'/>';};
+ let body='';
+ if(!it.under&&!it.zone){
+  /* consistent world-space light: rotate the shadow offset into item space */
+  const a=it.rot*Math.PI/180,sr=Math.sin(a),cr=Math.cos(a);
+  let dx=2.2*cr+3.2*sr,dy=-2.2*sr+3.2*cr;if(it.mirror)dx=-dx;
+  body+=mk('shdw','var(--item-shadow)',Math.round(dx*10)/10,Math.round(dy*10)/10);}
+ body+=mk('body',fill);
+ if(!it.zone)body+=mk('sheen','url(#sheen)');
+ if(it.under&&!it.zone&&!it.deco&&it.shape!=='round'&&Math.min(w,d)>60)
+  body+='<rect class="deco" x="'+(-w/2+9)+'" y="'+(-d/2+9)+'" width="'+(w-18)+'" height="'+(d-18)+'" rx="3" style="opacity:.5"/>';
  const tr='translate('+it.x+' '+it.y+') rotate('+it.rot+')'+(it.mirror?' scale(-1 1)':'');
  let label='';const sw=w*k,sd=d*k;const upside=(it.rot>90&&it.rot<=270);
  if(sw>=42&&sd>=16){const fs=11/k;const ltr='rotate('+(upside?180:0)+')'+(it.mirror?' scale(-1 1)':'');
@@ -740,13 +772,133 @@ function renderPanels(){ $('#title').value=state.title||'';
  $$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===libTab));$$('.pane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+libTab));
  renderLibrary();renderBoardList();renderPlanPane();renderInspector();}
 
+/* ---------- "from a shop": paste a product link or its size text ---------- */
+let shopText='',shopDraft=null,shopMsg='',shopBusy=false;
+function parseDimsText(text){
+ const t=String(text||'');
+ const out={};
+ const num=s=>parseFloat(String(s).replace(',','.'));
+ const toCm=(v,u)=>{if(!isFinite(v))return null;u=(u||'').toLowerCase();
+  if(u==='mm')return v/10; if(u==='m')return v*100; if(u==='cm')return v;
+  if(v>400&&v<=4500)return v/10;      // unlabelled big number: millimetres
+  if(v<4.5)return v*100;               // unlabelled small number: metres
+  return v;};
+ const dims={};
+ const put=(k,v)=>{if(v==null||v<10||v>500)return;
+  if(k==='w'&&dims.w==null)dims.w=v;
+  else if((k==='d'||k==='l')&&dims.d==null)dims.d=v;
+  else if(k==='h'&&dims.h==null)dims.h=v;};
+ /* ordered headers first: "H x W x D: 110 x 155 x 210cm", "(W x D) 226 x 96cm" */
+ const hdr3=/([HWDL])\s*[x×*\/]\s*([HWDL])\s*[x×*\/]\s*([HWDL])\W{0,4}(\d+(?:[.,]\d+)?)\s*(cm|mm|m)?\s*[x×*]\s*(\d+(?:[.,]\d+)?)\s*(cm|mm|m)?\s*[x×*]\s*(\d+(?:[.,]\d+)?)\s*(cm|mm|m)?/i.exec(t);
+ const hdr2=hdr3?null:/([HWDL])\s*[x×*\/]\s*([HWDL])\W{0,4}(\d+(?:[.,]\d+)?)\s*(cm|mm|m)?\s*[x×*]\s*(\d+(?:[.,]\d+)?)\s*(cm|mm|m)?/i.exec(t);
+ if(hdr3){const u=hdr3[9]||hdr3[7]||hdr3[5];
+  const vals=[toCm(num(hdr3[4]),hdr3[5]||u),toCm(num(hdr3[6]),hdr3[7]||u),toCm(num(hdr3[8]),hdr3[9]||u)];
+  [hdr3[1],hdr3[2],hdr3[3]].forEach((L,i)=>{const k=L.toLowerCase();put(k==='l'?'d':k,vals[i]);});}
+ else if(hdr2){const u=hdr2[6]||hdr2[4];
+  const vals=[toCm(num(hdr2[3]),hdr2[4]||u),toCm(num(hdr2[5]),hdr2[6]||u)];
+  [hdr2[1],hdr2[2]].forEach((L,i)=>{const k=L.toLowerCase();put(k==='l'?'d':k,vals[i]);});}
+ /* labelled: "Width: 226cm", "W226", "Depth 96 cm", "Length: 2.0m", "H88cm" */
+ const lab=/(width|depth|height|length|diameter|\b[WDHL])\s*[:=.]?\s*(\d+(?:[.,]\d+)?)\s*(cm|mm|m\b)?/gi;
+ let m;
+ while((m=lab.exec(t)))put(m[1][0].toLowerCase(),toCm(num(m[2]),m[3]));
+ /* "226 x 96 x 88 cm" (or two values for rugs and beds) */
+ if(dims.w==null||dims.d==null){
+  const tri=/(\d+(?:[.,]\d+)?)\s*(cm|mm|m)?\s*[x*×]\s*(\d+(?:[.,]\d+)?)\s*(cm|mm|m)?(?:\s*[x*×]\s*(\d+(?:[.,]\d+)?)\s*(cm|mm|m)?)?/i.exec(t);
+  if(tri){
+   const u=tri[6]||tri[4]||tri[2];
+   const a=toCm(num(tri[1]),tri[2]||u),b=toCm(num(tri[3]),tri[4]||u),c=tri[5]!=null?toCm(num(tri[5]),tri[6]||u):null;
+   const ok=v=>v!=null&&v>=10&&v<=500;
+   const pre=t.slice(Math.max(0,tri.index-40),tri.index).toLowerCase();
+   const hwd=/h\s*[x*×\/]\s*w\s*[x*×\/]\s*[dl]/.test(pre); // "(H x W x D)" prefix
+   if(ok(a)&&ok(b)){
+    if(c!=null&&ok(c)&&hwd){put('h',a);put('w',b);put('d',c);}
+    else if(c!=null&&ok(c)){put('w',a);put('d',b);put('h',c);}
+    else{put('w',a);put('d',b);}}}}
+ if(dims.w!=null&&dims.d==null&&/diamet/i.test(t))dims.d=dims.w;
+ const pm=/(£|€|\$)\s?(\d[\d,]*(?:\.\d\d)?)/.exec(t);
+ if(pm)out.price=pm[1]+pm[2];
+ for(const line of t.split(/[\n\r]+/)){const s=line.trim();
+  if(s.length>=4&&/[a-z]{3}/i.test(s)&&!/^https?:/i.test(s)&&s.replace(/[^0-9]/g,'').length<s.length/3){out.name=s.slice(0,70);break;}}
+ if(dims.w==null||dims.d==null)return null;
+ out.w=Math.round(dims.w);out.d=Math.round(dims.d);
+ if(dims.h!=null)out.h=Math.round(dims.h);
+ return out;}
+function guessKind(name){const n=(name||'').toLowerCase();
+ if(/sofa|settee|couch|chaise/.test(n))return {deco:'sofa',color:'fabric'};
+ if(/\bbed\b|bedstead|divan|\bcot\b/.test(n))return {deco:'bed',color:'linen'};
+ if(/armchair|\bchair\b|stool/.test(n))return {deco:'chair',color:'fabric'};
+ if(/\brug\b|runner|carpet/.test(n))return {under:true,color:'rug'};
+ if(/wardrobe|armoire/.test(n))return {deco:'ward',color:'walnut'};
+ if(/table|desk|sideboard|console|dresser|drawers|bookcase|shelv/.test(n))return {color:'oak'};
+ if(/\btv\b|television/.test(n))return {color:'ink'};
+ return {color:'cobalt'};}
+async function doShopRead(){
+ const txt=shopText.trim();if(!txt||shopBusy)return;
+ shopMsg='';shopDraft=null;
+ const um=/https?:\/\/[^\s"'<>]+/.exec(txt);
+ const pasted=parseDimsText(um?txt.replace(um[0],' '):txt);
+ if(um&&typeof window.wfProductFetch==='function'){
+  shopBusy=true;renderLibrary();
+  let fetched=null,failed=false;
+  try{fetched=await window.wfProductFetch(um[0]);}catch(e){failed=true;}
+  shopBusy=false;
+  const dims=(fetched&&fetched.dims)||pasted;
+  if(dims&&dims.w){
+   shopDraft={name:(fetched&&fetched.name)||(pasted&&pasted.name)||'Item from a shop',
+    w:dims.w,d:dims.d,h:dims.h,price:(fetched&&fetched.price)||(pasted&&pasted.price)||'',link:um[0]};}
+  else if(failed)shopMsg='That shop would not let us read the page. Copy the size text from it (e.g. "W: 226cm D: 96cm") and paste that here instead.';
+  else shopMsg='Read the page but could not find sizes on it. Copy the dimensions text from the product page and paste that here.';
+  renderLibrary();return;}
+ if(pasted&&pasted.w){shopDraft=pasted;if(um)shopDraft.link=um[0];}
+ else if(um)shopMsg='Links cannot be fetched in this copy of the planner. Copy the size text off the product page and paste it here (keeping the link in the paste is fine).';
+ else shopMsg='No sizes found. Paste something like "W: 226cm x D: 96cm" - any labels and units work.';
+ renderLibrary();}
+function shopAdd(){
+ if(!shopDraft||!shopDraft.w)return;
+ const g=guessKind(shopDraft.name);
+ const it=addItem({name:shopDraft.name||'Item from a shop',w:clamp(Math.round(shopDraft.w),10,2000),d:clamp(Math.round(shopDraft.d),10,2000),color:g.color,deco:g.deco||'',under:!!g.under});
+ if(shopDraft.link)it.link=shopDraft.link;
+ if(shopDraft.price)it.price=shopDraft.price;
+ changed();
+ shopDraft=null;shopText='';shopMsg='';
+ renderLibrary();closeDrawers();
+ toast('Added at its real size - drag it into a room');}
+
 let libQuery='';
 function renderLibrary(){const p=$('#pane-Library');const q=libQuery.trim().toLowerCase();let h='<input class="search" id="libq" type="text" placeholder="Search furniture…" value="'+esc(libQuery)+'" aria-label="Search furniture">';
  h+='<div class="hint">Click to add to the view, or drag onto the board. Edit sizes in the panel on the right.</div>';
  LIB.forEach(c=>{const its=c.items.filter(i=>!q||i.name.toLowerCase().includes(q)||c.cat.toLowerCase().includes(q));if(!its.length)return;h+='<div class="cat"><h2>'+esc(c.cat)+'</h2><div class="lib">';
   its.forEach((i,idx)=>{h+='<button data-cat="'+esc(c.cat)+'" data-i="'+c.items.indexOf(i)+'"><span class="nm">'+esc(i.name)+'</span><span class="dm">'+esc(fmt(i.w,true)+' × '+fmt(i.d,true))+'</span><span class="sw" style="background:'+(COLORS[i.color]||'#ccc')+'"></span></button>';});h+='</div></div>';});
+ h+='<div class="cat"><h2>From a shop</h2>';
+ h+='<div class="hint">'+(typeof window.wfProductFetch==='function'
+  ?'Paste a product link, or copy the size text off the product page. The piece lands here at its real size.'
+  :'Copy the product name and size text off any shop page and paste it here. The piece lands at its real size.')+'</div>';
+ h+='<textarea id="shop-in" rows="2" placeholder="e.g. Hartford 3-seater  W: 226cm D: 96cm" aria-label="Product link or size text"></textarea>';
+ h+='<div class="row"><button class="primary" id="shop-go"'+(shopBusy?' disabled':'')+'>'+(shopBusy?'Reading the page…':'Read it')+'</button></div>';
+ if(shopMsg)h+='<div class="hint" style="color:var(--warn)">'+esc(shopMsg)+'</div>';
+ if(shopDraft){
+  h+='<div style="border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--panel-2)">';
+  h+='<label class="f"><span>Name</span><input id="shop-nm" type="text" value="'+esc(shopDraft.name||'')+'"></label>';
+  h+='<div class="grid3"><label class="f"><span>Width (cm)</span><input id="shop-w" type="number" step="1" min="10" value="'+Math.round(shopDraft.w)+'"></label><label class="f"><span>Depth (cm)</span><input id="shop-d" type="number" step="1" min="10" value="'+Math.round(shopDraft.d)+'"></label><label class="f"><span>Height</span><input id="shop-h" type="number" step="1" value="'+(shopDraft.h?Math.round(shopDraft.h):'')+'" placeholder="–"></label></div>';
+  if(shopDraft.price||shopDraft.link)h+='<div class="hint">'+(shopDraft.price?esc(shopDraft.price)+' · ':'')+(shopDraft.link?'link saved with the item':'')+'</div>';
+  h+='<div class="row"><button class="primary" id="shop-addb">Add to the board</button><button class="ghost" id="shop-swap" title="Swap width and depth">Swap W/D</button><button class="ghost" id="shop-cancel">Cancel</button></div></div>';
+ }
+ h+='</div>';
  h+='<div class="cat"><h2>Custom</h2><button id="custom-add">+ Custom item (enter any size)</button></div>';
  p.innerHTML=h;
+ {const si=$('#shop-in');si.value=shopText;
+  si.addEventListener('input',e=>{shopText=e.target.value;});
+  si.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();doShopRead();}});
+  $('#shop-go').addEventListener('click',doShopRead);
+  if(shopDraft){
+   $('#shop-nm').addEventListener('change',e=>{shopDraft.name=e.target.value;});
+   $('#shop-w').addEventListener('change',e=>{shopDraft.w=+e.target.value||shopDraft.w;});
+   $('#shop-d').addEventListener('change',e=>{shopDraft.d=+e.target.value||shopDraft.d;});
+   $('#shop-h').addEventListener('change',e=>{shopDraft.h=+e.target.value||null;});
+   $('#shop-addb').addEventListener('click',shopAdd);
+   $('#shop-swap').addEventListener('click',()=>{const w=shopDraft.w;shopDraft.w=shopDraft.d;shopDraft.d=w;renderLibrary();});
+   $('#shop-cancel').addEventListener('click',()=>{shopDraft=null;renderLibrary();});
+  }}
  $('#libq').addEventListener('input',e=>{libQuery=e.target.value;const pos=e.target.selectionStart;renderLibrary();const el=$('#libq');el.focus();el.setSelectionRange(pos,pos);});
  $$('.lib button',p).forEach(b=>{const def=LIB.find(c=>c.cat===b.dataset.cat).items[+b.dataset.i];b.addEventListener('pointerdown',e=>libDown(e,def));});
  $('#custom-add').addEventListener('click',()=>{const it=addItem({name:'Custom item',w:100,d:50,color:'cobalt'});closeDrawers();$('#insp').classList.add('open');setTimeout(()=>{const f=$('#f-name');if(f){f.focus();f.select();}},0);});}
@@ -816,8 +968,10 @@ function renderInspector(){const p=$('#insp');const s=getSel();let h='';
   else if(it.zone)h+='<div class="hint">A zone marks an area (e.g. low headroom). Furniture placed in it gets a warning.</div>';
   else h+='<div class="hint">Not inside a room.</div>';
   if(iss.length)h+='<div class="issues">'+iss.map(m=>'<div class="issue">'+esc(m)+'</div>').join('')+'</div>';else if(!it.under&&!it.zone)h+='<div class="okbox">No clashes.</div>';
+  if(it.link)h+='<div class="row"><button class="ghost small" id="b-shoplink">View the product'+(it.price?' · '+esc(it.price):'')+' ↗</button></div>';
   h+='<div class="kv small"><b>Position</b><span id="f-pos">'+esc(fmt(it.x)+', '+fmt(it.y))+'</span></div>';
   h+='</div>';p.innerHTML=h;
+  if(it.link)$('#b-shoplink').addEventListener('click',()=>{window.open(it.link,'_blank','noopener');});
   const commit=fn=>{pushHistory();fn();changed();};
   $('#f-name').addEventListener('change',e=>commit(()=>{it.name=e.target.value||'Item';}));
   $('#f-w').addEventListener('change',e=>commit(()=>{it.w=clamp(fromUnit(+e.target.value)||1,1,2000);}));
@@ -1514,6 +1668,48 @@ function wfBuildPlan(meta,imgPack,trace){
  return plan;}
 
 function wfHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))>>>0;return h.toString(36);}
+
+/* ---------- shop product pages: name, price, real dimensions ---------- */
+window.wfProductFetch=async function(url){
+ const P=WF_PROXIES;
+ /* direct first: some shops allow CORS, and it fails fast when they don't */
+ const chain=[{name:'direct',u:x=>x},P.corssh,P.allorigins,P.jinaMd,P.codetabs,P.jinaHtml];
+ const text=await wfHedged(chain,p=>wfFetchT(p.u(url),{headers:p.headers||{}},p.name.indexOf('jina')===0?35000:15000)
+  .then(r=>{if(!r.ok)throw new Error('http '+r.status);return r.text();})
+  .then(t=>{if(!t||t.length<600)throw new Error('empty');
+   if(/Just a moment|cf-chl|challenge-platform|Access Denied|Attention Required|are you a human|Robot or human/i.test(t.slice(0,4000)))throw new Error('blocked');
+   return t;}),3500,70000);
+ const out={link:url,dims:null};
+ let m=/property="og:title"\s+content="([^"]+)"/i.exec(text)||/<title>([^<]+)<\/title>/i.exec(text)||/^Title:\s*([^\r\n]+)/m.exec(text);
+ if(m)out.name=m[1].split(/\s*[|–—]\s*/)[0].trim().slice(0,70);
+ /* schema.org Product blocks are the most reliable source when present */
+ const lds=text.match(/<script[^>]*ld\+json[^>]*>([\s\S]*?)<\/script>/gi)||[];
+ for(const block of lds){
+  try{
+   const j=JSON.parse(block.replace(/<script[^>]*>/i,'').replace(/<\/script>/i,''));
+   const prods=[].concat(j,j&&j['@graph']||[]).filter(o=>o&&/product/i.test(String(o['@type'])));
+   for(const pr of prods){
+    if(pr.name&&!out.name)out.name=String(pr.name).slice(0,70);
+    const offers=[].concat(pr.offers||[]);
+    if(offers[0]&&offers[0].price&&!out.price)out.price='£'+offers[0].price;
+    const dv=k=>{const v=pr[k];if(v==null)return null;
+     const val=typeof v==='object'?v.value:v;const unit=typeof v==='object'?(v.unitCode||v.unitText||''):'';
+     const n=parseFloat(val);if(!isFinite(n))return null;
+     if(/mm|MMT/i.test(unit))return n/10;if(/^m$|MTR/i.test(unit))return n*100;if(/cm|CMT/i.test(unit))return n;
+     return n>400?n/10:n;};
+    const w=dv('width'),d=dv('depth'),h=dv('height');
+    if(w&&d&&!out.dims)out.dims={w:Math.round(w),d:Math.round(d),h:h?Math.round(h):undefined};}
+  }catch(e){}}
+ if(!out.price){m=/(£|€)\s?(\d[\d,]*(?:\.\d\d)?)/.exec(text);if(m)out.price=m[1]+m[2];}
+ /* visible text: look near dimension-ish keywords first, then anywhere */
+ if(!out.dims){
+  const plain=text.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;|&#160;/g,' ');
+  let best=null;
+  const kw=/dimension|measurement|\bsize\b|width|depth/gi;let k;
+  while((k=kw.exec(plain))&&!best)best=parseDimsText(plain.slice(Math.max(0,k.index-120),k.index+600));
+  if(!best)best=parseDimsText(plain.slice(0,120000));
+  if(best){out.dims={w:best.w,d:best.d,h:best.h};if(!out.price&&best.price)out.price=best.price;}}
+ return out;};
 
 /* ---------- the whole pipeline ---------- */
 async function resolveListingLive(url,onStage){
