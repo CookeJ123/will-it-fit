@@ -3,26 +3,27 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Jost:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style id="css">
 :root{
-  --bg:#EEF0EC; --panel:#FFFFFF; --panel-2:#F6F7F4; --ink:#1B1F26; --muted:#5E6673; --line:#D5D9D2; --line-2:#E6E9E3;
-  --accent:#1F5FBF; --accent-soft:#DCE6F8; --on-accent:#FFFFFF; --warn:#C8491B; --warn-soft:#FBE5DC; --ok:#2E7D4F;
-  --floor:#E9E5DA; --floor-oak:#E3D3B4; --floor-tile:#DEE4E4; --floor-dark:#C9C4BA; --wall:#23272E; --grid:#D9DDD5; --grid-major:#C8CDC4;
-  --canvas:#E4E6E1; --shadow:0 8px 24px rgba(20,24,32,.12); --item-shadow:rgba(20,24,32,.15);
-  --sans:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,sans-serif; --disp:'Archivo','IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  /* Will it Fit brand: Deep Pine #0C3532 · Estate Teal #16544E · Seafoam #8FD9C9 · Mist #CDEFE5 · Paper #F3F4F1 */
+  --bg:#F3F4F1; --panel:#FFFFFF; --panel-2:#EBEFEA; --ink:#1E3833; --muted:#5E7A74; --line:#D3DCD5; --line-2:#E3E9E3;
+  --accent:#16544E; --accent-soft:#CDEFE5; --on-accent:#F3FBF7; --warn:#C8491B; --warn-soft:#FBE5DC; --ok:#2E7D4F;
+  --floor:#EAE6DA; --floor-oak:#E5D5B6; --floor-tile:#DCE6E2; --floor-dark:#CBC7BB; --wall:#0C3532; --grid:#DCE2DA; --grid-major:#CBD3CA;
+  --canvas:#ECEEE7; --shadow:0 8px 24px rgba(12,53,50,.12); --item-shadow:rgba(12,53,50,.16);
+  --sans:'Jost',system-ui,-apple-system,Segoe UI,sans-serif; --disp:'Jost',system-ui,sans-serif; --serif:'Cormorant Garamond',Georgia,serif; --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
-  --bg:#0E1524; --panel:#141F33; --panel-2:#192741; --ink:#E7EDF8; --muted:#94A6C4; --line:#263A5C; --line-2:#1F304E;
-  --accent:#6FB0FF; --accent-soft:#1D3557; --on-accent:#081221; --warn:#FF9A70; --warn-soft:#47291E; --ok:#63C79A;
-  --floor:#14263F; --floor-oak:#20304A; --floor-tile:#122B42; --floor-dark:#0F1E33; --wall:#D8E5F8; --grid:#152949; --grid-major:#1C355B;
-  --canvas:#0B1B33; --shadow:0 8px 24px rgba(2,8,20,.55); --item-shadow:rgba(2,8,20,.55);
+  --bg:#08201D; --panel:#0D2C29; --panel-2:#123632; --ink:#E6F3ED; --muted:#8FAEA5; --line:#1E4841; --line-2:#183C36;
+  --accent:#8FD9C9; --accent-soft:#16544E; --on-accent:#06201C; --warn:#F0A088; --warn-soft:#47291E; --ok:#7BCEA4;
+  --floor:#0F332E; --floor-oak:#1D3B2F; --floor-tile:#0E3A36; --floor-dark:#0A2723; --wall:#CDEFE5; --grid:#10312C; --grid-major:#17453F;
+  --canvas:#07211E; --shadow:0 8px 24px rgba(2,12,10,.55); --item-shadow:rgba(2,12,10,.55);
 }}
 :root[data-theme="dark"]{
-  --bg:#0E1524; --panel:#141F33; --panel-2:#192741; --ink:#E7EDF8; --muted:#94A6C4; --line:#263A5C; --line-2:#1F304E;
-  --accent:#6FB0FF; --accent-soft:#1D3557; --on-accent:#081221; --warn:#FF9A70; --warn-soft:#47291E; --ok:#63C79A;
-  --floor:#14263F; --floor-oak:#20304A; --floor-tile:#122B42; --floor-dark:#0F1E33; --wall:#D8E5F8; --grid:#152949; --grid-major:#1C355B;
-  --canvas:#0B1B33; --shadow:0 8px 24px rgba(2,8,20,.55); --item-shadow:rgba(2,8,20,.55);
+  --bg:#08201D; --panel:#0D2C29; --panel-2:#123632; --ink:#E6F3ED; --muted:#8FAEA5; --line:#1E4841; --line-2:#183C36;
+  --accent:#8FD9C9; --accent-soft:#16544E; --on-accent:#06201C; --warn:#F0A088; --warn-soft:#47291E; --ok:#7BCEA4;
+  --floor:#0F332E; --floor-oak:#1D3B2F; --floor-tile:#0E3A36; --floor-dark:#0A2723; --wall:#CDEFE5; --grid:#10312C; --grid-major:#17453F;
+  --canvas:#07211E; --shadow:0 8px 24px rgba(2,12,10,.55); --item-shadow:rgba(2,12,10,.55);
 }
 *,*::before,*::after{box-sizing:border-box}
 html,body{height:100%;margin:0}
@@ -57,7 +58,7 @@ h3{font-size:15px;font-weight:600}
 /* top bar */
 .top{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel);min-height:50px}
 .top .brand{display:flex;align-items:baseline;gap:10px;min-width:0}
-.top .brand h1{font-size:16px;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.top .brand h1{font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}
 .top .brand input{font-family:var(--disp);font-weight:600;font-size:14px;border:1px solid transparent;background:transparent;border-radius:6px;padding:4px 6px;min-width:0;width:min(34vw,260px)}
 .top .brand input:hover,.top .brand input:focus{border-color:var(--line);background:var(--panel-2)}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
@@ -191,7 +192,7 @@ const uid=()=>Math.random().toString(36).slice(2,9);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clone=o=>JSON.parse(JSON.stringify(o));
-const FONTS='https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap';
+const FONTS='https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Jost:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap';
 const KEY='willitfit:draft:v1';
 const PLAN_ID='maple-house-2026-08-19b';
 
@@ -963,7 +964,7 @@ async function saveToPage(){if(!caps.artifact)return;const btn=$('#save-page');i
   else{toast('Could not save ('+(code||'error')+')');if(btn){btn.disabled=false;btn.textContent='Save to page';}}}}
 function planSnapshotSVG(maxPx,bgVar){const b=planBounds();const pad=40;const W=b.w+pad*2,H=b.d+pad*2;const scale=Math.min(4,Math.max(1,maxPx/Math.max(W,H)));
  const savedSel=sel,savedMode=mode;sel=null;mode='furnish';render();
- const css=getComputedStyle(document.documentElement);const vars=['--ink','--muted','--wall','--floor','--floor-oak','--floor-tile','--floor-dark','--accent','--warn','--canvas','--panel','--grid','--grid-major','--sans','--disp','--mono'].map(v=>v+':'+css.getPropertyValue(v)+';').join('');
+ const css=getComputedStyle(document.documentElement);const vars=['--ink','--muted','--wall','--floor','--floor-oak','--floor-tile','--floor-dark','--accent','--warn','--canvas','--panel','--grid','--grid-major','--sans','--disp','--serif','--mono'].map(v=>v+':'+css.getPropertyValue(v)+';').join('');
  const style='<style>:root{'+vars+'}'+$('#css').textContent.split('/* canvas */')[1].split('.toast')[0]+'</style>';
  const inner=world.innerHTML;sel=savedSel;mode=savedMode;render();
  return {W:W*scale,H:H*scale,
@@ -989,7 +990,7 @@ async function exportShareCard(){try{ensureDownloads();
  const snap=planSnapshotSVG(1500);
  const img=await svgToImage(snap.svg);
  const css=getComputedStyle(document.documentElement);const col=v=>css.getPropertyValue(v).trim();
- const sans=(css.getPropertyValue('--sans')||'sans-serif').trim(),disp=(css.getPropertyValue('--disp')||sans).trim(),monoF=(css.getPropertyValue('--mono')||'monospace').trim();
+ const sans=(css.getPropertyValue('--sans')||'sans-serif').trim(),disp=(css.getPropertyValue('--disp')||sans).trim(),monoF=(css.getPropertyValue('--mono')||'monospace').trim(),serifF=(css.getPropertyValue('--serif')||'Georgia,serif').trim();
  const CW=1600,CH=900;const c=document.createElement('canvas');c.width=CW;c.height=CH;const ctx=c.getContext('2d');
  ctx.fillStyle=col('--bg');ctx.fillRect(0,0,CW,CH);
  /* plan panel */
@@ -1002,8 +1003,12 @@ async function exportShareCard(){try{ensureDownloads();
  ctx.restore();
  /* right column */
  const rx=px0+pw+56,rw=CW-(px0+pw+56)-52;let ry=170;
- ctx.fillStyle=col('--accent');ctx.font='600 21px '+monoF;ctx.fillText('WILL IT FIT',rx,ry);ry+=62;
- ctx.fillStyle=col('--ink');ctx.font='700 46px '+disp;
+ ctx.fillStyle=col('--accent');ctx.font='600 26px '+serifF;
+ try{ctx.letterSpacing='7px';}catch(e){}
+ ctx.fillText('WILL IT FIT',rx,ry);
+ try{ctx.letterSpacing='0px';}catch(e){}
+ ry+=62;
+ ctx.fillStyle=col('--ink');ctx.font='600 48px '+serifF;
  ry=cardWrap(ctx,state.title||'My floor plan',rx,ry,rw,56,3)+18;
  const roomGroups=new Set(state.rooms.map(r2=>r2.name.trim().toLowerCase())).size;
  const nItems=state.items.filter(i=>!i.zone).length;
