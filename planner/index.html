@@ -175,11 +175,22 @@ svg .handle.rot:hover{transform:scale(1.35)}
 .dlg section h2{font-size:11px}
 .banner{background:var(--accent-soft);border-bottom:1px solid var(--line);padding:6px 12px;font-size:12.5px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .banner .sp{flex:1}
+/* onboarding coach mark */
+.coach{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:16;display:flex;gap:10px;align-items:center;background:var(--accent-soft);border:1.5px solid var(--accent);border-radius:10px;padding:9px 12px;font-size:13px;box-shadow:var(--shadow);max-width:min(92vw,430px)}
+.coach[hidden]{display:none}
+.coach button{flex:none}
+/* mobile item pill */
+.mpill{display:none}
 @media (max-width:920px){
   .main{grid-template-columns:1fr}
-  .side,.insp{position:absolute;top:0;bottom:0;width:min(86vw,320px);z-index:20;box-shadow:var(--shadow);transform:translateX(-105%);transition:transform .2s}
-  .insp{right:0;left:auto;transform:translateX(105%)}
+  /* panels become bottom sheets on small screens */
+  .side,.insp{position:absolute;left:0;right:0;bottom:0;top:auto;width:auto;max-height:58vh;z-index:20;border:1px solid var(--line);border-bottom:0;border-radius:16px 16px 0 0;box-shadow:0 -14px 34px rgba(4,18,15,.28);transform:translateY(106%);transition:transform .25s}
+  .side::before,.insp::before{content:"";display:block;width:44px;height:4px;border-radius:2px;background:var(--line);margin:8px auto 2px;flex:none}
   .side.open,.insp.open{transform:none}
+  .mpill:not([hidden]){position:absolute;left:50%;transform:translateX(-50%);bottom:14px;display:flex;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:7px 10px;z-index:15;max-width:94vw}
+  .mpill .nm{font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:32vw}
+  .mpill .dm{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+  .mpill button{min-width:40px;min-height:40px;font-size:16px}
   .top{flex-wrap:wrap;gap:6px 8px;padding:6px 8px}
   .top .narrow-only{display:inline-flex}
   .top .wide-only{display:none}
@@ -243,7 +254,7 @@ const SAMPLE={"v":1,"title":"Maple House, Reading Road \u2014 first floor","unit
 /* ---------- app state ---------- */
 let state, hist=[], future=[], sel=null, mode='furnish', view={k:0.8,tx:40,ty:40};
 let readOnly=false, caps={artifact:null,downloads:null}, measure=null, calib=null, issues={}, issueList=[], drag=null, libDrag=null;
-let pointers=new Map(), libTab='Library', saveTimer=null, toastTimer=null, fromLink=false, planUpdated=false;
+let pointers=new Map(), libTab='Library', saveTimer=null, toastTimer=null, fromLink=false, planUpdated=false, lastTap=null;
 const root=$('#root');
 
 /* ---------- units ---------- */
@@ -476,15 +487,18 @@ function itemOverlay(it,k){const px=v=>v/k;let o='';const polys=worldPolys(it);c
  // rotate handle
  const [hx,hy]=rot(0,-it.d/2-px(26),it.rot);const [tx,ty]=rot(0,-it.d/2,it.rot);
  o+='<line class="guide" style="stroke-dasharray:none" x1="'+(it.x+tx)+'" y1="'+(it.y+ty)+'" x2="'+(it.x+hx)+'" y2="'+(it.y+hy)+'"/>';
+ o+='<circle class="hit" data-kind="handle" data-h="rot" cx="'+(it.x+hx)+'" cy="'+(it.y+hy)+'" r="'+px(17)+'"/>';
  o+='<circle class="handle rot" data-kind="handle" data-h="rot" cx="'+(it.x+hx)+'" cy="'+(it.y+hy)+'" r="'+px(7)+'"/>';
- // corner handles for resize
- if(!it.locked){[['nw',-1,-1],['ne',1,-1],['sw',-1,1],['se',1,1]].forEach(([h,sx,sy])=>{const m=it.mirror?-1:1;const [cxr,cyr]=rot(sx*m*it.w/2,sy*it.d/2,it.rot);o+='<rect class="handle" data-kind="handle" data-h="'+h+'" x="'+(it.x+cxr-px(4.5))+'" y="'+(it.y+cyr-px(4.5))+'" width="'+px(9)+'" height="'+px(9)+'" transform="rotate('+it.rot+' '+(it.x+cxr)+' '+(it.y+cyr)+')"/>';});}
+ // corner handles for resize (with generous invisible touch targets)
+ if(!it.locked){[['nw',-1,-1],['ne',1,-1],['sw',-1,1],['se',1,1]].forEach(([h,sx,sy])=>{const m=it.mirror?-1:1;const [cxr,cyr]=rot(sx*m*it.w/2,sy*it.d/2,it.rot);
+  o+='<rect class="hit" data-kind="handle" data-h="'+h+'" x="'+(it.x+cxr-px(12))+'" y="'+(it.y+cyr-px(12))+'" width="'+px(24)+'" height="'+px(24)+'"/>';
+  o+='<rect class="handle" data-kind="handle" data-h="'+h+'" x="'+(it.x+cxr-px(4.5))+'" y="'+(it.y+cyr-px(4.5))+'" width="'+px(9)+'" height="'+px(9)+'" transform="rotate('+it.rot+' '+(it.x+cxr)+' '+(it.y+cyr)+')"/>';});}
  return o;}
 
 /* ---------- lookups ---------- */
 function byId(kind,id){if(kind==='item')return state.items.find(i=>i.id===id);if(kind==='room')return state.rooms.find(i=>i.id===id);if(kind==='opening')return state.openings.find(i=>i.id===id);if(kind==='underlay')return state.underlay;return null;}
 function getSel(){return sel?byId(sel.kind,sel.id):null;}
-function select(kind,id){sel=kind?{kind,id}:null;render();renderPanels();}
+function select(kind,id){sel=kind?{kind,id}:null;if(kind==='item')obHide();render();renderPanels();}
 
 /* ---------- snapping ---------- */
 function snapGrid(v){const g=state.grid||5;return Math.round(v/g)*g;}
@@ -512,6 +526,8 @@ function addItem(def,x,y){pushHistory();const c=viewCentreWorld();const it={id:u
  if(def.a)it.a=def.a;if(def.b)it.b=def.b;if(def.link)it.link=def.link;if(def.price)it.price=def.price;if(def.photo)it.photo=def.photo;
  if(state.snap){[it.x,it.y]=snapItemPos(it,it.x,it.y);}state.items.push(it);sel={kind:'item',id:it.id};changed();
  {const n=world&&world.querySelector('.item[data-id="'+it.id+'"]');if(n)n.classList.add('pop');}
+ obSet('a');obHide();
+ if(!obGet().b)obShow('b','Nice. Tap a piece to see its gap to every wall — and drag the ○ handle above it to turn it.');
  return it;}
 function deleteSel(){if(!sel)return;pushHistory();if(sel.kind==='item')state.items=state.items.filter(i=>i.id!==sel.id);else if(sel.kind==='room')state.rooms=state.rooms.filter(i=>i.id!==sel.id);else if(sel.kind==='opening')state.openings=state.openings.filter(i=>i.id!==sel.id);else if(sel.kind==='underlay')state.underlay=null;sel=null;changed();}
 function duplicateSel(){const s=getSel();if(!s)return;pushHistory();const c=clone(s);c.id=uid();if(sel.kind==='item'){c.x+=30;c.y+=30;state.items.push(c);}else if(sel.kind==='room'){c.x+=c.w+state.wall;state.rooms.push(c);}else if(sel.kind==='opening'){c.x+=20;c.y+=20;state.openings.push(c);}else return;sel={kind:sel.kind,id:c.id};changed();}
@@ -528,7 +544,11 @@ function onDown(e){if(e.button===2)return;svg.setPointerCapture(e.pointerId);poi
  if(calib){calib.pts.push(w);if(calib.pts.length===2)finishCalib();else render();return;}
  if(mode==='measure'){measure={x1:w.x,y1:w.y,x2:w.x,y2:w.y};drag={type:'measure'};render();return;}
  if(kind==='handle'){const s=getSel();if(!s)return;drag={type:'handle',h:tEl.dataset.h,start:w,orig:clone(s),moved:false};return;}
- if(mode==='furnish'&&kind==='item'){const it=byId('item',id);if(!it)return;if(!(sel&&sel.kind==='item'&&sel.id===id))select('item',id);if(it.locked){return;}drag={type:'move',start:w,orig:{x:it.x,y:it.y},moved:false,sx:e.clientX,sy:e.clientY};return;}
+ if(mode==='furnish'&&kind==='item'){const it=byId('item',id);if(!it)return;if(!(sel&&sel.kind==='item'&&sel.id===id))select('item',id);if(it.locked){return;}
+  const now=Date.now();
+  if(lastTap&&lastTap.id===id&&now-lastTap.t<350&&Math.hypot(e.clientX-lastTap.x,e.clientY-lastTap.y)<24){lastTap=null;rotateSel(90);return;}
+  lastTap={id,t:now,x:e.clientX,y:e.clientY};
+  drag={type:'move',start:w,orig:{x:it.x,y:it.y},moved:false,sx:e.clientX,sy:e.clientY};return;}
  if(mode==='plan'&&(kind==='room'||kind==='opening'||kind==='underlay')){const ob=byId(kind,id);if(!ob)return;if(!(sel&&sel.kind===kind&&(kind==='underlay'||sel.id===id)))select(kind,id);if(ob.locked)return;drag={type:'move',start:w,orig:{x:ob.x,y:ob.y},moved:false,sx:e.clientX,sy:e.clientY};return;}
  if(sel&&!(e.shiftKey))select(null,null);
  drag={type:'pan',sx:e.clientX,sy:e.clientY,tx:view.tx,ty:view.ty};boardEl.classList.add('grabbing');}
@@ -540,7 +560,11 @@ function onMove(e){if(pointers.has(e.pointerId))pointers.set(e.pointerId,{x:e.cl
  if(!drag.moved){if(Math.hypot(e.clientX-(drag.sx||0),e.clientY-(drag.sy||0))<3&&drag.type==='move')return;drag.moved=true;pushHistory();}
  const s=getSel();if(!s)return;
  if(drag.type==='move'){let nx=drag.orig.x+(w.x-drag.start.x),ny=drag.orig.y+(w.y-drag.start.y);
-  if(sel.kind==='item'){if(!e.altKey)[nx,ny]=snapItemPos(s,nx,ny);s.x=nx;s.y=ny;}
+  if(sel.kind==='item'){const rx0=nx,ry0=ny;if(!e.altKey)[nx,ny]=snapItemPos(s,nx,ny);
+   const eng=Math.abs(nx-rx0)>0.5||Math.abs(ny-ry0)>0.5;
+   if(eng&&!drag.snapOn&&navigator.vibrate)try{navigator.vibrate(8);}catch(err){}
+   drag.snapOn=eng;
+   s.x=nx;s.y=ny;}
   else if(sel.kind==='room'){if(!e.altKey)[nx,ny]=snapRoomEdges(s,nx,ny);s.x=nx;s.y=ny;}
   else if(sel.kind==='opening'){const p=e.altKey?{x:nx,y:ny,rot:s.rot}:snapOpening(s,nx,ny);s.x=p.x;s.y=p.y;s.rot=p.rot;}
   else if(sel.kind==='underlay'){s.x=nx;s.y=ny;}
@@ -600,7 +624,7 @@ function shell(){root.innerHTML=
   '<aside class="side" id="side"><div class="tabs" id="tabs"><button data-tab="Library">Library</button><button data-tab="Board">Board</button><button data-tab="Plan">Plan</button></div>'+
    '<div class="pane" id="pane-Library"></div><div class="pane" id="pane-Board"></div><div class="pane" id="pane-Plan"></div></aside>'+
   '<div class="board" id="board"><svg id="svg" xmlns="http://www.w3.org/2000/svg"><g id="world"></g></svg>'+
-   '<div class="modechip" id="modechip"></div><div class="hud"><span class="chip" id="zoomchip">80%</span><span class="chip" id="cursorchip"></span></div><div class="toast" id="toast"></div></div>'+
+   '<div class="modechip" id="modechip"></div><div class="coach" id="coach" hidden></div><div class="mpill" id="mpill" hidden></div><div class="hud"><span class="chip" id="zoomchip">80%</span><span class="chip" id="cursorchip"></span></div><div class="toast" id="toast"></div></div>'+
   '<aside class="insp" id="insp"></aside>'+
  '</div>'+
  '<div class="scrim" id="scrim"><div class="dlg" id="dlg" role="dialog" aria-modal="true"></div></div>';
@@ -626,6 +650,33 @@ function closeDrawers(){$('#side').classList.remove('open');$('#insp').classList
 function setMode(m){mode=m;if(m!=='measure')measure=null;if(m==='furnish'&&sel&&sel.kind!=='item')sel=null;if(m==='plan'&&sel&&sel.kind==='item')sel=null;if(m==='plan'&&libTab!=='Plan'){libTab='Plan';}if(m==='furnish'&&libTab==='Plan')libTab='Library';render();renderPanels();}
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2200);}
 
+/* ---------- first-run coaching: two gentle beats, then never again ---------- */
+let obStarted=false;
+function obGet(){try{return JSON.parse(localStorage.getItem('wf:onboard')||'{}');}catch(e){return {};}}
+function obSet(k){if(!k)return;const o=obGet();o[k]=1;try{localStorage.setItem('wf:onboard',JSON.stringify(o));}catch(e){}}
+function obShow(k,msg){if(obGet()[k])return;const el=$('#coach');if(!el)return;
+ el.innerHTML='<span>'+msg+'</span><button id="coach-x" class="small">Got it</button>';
+ el.hidden=false;el.dataset.k=k;
+ $('#coach-x').addEventListener('click',()=>{obSet(k);el.hidden=true;});}
+function obHide(){const el=$('#coach');if(el&&!el.hidden){obSet(el.dataset.k);el.hidden=true;}}
+function obMaybeStart(){if(obStarted||!state)return;obStarted=true;
+ if(obGet().a)return;
+ if(state.items.some(i=>!i.locked))return; /* they have placed things before */
+ obShow('a',window.innerWidth<=920
+  ?'Add your first piece: tap ☰ (top left) to open the Library, then tap anything in it.'
+  :'Drag your first piece in from the Library on the left — or just click one.');}
+
+/* ---------- mobile item pill: big controls for the selected piece ---------- */
+function renderMpill(){const el=$('#mpill');if(!el)return;
+ const s=getSel();
+ if(!s||sel.kind!=='item'||s.locked||window.innerWidth>920){el.hidden=true;return;}
+ el.hidden=false;
+ el.innerHTML='<span class="nm">'+esc(s.name)+'</span><span class="dm">'+esc(fmt(s.w,true)+' × '+fmt(s.d,true))+'</span>'+
+  '<button id="mp-rot" title="Rotate 90°" aria-label="Rotate">↻</button><button id="mp-edit" aria-label="Edit details">Edit</button><button id="mp-del" title="Remove" aria-label="Remove">✕</button>';
+ $('#mp-rot').addEventListener('click',()=>rotateSel(90));
+ $('#mp-edit').addEventListener('click',()=>{$('#side').classList.remove('open');$('#insp').classList.add('open');});
+ $('#mp-del').addEventListener('click',deleteSel);}
+
 /* ---------- panels ---------- */
 function renderPanels(){ $('#title').value=state.title||'';
  $$('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));
@@ -635,7 +686,7 @@ function renderPanels(){ $('#title').value=state.title||'';
  boardEl.className='board mode-'+mode;
  svg.classList.toggle('halos-on',state.halos!==false);
  $$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===libTab));$$('.pane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+libTab));
- renderLibrary();renderBoardList();renderPlanPane();renderInspector();}
+ renderLibrary();renderBoardList();renderPlanPane();renderInspector();renderMpill();obMaybeStart();}
 
 /* ---------- "from a shop": paste a product link or its size text ---------- */
 let shopText='',shopDraft=null,shopMsg='',shopBusy=false,shopGuide=null;
