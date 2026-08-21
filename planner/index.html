@@ -164,6 +164,22 @@ svg .item.settle>.lift{animation:wf-settle .18s ease-out}
 svg .item.pop>.lift{animation:wf-pop .22s cubic-bezier(.2,.9,.3,1.2)}
 svg .handle.rot{transition:transform .12s;transform-box:fill-box;transform-origin:center}
 svg .handle.rot:hover{transform:scale(1.35)}
+svg .ghost polygon{fill:var(--accent);fill-opacity:.09;stroke:var(--accent);stroke-width:1.6;stroke-dasharray:6 4;vector-effect:non-scaling-stroke;cursor:pointer}
+svg .ghost:hover polygon{fill-opacity:.2}
+svg .ghost text{fill:var(--accent);font-family:var(--disp);font-weight:600;letter-spacing:.08em;text-transform:uppercase;pointer-events:none}
+@keyframes wf-ghost{0%,100%{stroke-opacity:.55}50%{stroke-opacity:1}}
+svg .ghost polygon{animation:wf-ghost 1.6s ease-in-out infinite}
+/* fit report */
+.fr-sum{font-family:var(--disp);font-weight:600;font-size:15px;border-radius:9px;padding:10px 12px}
+.fr-sum.good{background:var(--accent-soft);color:var(--ink)}
+.fr-sum.mid{background:var(--warn-soft)}
+.fr-sum.bad{background:var(--warn-soft);border-left:3px solid var(--warn)}
+.fr-row{display:flex;gap:10px;align-items:flex-start;padding:7px 4px;border-bottom:1px solid var(--line-2);font-size:13.5px}
+.fr-row .fr-i{flex:none;width:20px;text-align:center;font-weight:700}
+.fr-row.good .fr-i{color:var(--ok)}
+.fr-row.mid .fr-i{color:var(--warn)}
+.fr-row.bad .fr-i{color:var(--warn)}
+.fr-row.out .fr-i{color:var(--muted)}
 .toast{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;box-shadow:var(--shadow);opacity:0;transition:opacity .2s;pointer-events:none;z-index:50}
 .toast.show{opacity:1}
 /* dialogs */
@@ -306,11 +322,137 @@ function computeIssues(){issues={};issueList=[];const add=(id,msg)=>{(issues[id]
    if(polysHit(A.polys,B.polys)){add(A.it.id,A.it.name+' overlaps '+B.it.name);add(B.it.id,B.it.name+' overlaps '+A.it.name);}}
  }}
 
+/* ---------- auto-fit: every clear spot for a piece, back against each wall ---------- */
+function haloBlockers(it){
+ /* other items sitting inside this piece's clearance space (drawers can't open etc.) */
+ const names=[];
+ for(const hz of haloRects(it)){
+  const poly=toWorldPoly(it,[[hz.x,hz.y],[hz.x+hz.w,hz.y],[hz.x+hz.w,hz.y+hz.h],[hz.x,hz.y+hz.h]]);
+  for(const o of state.items){
+   if(o.id===it.id||o.under||o.zone)continue;
+   if(polysHit([poly],worldPolys(o))&&names.indexOf(o.name)<0)names.push(o.name);}}
+ return names;}
+function spotValid(tmp,room,others,swings){
+ const polys=worldPolys(tmp);const ab=aabbOf(polys);
+ if(ab.minX<room.x-0.6||ab.maxX>room.x+room.w+0.6||ab.minY<room.y-0.6||ab.maxY>room.y+room.d+0.6)return false;
+ for(const o of others){
+  if(o.it.zone){if(polysHit(polys,o.polys))return false;continue;}
+  if(polysHit(polys,o.polys))return false;}
+ for(const sw of swings)if(polysHit(polys,[sw]))return false;
+ /* the front clearance (doors, drawers, chair pull-out) must stay usable */
+ for(const hz of haloRects(tmp)){
+  if(hz.side!=='front')continue;
+  const poly=toWorldPoly(tmp,[[hz.x,hz.y],[hz.x+hz.w,hz.y],[hz.x+hz.w,hz.y+hz.h],[hz.x,hz.y+hz.h]]);
+  const hab=aabbOf([poly]);
+  if(hab.minX<room.x-0.6||hab.maxX>room.x+room.w+0.6||hab.minY<room.y-0.6||hab.maxY>room.y+room.d+0.6)return false;
+  for(const o of others)if(!o.it.zone&&polysHit([poly],o.polys))return false;}
+ return true;}
+function autoFitSpots(it){
+ const others=state.items.filter(o=>o.id!==it.id&&!o.under).map(o=>({it:o,polys:worldPolys(o)}));
+ const swings=state.openings.filter(o=>o.kind==='door').map(doorSwingPoly);
+ const spots=[];
+ const STEP=10;
+ for(const room of state.rooms){
+  /* back against each wall: top 0°, right 90°, bottom 180°, left 270° */
+  for(const [wall,th] of [['top',0],['right',90],['bottom',180],['left',270]]){
+   const fpW=(th%180===0)?it.w:it.d, fpD=(th%180===0)?it.d:it.w;
+   if(fpW>room.w+0.5||fpD>room.d+0.5)continue;
+   const horiz=(wall==='top'||wall==='bottom');
+   const fixed=wall==='top'?room.y+fpD/2:wall==='bottom'?room.y+room.d-fpD/2:wall==='left'?room.x+fpD/2:room.x+room.w-fpD/2;
+   const a0=(horiz?room.x:room.y)+fpW/2, a1=(horiz?room.x+room.w:room.y+room.d)-fpW/2;
+   let run=[];
+   const flush=()=>{if(!run.length)return;
+    const picks=run.length<=2?run:[run[0],run[(run.length-1)>>1],run[run.length-1]];
+    for(const p of picks)spots.push({x:horiz?p:fixed,y:horiz?fixed:p,rot:th,room:room.name,wall});
+    run=[];};
+   for(let a=a0;a<=a1+0.01;a+=STEP){
+    const tmp=Object.assign({},it,{x:horiz?a:fixed,y:horiz?fixed:a,rot:th});
+    if(spotValid(tmp,room,others,swings))run.push(a);else flush();}
+   flush();}}
+ /* thin out: no two ghosts may substantially overlap, cap the count */
+ const kept=[];
+ const fpOf=s=>{const fw=(s.rot%180===0)?it.w:it.d,fd=(s.rot%180===0)?it.d:it.w;
+  return {x0:s.x-fw/2,y0:s.y-fd/2,x1:s.x+fw/2,y1:s.y+fd/2,a:fw*fd};};
+ for(const s of spots){
+  const f=fpOf(s);let clash=false;
+  for(const k of kept){const g=fpOf(k);
+   const ox=Math.max(0,Math.min(f.x1,g.x1)-Math.max(f.x0,g.x0));
+   const oy=Math.max(0,Math.min(f.y1,g.y1)-Math.max(f.y0,g.y0));
+   if(ox*oy>0.25*Math.min(f.a,g.a)){clash=true;break;}}
+  if(clash)continue;
+  kept.push(s);if(kept.length>=14)break;}
+ return kept;}
+let autofit=null;
+function startAutoFit(it){
+ if(autofit&&autofit.id===it.id){autofit=null;render();return;}
+ const spots=autoFitSpots(it);
+ if(!spots.length){autofit=null;toast('No clear spot for '+it.name+' — try removing something, or check its size');render();return;}
+ autofit={id:it.id,spots};
+ const rooms=[...new Set(spots.map(s=>s.room))];
+ toast(spots.length+' spot'+(spots.length===1?'':'s')+' found in '+rooms.join(', ')+' — tap one to place it');
+ render();}
+function applyAutoFitSpot(ix){
+ if(!autofit)return;
+ const it=byId('item',autofit.id);const sp=autofit.spots[ix];
+ if(!it||!sp)return;
+ pushHistory();it.x=sp.x;it.y=sp.y;it.rot=sp.rot;autofit=null;changed();
+ toast('Placed against the '+sp.wall+' wall of '+sp.room);}
+
+/* ---------- the fit report: the app's namesake, in writing ---------- */
+function buildFitReport(){
+ computeIssues();
+ const rep={fit:[],warn:[],fail:[],out:[]};
+ for(const it of state.items){
+  if(it.locked||it.zone||it.under)continue;
+  const r=roomAt(it.x,it.y);
+  const iss=issues[it.id]||[];
+  if(!r){rep.out.push({it});continue;}
+  if(iss.length){
+   const spots=autoFitSpots(it);
+   const here=spots.filter(s=>s.room===r.name).length;
+   const elsewhere=[...new Set(spots.filter(s=>s.room!==r.name).map(s=>s.room))];
+   let alt='no clear spot anywhere on this floor';
+   if(here)alt='fits '+here+' other way'+(here===1?'':'s')+' in '+r.name;
+   else if(elsewhere.length)alt='would fit in '+elsewhere.slice(0,2).join(' or ');
+   rep.fail.push({it,r,iss,alt});continue;}
+  const blockers=haloBlockers(it);
+  if(blockers.length){rep.warn.push({it,r,blockers});continue;}
+  rep.fit.push({it,r});}
+ return rep;}
+function fitReportText(rep){
+ const n=rep.fit.length+rep.warn.length+rep.fail.length+rep.out.length;
+ const good=rep.fit.length+rep.warn.length;
+ let t='WILL IT FIT — '+(state.title||'My floor plan')+'\n';
+ t+=good+' of '+n+' piece'+(n===1?'':'s')+' fit'+(good===n&&n?'. Everything fits.':'.')+'\n\n';
+ rep.fit.forEach(e=>{t+='[OK] '+e.it.name+' — '+e.r.name+'\n';});
+ rep.warn.forEach(e=>{t+='[TIGHT] '+e.it.name+' — '+e.r.name+': needs clear space, blocked by '+e.blockers.join(', ')+'\n';});
+ rep.fail.forEach(e=>{t+='[NO] '+e.it.name+' — '+e.iss[0]+'; '+e.alt+'\n';});
+ rep.out.forEach(e=>{t+='[--] '+e.it.name+' — not placed in a room yet\n';});
+ return t+'\ncookej123.github.io/will-it-fit';}
+function openFitReport(){
+ const rep=buildFitReport();
+ const n=rep.fit.length+rep.warn.length+rep.fail.length+rep.out.length;
+ const good=rep.fit.length+rep.warn.length;
+ let h='<div class="row" style="justify-content:space-between"><h3>Fit report</h3><button class="ghost" id="dlg-x" aria-label="Close">✕</button></div>';
+ if(!n)h+='<div class="hint">Nothing movable on the board yet — add some furniture first.</div>';
+ else{
+  h+='<div class="fr-sum '+(rep.fail.length?'bad':rep.warn.length?'mid':'good')+'">'
+   +(rep.fail.length===0&&rep.out.length===0?(rep.warn.length?good+' of '+n+' fit — '+rep.warn.length+' tight':(n===1?'It fits.':'Everything fits — all '+n+' pieces'))
+   :good+' of '+n+' piece'+(n===1?'':'s')+' fit')+'</div>';
+  const row=(icon,cls,name,room,note)=>'<div class="fr-row '+cls+'"><span class="fr-i">'+icon+'</span><div><b>'+esc(name)+'</b>'+(room?' <span class="muted">· '+esc(room)+'</span>':'')+(note?'<div class="hint">'+esc(note)+'</div>':'')+'</div></div>';
+  rep.fail.forEach(e=>{h+=row('✗','bad',e.it.name,e.r.name,e.iss[0]+' — '+e.alt);});
+  rep.warn.forEach(e=>{h+=row('⚠','mid',e.it.name,e.r.name,'needs clear space in front — blocked by '+e.blockers.join(', '));});
+  rep.out.forEach(e=>{h+=row('·','out',e.it.name,'','not placed in a room yet');});
+  rep.fit.forEach(e=>{h+=row('✓','good',e.it.name,e.r.name,'');});
+  h+='<div class="row" style="margin-top:6px"><button class="primary" id="fr-copy">Copy as text</button><span class="hint">Paste it straight into WhatsApp.</span></div>';}
+ openDlg(h);
+ $('#dlg-x').addEventListener('click',closeDlg);
+ const fc=$('#fr-copy');if(fc)fc.addEventListener('click',async()=>{const ok=await copyText(fitReportText(rep));toast(ok?'Report copied':'Couldn’t copy here');});}
 /* ---------- history / persistence ---------- */
 function pushHistory(){hist.push(JSON.stringify(state));if(hist.length>120)hist.shift();future=[];}
 function undo(){if(!hist.length)return;future.push(JSON.stringify(state));state=JSON.parse(hist.pop());sel=null;changed();}
 function redo(){if(!future.length)return;hist.push(JSON.stringify(state));state=JSON.parse(future.pop());sel=null;changed();}
-function changed(opts){computeIssues();render();if(!(opts&&opts.noPanels))renderPanels();scheduleSave();}
+function changed(opts){autofit=null;computeIssues();render();if(!(opts&&opts.noPanels))renderPanels();scheduleSave();}
 function embeddedState(){try{return JSON.parse($('#state').textContent||'null');}catch(e){return null;}}
 function baseKey(){const e=embeddedState();return e?(e.savedAt||'embedded'):'plan:'+PLAN_ID;}
 function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{try{localStorage.setItem(KEY,JSON.stringify({base:baseKey(),t:Date.now(),state}));}catch(e){}},400);}
@@ -397,6 +539,11 @@ function render(){ if(!world)return; const k=view.k,t=state.wall,px=v=>v/k; let 
   if(showDims)o+='<text class="dims" x="'+lx+'" y="'+(ly+fs2*1.25)+'" font-size="'+fs2+'" style="'+halo+'">'+esc(dims)+'</text>';});
  // selection overlays
  if(sel&&sel.kind==='item'&&mode==='furnish'){const it=byId('item',sel.id);if(it)o+=itemOverlay(it,k);}
+ if(autofit&&mode==='furnish'){const it=byId('item',autofit.id);
+  if(it)autofit.spots.forEach((sp,i)=>{
+   const tmp=Object.assign({},it,{x:sp.x,y:sp.y,rot:sp.rot});
+   const pts=outlineLocal(tmp).map(p=>p.join(',')).join(' ');
+   o+='<g class="ghost" data-kind="ghost" data-spot="'+i+'" transform="translate('+sp.x+' '+sp.y+') rotate('+sp.rot+')'+(it.mirror?' scale(-1 1)':'')+'"><polygon points="'+pts+'"/><text y="'+(4/k*3)+'" text-anchor="middle" font-size="'+(12/k)+'">tap</text></g>';});}
  if(sel&&sel.kind==='room'&&mode==='plan'){const r=byId('room',sel.id);if(r){o+='<rect class="roomsel" x="'+r.x+'" y="'+r.y+'" width="'+r.w+'" height="'+r.d+'"/>';[['nw',r.x,r.y],['ne',r.x+r.w,r.y],['sw',r.x,r.y+r.d],['se',r.x+r.w,r.y+r.d]].forEach(([h,x,y])=>{o+='<rect class="handle" data-kind="handle" data-h="'+h+'" x="'+(x-px(5))+'" y="'+(y-px(5))+'" width="'+px(10)+'" height="'+px(10)+'"/>';});}}
  if(sel&&sel.kind==='underlay'&&mode==='plan'&&u&&u.src){o+='<rect class="roomsel" x="'+u.x+'" y="'+u.y+'" width="'+(u.iw*u.cmPerPx)+'" height="'+(u.ih*u.cmPerPx)+'"/>';}
  // measure
@@ -446,9 +593,9 @@ function haloRects(it){
  if(it.under||it.zone)return [];
  const w=it.w,d=it.d,n=(it.name||'').toLowerCase();
  const out=[];
- const front=cl=>out.push({x:-w/2,y:d/2,w:w,h:cl});
- const back=cl=>out.push({x:-w/2,y:-d/2-cl,w:w,h:cl});
- const sides=cl=>{out.push({x:-w/2-cl,y:-d/2,w:cl,h:d});out.push({x:w/2,y:-d/2,w:cl,h:d});};
+ const front=cl=>out.push({x:-w/2,y:d/2,w:w,h:cl,side:'front'});
+ const back=cl=>out.push({x:-w/2,y:-d/2-cl,w:w,h:cl,side:'back'});
+ const sides=cl=>{out.push({x:-w/2-cl,y:-d/2,w:cl,h:d,side:'side'});out.push({x:w/2,y:-d/2,w:cl,h:d,side:'side'});};
  if(it.deco==='bed'&&w>70){sides(55);front(55);}      // make the bed, get in and out
  else if(it.deco==='sofa')front(45);                  // walkway / coffee-table gap
  else if(it.deco==='ward')front(60);                  // doors open
@@ -506,7 +653,9 @@ function itemOverlay(it,k){const px=v=>v/k;let o='';const polys=worldPolys(it);c
 /* ---------- lookups ---------- */
 function byId(kind,id){if(kind==='item')return state.items.find(i=>i.id===id);if(kind==='room')return state.rooms.find(i=>i.id===id);if(kind==='opening')return state.openings.find(i=>i.id===id);if(kind==='underlay')return state.underlay;return null;}
 function getSel(){return sel?byId(sel.kind,sel.id):null;}
-function select(kind,id){sel=kind?{kind,id}:null;if(kind==='item')obHide();render();renderPanels();}
+function select(kind,id){sel=kind?{kind,id}:null;if(kind==='item')obHide();
+ if(autofit&&(!sel||sel.id!==autofit.id))autofit=null;
+ render();renderPanels();}
 
 /* ---------- snapping ---------- */
 function snapGrid(v){const g=state.grid||5;return Math.round(v/g)*g;}
@@ -549,6 +698,7 @@ function flipHinge(o){const [ex,ey]=openingEnd(o);o.x=ex;o.y=ey;o.rot=norm(o.rot
 function onDown(e){if(e.button===2)return;svg.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(pointers.size===2){const [a,b]=[...pointers.values()];drag={type:'pinch',d0:Math.hypot(a.x-b.x,a.y-b.y),k0:view.k,mx:(a.x+b.x)/2,my:(a.y+b.y)/2,tx:view.tx,ty:view.ty};return;}
  const w=toWorld(e);const tEl=e.target.closest?e.target.closest('[data-kind]'):null;const kind=tEl?tEl.dataset.kind:null,id=tEl?tEl.dataset.id:null;
+ if(kind==='ghost'&&autofit){applyAutoFitSpot(+tEl.dataset.spot);return;}
  if(calib){calib.pts.push(w);if(calib.pts.length===2)finishCalib();else render();return;}
  if(mode==='measure'){measure={x1:w.x,y1:w.y,x2:w.x,y2:w.y};drag={type:'measure'};render();return;}
  if(kind==='handle'){const s=getSel();if(!s)return;drag={type:'handle',h:tEl.dataset.h,start:w,orig:clone(s),moved:false};return;}
@@ -596,7 +746,7 @@ function onKey(e){const tag=(e.target.tagName||'').toLowerCase();if(tag==='input
  if(mod&&e.key.toLowerCase()==='y'){e.preventDefault();redo();return;}
  if(mod&&e.key.toLowerCase()==='d'){e.preventDefault();duplicateSel();return;}
  if(e.key==='Delete'||e.key==='Backspace'){if(sel){e.preventDefault();deleteSel();}return;}
- if(e.key==='Escape'){if(calib){calib=null;render();toast('Calibration cancelled');}else if(measure){measure=null;render();}else select(null,null);return;}
+ if(e.key==='Escape'){if(autofit){autofit=null;render();}else if(calib){calib=null;render();toast('Calibration cancelled');}else if(measure){measure=null;render();}else select(null,null);return;}
  if(e.key==='r'||e.key==='R'){rotateSel(e.shiftKey?-90:90);return;}
  if(e.key==='f'||e.key==='F'){fitView();return;}
  if(e.key==='+'||e.key==='='){zoomAt(1.2);return;}if(e.key==='-'){zoomAt(1/1.2);return;}
@@ -625,6 +775,7 @@ function shell(){root.innerHTML=
   '<div class="seg"><button id="undo" title="Undo (Ctrl+Z)">↶</button><button id="redo" title="Redo (Ctrl+Y)">↷</button></div></div>'+
   '<div class="sp"></div>'+
   '<div class="seg"><button id="zoomout" title="Zoom out (-)">−</button><button id="fit" title="Fit plan (F)">Fit</button><button id="zoomin" title="Zoom in (+)">+</button></div>'+
+  '<button id="report" class="wide-only" title="Does everything fit? The verdict, in writing">✓ Fit report</button>'+
   '<button class="primary" id="share">Share</button>'+
   '<button class="icon narrow-only" id="btn-insp" title="Details" aria-label="Open details">ⓘ</button>'+
  '</div>'+
@@ -649,6 +800,7 @@ function shell(){root.innerHTML=
  $('#undo').addEventListener('click',undo);$('#redo').addEventListener('click',redo);
  $('#zoomin').addEventListener('click',()=>zoomAt(1.25));$('#zoomout').addEventListener('click',()=>zoomAt(0.8));$('#fit').addEventListener('click',fitView);
  $('#share').addEventListener('click',openShare);
+ $('#report').addEventListener('click',openFitReport);
  $('#btn-lib').addEventListener('click',()=>{$('#insp').classList.remove('open');$('#side').classList.toggle('open');});
  $('#btn-insp').addEventListener('click',()=>{$('#side').classList.remove('open');$('#insp').classList.toggle('open');});
  $$('#tabs button').forEach(b=>b.addEventListener('click',()=>{libTab=b.dataset.tab;renderPanels();}));
@@ -686,7 +838,8 @@ function renderMpill(){const el=$('#mpill');if(!el)return;
  if(!s||sel.kind!=='item'||s.locked||window.innerWidth>920){el.hidden=true;return;}
  el.hidden=false;
  el.innerHTML='<span class="nm">'+esc(s.name)+'</span><span class="dm">'+esc(fmt(s.w,true)+' × '+fmt(s.d,true))+'</span>'+
-  '<button id="mp-rot" title="Rotate 90°" aria-label="Rotate">↻</button><button id="mp-edit" aria-label="Edit details">Edit</button><button id="mp-del" title="Remove" aria-label="Remove">✕</button>';
+  '<button id="mp-af" title="Where would it go?" aria-label="Auto-fit">✨</button><button id="mp-rot" title="Rotate 90°" aria-label="Rotate">↻</button><button id="mp-edit" aria-label="Edit details">Edit</button><button id="mp-del" title="Remove" aria-label="Remove">✕</button>';
+ $('#mp-af').addEventListener('click',()=>startAutoFit(s));
  $('#mp-rot').addEventListener('click',()=>rotateSel(90));
  $('#mp-edit').addEventListener('click',()=>{$('#side').classList.remove('open');$('#insp').classList.add('open');});
  $('#mp-del').addEventListener('click',deleteSel);}
@@ -826,7 +979,7 @@ async function doShopRead(){
   if(dims&&dims.w){
    shopDraft={name:(fetched&&fetched.name)||(pasted&&pasted.name)||'Item from a shop',
     w:dims.w,d:dims.d,h:dims.h,price:(fetched&&fetched.price)||(pasted&&pasted.price)||'',link:um[0],
-    photo:(fetched&&fetched.photo)||undefined};}
+    photo:(fetched&&fetched.photo)||undefined,community:!!(fetched&&fetched.community)};}
   else if(failed)shopGuide={link:um[0],why:'blocked'};
   else shopGuide={link:um[0],why:'nosizes'};
   renderLibrary();return;}
@@ -841,6 +994,9 @@ function shopAdd(){
  if(shopDraft.link)it.link=shopDraft.link;
  if(shopDraft.price)it.price=shopDraft.price;
  if(shopDraft.photo)it.photo=shopDraft.photo;
+ /* share what this user just read (bookmarklet / paste) into the community cache */
+ if(shopDraft.link&&!shopDraft.community&&typeof window.wfDimsShare==='function')
+  window.wfDimsShare(shopDraft.link,{name:it.name,dims:{w:it.w,d:it.d,h:shopDraft.h},price:it.price,photo:it.photo});
  changed();
  shopDraft=null;shopText='';shopMsg='';shopGuide=null;
  renderLibrary();closeDrawers();
@@ -900,6 +1056,7 @@ function renderLibrary(){const p=$('#pane-Library');const q=libQuery.trim().toLo
   h+='<label class="f"><span>Name</span><input id="shop-nm" type="text" value="'+esc(shopDraft.name||'')+'"></label>';
   h+='<div class="grid3"><label class="f"><span>Width (cm)</span><input id="shop-w" type="number" step="1" min="10" value="'+Math.round(shopDraft.w)+'"></label><label class="f"><span>Depth (cm)</span><input id="shop-d" type="number" step="1" min="10" value="'+Math.round(shopDraft.d)+'"></label><label class="f"><span>Height</span><input id="shop-h" type="number" step="1" value="'+(shopDraft.h?Math.round(shopDraft.h):'')+'" placeholder="–"></label></div>';
   if(shopDraft.price||shopDraft.link)h+='<div class="hint">'+(shopDraft.price?esc(shopDraft.price)+' · ':'')+(shopDraft.link?'link saved with the item':'')+'</div>';
+  if(shopDraft.community)h+='<div class="hint" style="color:var(--accent)">Sizes from the Will It Fit community — check them against the shop page.</div>';
   h+='<div class="row"><button class="primary" id="shop-addb">Add to the board</button><button class="ghost" id="shop-swap" title="Swap width and depth">Swap W/D</button><button class="ghost" id="shop-cancel">Cancel</button></div></div>';
  }
  h+='<div class="hint" style="margin-top:2px">Shops that block reading (Next, IKEA…): drag this button to your bookmarks bar, then click it while you are on the product page. On a page with several products, select the one you want (drag over its name and sizes) before clicking —</div>';
@@ -942,6 +1099,7 @@ function renderLibrary(){const p=$('#pane-Library');const q=libQuery.trim().toLo
 function renderBoardList(){const p=$('#pane-Board');let h='';
  const byRoom={};state.items.forEach(it=>{const r=roomAt(it.x,it.y);const key=r?r.name:'Outside the plan';(byRoom[key]=byRoom[key]||[]).push(it);});
  const nFree=state.items.filter(i=>!i.locked).length;h+='<div class="row" style="justify-content:space-between"><h2>'+nFree+' item'+(nFree===1?'':'s')+' placed · '+(state.items.length-nFree)+' fixed</h2>'+(nFree?'<button class="ghost small" id="clear-items">Clear furniture</button>':'')+'</div>';
+ if(nFree)h+='<button class="primary" id="fit-report-btn">✓ Fit report — does it all fit?</button>';
  if(issueList.length){h+='<div class="issues">'+issueList.map(i=>'<div class="issue" data-id="'+i.id+'">'+esc(i.msg)+'</div>').join('')+'</div>';}
  else if(state.items.length)h+='<div class="okbox">Nothing overlaps, crosses a wall, or blocks a door.</div>';
  Object.keys(byRoom).sort().forEach(rn=>{h+='<div class="cat"><h2>'+esc(rn)+'</h2><div class="list">'+byRoom[rn].map(it=>'<button data-id="'+it.id+'" class="'+(sel&&sel.id===it.id?'sel ':'')+(issues[it.id]?'bad':'')+'"><span class="nm">'+esc(it.name)+'</span><span class="dm">'+esc(fmt(it.w,true)+' × '+fmt(it.d,true))+'</span></button>').join('')+'</div></div>';});
@@ -949,7 +1107,8 @@ function renderBoardList(){const p=$('#pane-Board');let h='';
  p.innerHTML=h;
  $$('.list button',p).forEach(b=>b.addEventListener('click',()=>{if(mode!=='furnish')setMode('furnish');select('item',b.dataset.id);closeDrawers();}));
  $$('.issue',p).forEach(b=>b.addEventListener('click',()=>{if(mode!=='furnish')setMode('furnish');select('item',b.dataset.id);}));
- const c=$('#clear-items');if(c)c.addEventListener('click',()=>{if(!confirm('Remove all movable furniture? Fixed fittings (locked) stay.'))return;pushHistory();state.items=state.items.filter(i=>i.locked);sel=null;changed();});}
+ const c=$('#clear-items');if(c)c.addEventListener('click',()=>{if(!confirm('Remove all movable furniture? Fixed fittings (locked) stay.'))return;pushHistory();state.items=state.items.filter(i=>i.locked);sel=null;changed();});
+ const frb=$('#fit-report-btn');if(frb)frb.addEventListener('click',()=>{closeDrawers();openFitReport();});}
 
 function renderPlanPane(){const p=$('#pane-Plan');const u=state.underlay;let h='';
  h+='<div class="hint">'+(mode==='plan'?'Drag rooms to move them, pull the corners to resize, drag doors and windows onto walls.':'Switch to <b>Edit plan</b> to move rooms, doors and windows.')+'</div>';
@@ -1001,6 +1160,7 @@ function renderInspector(){const p=$('#insp');const s=getSel();let h='';
   h+='<label class="f"><span>Name</span><input id="f-name" type="text" value="'+esc(it.name)+'"></label>';
   h+='<div class="grid3"><label class="f"><span>Width ('+unitLabel()+')</span><input id="f-w" type="number" step="1" min="1" value="'+toUnit(it.w)+'"></label><label class="f"><span>Depth ('+unitLabel()+')</span><input id="f-d" type="number" step="1" min="1" value="'+toUnit(it.d)+'"></label><label class="f"><span>Rotation °</span><input id="f-rot" type="number" step="15" value="'+it.rot+'"></label></div>';
   h+='<div class="row"><button id="b-rl" title="Rotate left 90°">↺ 90°</button><button id="b-rr" title="Rotate right 90° (R)">↻ 90°</button><button id="b-mir" class="'+(it.mirror?'on':'')+'">Mirror</button><button id="b-lock" class="'+(it.locked?'on':'')+'">'+(it.locked?'Locked':'Lock')+'</button></div>';
+  if(!it.locked&&!it.zone&&!it.under)h+='<div class="row"><button id="b-af" class="'+(autofit&&autofit.id===it.id?'on':'')+'" title="Light up every clear spot for this piece">✨ Auto-fit — where would it go?</button></div>';
   h+='<div class="grid2"><label class="f"><span>Shape</span><select id="f-shape"><option value="rect"'+(it.shape==='rect'||!it.shape?' selected':'')+'>Rectangle</option><option value="round"'+(it.shape==='round'?' selected':'')+'>Round / oval</option><option value="L"'+(it.shape==='L'?' selected':'')+'>L-shape</option></select></label><label class="f"><span>Layer</span><select id="f-under"><option value="0"'+(!it.under&&!it.zone?' selected':'')+'>Furniture</option><option value="1"'+(it.under?' selected':'')+'>Rug / fitting (under things)</option><option value="2"'+(it.zone?' selected':'')+'>Zone (marks an area)</option></select></label></div>';
   if(it.shape==='L')h+='<div class="grid2"><label class="f"><span>Main depth ('+unitLabel()+')</span><input id="f-a" type="number" step="1" value="'+toUnit(it.a||it.d*.6)+'"></label><label class="f"><span>Chaise width ('+unitLabel()+')</span><input id="f-b" type="number" step="1" value="'+toUnit(it.b||it.w*.4)+'"></label></div>';
   h+='<label class="f"><span>Colour</span><div class="sw-row">'+Object.keys(COLORS).map(c=>'<button data-c="'+c+'" class="'+(it.color===c?'on':'')+'" style="background:'+COLORS[c]+'" title="'+c+'" aria-label="'+c+'"></button>').join('')+'</div></label>';
@@ -1027,6 +1187,7 @@ function renderInspector(){const p=$('#insp');const s=getSel();let h='';
   $('#b-rl').addEventListener('click',()=>rotateSel(-90));$('#b-rr').addEventListener('click',()=>rotateSel(90));
   $('#b-mir').addEventListener('click',()=>commit(()=>{it.mirror=!it.mirror;}));$('#b-lock').addEventListener('click',()=>commit(()=>{it.locked=!it.locked;}));
   $('#b-dup').addEventListener('click',duplicateSel);$('#b-del').addEventListener('click',deleteSel);
+  const baf=$('#b-af');if(baf)baf.addEventListener('click',()=>{startAutoFit(it);closeDrawers();});
   $('#f-shape').addEventListener('change',e=>commit(()=>{it.shape=e.target.value;if(it.shape==='L'){it.a=it.a||Math.round(it.d*.6);it.b=it.b||Math.round(it.w*.4);}}));
   $('#f-under').addEventListener('change',e=>commit(()=>{it.under=e.target.value==='1';it.zone=e.target.value==='2';}));
   const fa=$('#f-a'),fb=$('#f-b');if(fa)fa.addEventListener('change',e=>commit(()=>{it.a=clamp(fromUnit(+e.target.value)||10,10,it.d);}));if(fb)fb.addEventListener('change',e=>commit(()=>{it.b=clamp(fromUnit(+e.target.value)||10,10,it.w);}));
