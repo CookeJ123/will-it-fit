@@ -87,6 +87,10 @@ h3{font-size:15px;font-weight:600}
 .lib .nm{font-weight:500;font-size:12.5px;line-height:1.2}
 .lib .dm{font-family:var(--mono);font-size:11px;color:var(--muted)}
 .lib .sw{width:100%;height:4px;border-radius:2px;margin-top:3px}
+.lib button[data-myf]{position:relative;padding-right:20px}
+.myf-x{position:absolute;top:3px;right:4px;font-size:10px;line-height:1;color:var(--muted);cursor:pointer;padding:3px}
+.myf-x:hover{color:var(--warn)}
+.insp .item-photo{width:100%;max-height:170px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block}
 .list{display:flex;flex-direction:column;gap:2px}
 .list button{display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;border-color:transparent;padding:6px 8px}
 .list button:hover{background:var(--panel-2)}
@@ -133,7 +137,8 @@ svg .item.locked .body{stroke-dasharray:4 3}
 svg .item.zone .body{stroke:var(--muted);stroke-dasharray:5 4}
 svg .item.zone.sel .body{stroke:var(--accent)}
 svg .leaf{stroke:var(--wall);stroke-width:2;vector-effect:non-scaling-stroke}
-svg .swing{fill:none;stroke:var(--muted);stroke-width:1;vector-effect:non-scaling-stroke;stroke-dasharray:4 3}
+svg .swing{fill:var(--accent);fill-opacity:0;stroke:var(--muted);stroke-width:1;vector-effect:non-scaling-stroke;stroke-dasharray:4 3}
+svg.halos-on .swing{fill-opacity:.05}
 svg .gap{fill:var(--floor)}
 svg .win{stroke:var(--wall);stroke-width:1.5;vector-effect:non-scaling-stroke}
 svg .hit{fill:transparent}
@@ -148,6 +153,8 @@ svg .measure{stroke:var(--warn);stroke-width:1.5;vector-effect:non-scaling-strok
 svg .measure-t{font-family:var(--mono);fill:var(--warn);font-weight:600}
 svg .calib{fill:var(--warn)}
 svg .plan-dim .item{opacity:.45}
+svg .item .halo{fill:var(--accent);fill-opacity:.06;stroke:var(--accent);stroke-opacity:.3;stroke-width:1;vector-effect:non-scaling-stroke;stroke-dasharray:3 4;pointer-events:none}
+svg .item.sel .halo{fill-opacity:.1;stroke-opacity:.5}
 svg .item>.lift{transform-box:fill-box;transform-origin:center}
 svg .item.dragging>.lift{transform:scale(1.028)}
 svg .item.dragging{cursor:grabbing}
@@ -414,6 +421,23 @@ function decoSVG(it){const w=it.w,d=it.d;switch(it.deco){
   s+='<line class="deco" x1="0" y1="'+(-d/2+15)+'" x2="0" y2="'+(d/2-15)+'" style="stroke-width:1.5"/><path class="deco" d="M -7 '+(d/2-26)+' L 0 '+(d/2-14)+' L 7 '+(d/2-26)+'" style="stroke-width:1.5"/>';return s;}
  default:return '';}}
 
+/* clearance halos: the walking / opening space a piece needs, in item-local cm.
+   y- is the back (headboard, sofa back), y+ the front. */
+function haloRects(it){
+ if(it.under||it.zone)return [];
+ const w=it.w,d=it.d,n=(it.name||'').toLowerCase();
+ const out=[];
+ const front=cl=>out.push({x:-w/2,y:d/2,w:w,h:cl});
+ const back=cl=>out.push({x:-w/2,y:-d/2-cl,w:w,h:cl});
+ const sides=cl=>{out.push({x:-w/2-cl,y:-d/2,w:cl,h:d});out.push({x:w/2,y:-d/2,w:cl,h:d});};
+ if(it.deco==='bed'&&w>70){sides(55);front(55);}      // make the bed, get in and out
+ else if(it.deco==='sofa')front(45);                  // walkway / coffee-table gap
+ else if(it.deco==='ward')front(60);                  // doors open
+ else if(/\bdesk\b/.test(n))front(90);                // chair pull-out
+ else if(/chest|drawers|sideboard|dresser/.test(n))front(50); // drawers open
+ else if(/dining|round table/.test(n)){front(70);back(70);sides(70);} // chairs all round
+ else if(/wardrobe|armoire/.test(n))front(60);
+ return out;}
 function itemSVG(it,k){const fill=it.zone?'url(#hatch)':(COLORS[it.color]||it.color||COLORS.oak);const tc=it.zone?'var(--muted)':textColorFor(fill);const w=it.w,d=it.d;
  const s=sel&&sel.kind==='item'&&sel.id===it.id,bad=!!issues[it.id];
  const dragging=s&&drag&&drag.type==='move'&&drag.moved;
@@ -424,6 +448,8 @@ function itemSVG(it,k){const fill=it.zone?'url(#hatch)':(COLORS[it.color]||it.co
   if(it.shape==='L')return '<polygon class="'+cls+'" points="'+outlineLocal(it).map(p=>p.join(',')).join(' ')+'" fill="'+fl2+'"'+trs+'/>';
   return '<rect class="'+cls+'" x="'+(-w/2)+'" y="'+(-d/2)+'" width="'+w+'" height="'+d+'"'+(rx?' rx="'+rx+'"':'')+' fill="'+fl2+'"'+trs+'/>';};
  let body='';
+ if(state.halos!==false&&!it.locked)
+  for(const hz of haloRects(it))body+='<rect class="halo" x="'+hz.x+'" y="'+hz.y+'" width="'+hz.w+'" height="'+hz.h+'" rx="6"/>';
  if(!it.under&&!it.zone){
   /* consistent world-space light: rotate the shadow offset into item space */
   const a=it.rot*Math.PI/180,sr=Math.sin(a),cr=Math.cos(a);
@@ -483,7 +509,7 @@ function snapOpening(op,px,py){const t=state.wall;let best=null;const th=40/view
 
 /* ---------- mutations ---------- */
 function addItem(def,x,y){pushHistory();const c=viewCentreWorld();const it={id:uid(),name:def.name,w:def.w,d:def.d,x:x==null?c.x:x,y:y==null?c.y:y,rot:0,color:def.color||'oak',shape:def.shape||'rect',deco:def.deco||'',under:!!def.under,zone:!!def.zone,locked:false};
- if(def.a)it.a=def.a;if(def.b)it.b=def.b;if(def.link)it.link=def.link;if(def.price)it.price=def.price;
+ if(def.a)it.a=def.a;if(def.b)it.b=def.b;if(def.link)it.link=def.link;if(def.price)it.price=def.price;if(def.photo)it.photo=def.photo;
  if(state.snap){[it.x,it.y]=snapItemPos(it,it.x,it.y);}state.items.push(it);sel={kind:'item',id:it.id};changed();
  {const n=world&&world.querySelector('.item[data-id="'+it.id+'"]');if(n)n.classList.add('pop');}
  return it;}
@@ -563,6 +589,7 @@ function shell(){root.innerHTML=
   '<div class="sp"></div>'+
   '<div class="seg" id="units"><button data-u="m">m</button><button data-u="ft">ft</button></div>'+
   '<button id="snap" title="Snap to grid and walls">Snap</button>'+
+  '<button id="halos" title="Show the clearance space furniture needs (walking room, drawers, door swings)">Halos</button>'+
   '<div class="seg"><button id="undo" title="Undo (Ctrl+Z)">↶</button><button id="redo" title="Redo (Ctrl+Y)">↷</button></div></div>'+
   '<div class="sp"></div>'+
   '<div class="seg"><button id="zoomout" title="Zoom out (-)">−</button><button id="fit" title="Fit plan (F)">Fit</button><button id="zoomin" title="Zoom in (+)">+</button></div>'+
@@ -586,6 +613,7 @@ function shell(){root.innerHTML=
  $$('#modes button').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
  $$('#units button').forEach(b=>b.addEventListener('click',()=>{state.units=b.dataset.u;changed();}));
  $('#snap').addEventListener('click',()=>{state.snap=!state.snap;changed();});
+ $('#halos').addEventListener('click',()=>{state.halos=state.halos===false;changed();});
  $('#undo').addEventListener('click',undo);$('#redo').addEventListener('click',redo);
  $('#zoomin').addEventListener('click',()=>zoomAt(1.25));$('#zoomout').addEventListener('click',()=>zoomAt(0.8));$('#fit').addEventListener('click',fitView);
  $('#share').addEventListener('click',openShare);
@@ -602,9 +630,10 @@ function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show'
 function renderPanels(){ $('#title').value=state.title||'';
  $$('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));
  $$('#units button').forEach(b=>b.classList.toggle('on',b.dataset.u===state.units));
- $('#snap').classList.toggle('on',!!state.snap);$('#undo').disabled=!hist.length;$('#redo').disabled=!future.length;
+ $('#snap').classList.toggle('on',!!state.snap);$('#halos').classList.toggle('on',state.halos!==false);$('#undo').disabled=!hist.length;$('#redo').disabled=!future.length;
  const mc=$('#modechip');mc.textContent=mode==='plan'?'Editing the plan':mode==='measure'?'Measure: drag between two points':'';mc.className='modechip'+(mode==='plan'?' plan':'');mc.style.display=mode==='furnish'?'none':'';
  boardEl.className='board mode-'+mode;
+ svg.classList.toggle('halos-on',state.halos!==false);
  $$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===libTab));$$('.pane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+libTab));
  renderLibrary();renderBoardList();renderPlanPane();renderInspector();}
 
@@ -612,7 +641,7 @@ function renderPanels(){ $('#title').value=state.title||'';
 let shopText='',shopDraft=null,shopMsg='',shopBusy=false,shopGuide=null;
 /* bookmarklet: runs on the shop's own page (so nothing can block it), grabs the
    text around any "…cm" sizes + title + url, and hands it to the live site */
-const WF_BOOKMARKLET="javascript:(function(){var sl=(window.getSelection?String(window.getSelection()):'').trim();var t=document.body?document.body.innerText:'';var x;if(sl.length>10){x=sl.slice(0,6000);}else{var w=[],re=/\\d+(?:[.,]\\d+)?\\s*cm/gi,m,n=0;while((m=re.exec(t))&&n<3){var s=Math.max(0,m.index-500);w.push(t.slice(s,Math.min(t.length,m.index+500)));re.lastIndex=m.index+500;n++;}x=(w.join('\\n')||t.slice(0,3000)).slice(0,6000);}var og=document.querySelector('meta[property=\"og:title\"]');var p={u:location.href.slice(0,500),t:((og&&og.content)||document.title||'').slice(0,120),x:x};if(sl.length>10)p.s=1;window.open('https://cookej123.github.io/will-it-fit/'+'\\x23shopadd='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(p))))),'_blank');})();";
+const WF_BOOKMARKLET="javascript:(function(){var sl=(window.getSelection?String(window.getSelection()):'').trim();var t=document.body?document.body.innerText:'';var x;if(sl.length>10){x=sl.slice(0,6000);}else{var w=[],re=/\\d+(?:[.,]\\d+)?\\s*cm/gi,m,n=0;while((m=re.exec(t))&&n<3){var s=Math.max(0,m.index-500);w.push(t.slice(s,Math.min(t.length,m.index+500)));re.lastIndex=m.index+500;n++;}x=(w.join('\\n')||t.slice(0,3000)).slice(0,6000);}var og=document.querySelector('meta[property=\"og:title\"]');var oi=document.querySelector('meta[property=\"og:image\"]');var p={u:location.href.slice(0,500),t:((og&&og.content)||document.title||'').slice(0,120),x:x};if(sl.length>10)p.s=1;if(oi&&oi.content&&/^https?:/.test(oi.content))p.i=oi.content.slice(0,400);window.open('https://cookej123.github.io/will-it-fit/'+'\\x23shopadd='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(p))))),'_blank');})();";
 function parseDimsText(text){
  const t=String(text||'');
  const out={};
@@ -731,7 +760,8 @@ async function doShopRead(){
   const dims=(fetched&&fetched.dims)||pasted;
   if(dims&&dims.w){
    shopDraft={name:(fetched&&fetched.name)||(pasted&&pasted.name)||'Item from a shop',
-    w:dims.w,d:dims.d,h:dims.h,price:(fetched&&fetched.price)||(pasted&&pasted.price)||'',link:um[0]};}
+    w:dims.w,d:dims.d,h:dims.h,price:(fetched&&fetched.price)||(pasted&&pasted.price)||'',link:um[0],
+    photo:(fetched&&fetched.photo)||undefined};}
   else if(failed)shopGuide={link:um[0],why:'blocked'};
   else shopGuide={link:um[0],why:'nosizes'};
   renderLibrary();return;}
@@ -745,16 +775,42 @@ function shopAdd(){
  const it=addItem({name:shopDraft.name||'Item from a shop',w:clamp(Math.round(shopDraft.w),10,2000),d:clamp(Math.round(shopDraft.d),10,2000),color:g.color,deco:g.deco||'',under:!!g.under});
  if(shopDraft.link)it.link=shopDraft.link;
  if(shopDraft.price)it.price=shopDraft.price;
+ if(shopDraft.photo)it.photo=shopDraft.photo;
  changed();
  shopDraft=null;shopText='';shopMsg='';shopGuide=null;
  renderLibrary();closeDrawers();
  toast('Added at its real size - drag it into a room');}
+
+/* ---------- "my furniture": a saved list that follows you to every plan ---------- */
+function myFurnLoad(){try{const a=JSON.parse(localStorage.getItem('wf:myfurniture')||'[]');return Array.isArray(a)?a:[];}catch(e){return [];}}
+function myFurnSave(a){try{localStorage.setItem('wf:myfurniture',JSON.stringify(a.slice(0,60)));}catch(e){}}
+function myFurnAdd(it){
+ const a=myFurnLoad();
+ const key=o=>(o.name||'').toLowerCase()+'|'+Math.round(o.w)+'x'+Math.round(o.d);
+ if(a.some(o=>key(o)===key(it))){toast('Already in My furniture');return;}
+ a.push({name:it.name,w:Math.round(it.w),d:Math.round(it.d),color:it.color,shape:it.shape||'rect',deco:it.deco||'',under:!!it.under,a:it.a,b:it.b,link:it.link,price:it.price,photo:it.photo});
+ myFurnSave(a);toast('Saved — My furniture follows you to every plan');renderPanels();}
+function myFurnAddAll(){
+ const a=myFurnLoad();if(!a.length)return;
+ pushHistory();
+ const b=planBounds();let cx=b.x+b.w+90,cy=b.y,colW=0;
+ for(const d0 of a){
+  const it={id:uid(),name:d0.name,w:d0.w,d:d0.d,x:cx+d0.w/2,y:cy+d0.d/2,rot:0,color:d0.color||'oak',shape:d0.shape||'rect',deco:d0.deco||'',under:!!d0.under,zone:false,locked:false};
+  if(d0.a)it.a=d0.a;if(d0.b)it.b=d0.b;if(d0.link)it.link=d0.link;if(d0.price)it.price=d0.price;if(d0.photo)it.photo=d0.photo;
+  state.items.push(it);
+  cy+=d0.d+30;colW=Math.max(colW,d0.w);
+  if(cy>b.y+Math.max(b.d,300)){cy=b.y;cx+=colW+50;colW=0;}}
+ sel=null;changed();fitView();toast(a.length+' piece'+(a.length===1?'':'s')+' added beside the plan — drag them in');}
 
 let libQuery='';
 function renderLibrary(){const p=$('#pane-Library');const q=libQuery.trim().toLowerCase();let h='<input class="search" id="libq" type="text" placeholder="Search furniture…" value="'+esc(libQuery)+'" aria-label="Search furniture">';
  h+='<div class="hint">Click to add to the view, or drag onto the board. Edit sizes in the panel on the right.</div>';
  LIB.forEach(c=>{const its=c.items.filter(i=>!q||i.name.toLowerCase().includes(q)||c.cat.toLowerCase().includes(q));if(!its.length)return;h+='<div class="cat"><h2>'+esc(c.cat)+'</h2><div class="lib">';
   its.forEach((i,idx)=>{h+='<button data-cat="'+esc(c.cat)+'" data-i="'+c.items.indexOf(i)+'"><span class="nm">'+esc(i.name)+'</span><span class="dm">'+esc(fmt(i.w,true)+' × '+fmt(i.d,true))+'</span><span class="sw" style="background:'+(COLORS[i.color]||'#ccc')+'"></span></button>';});h+='</div></div>';});
+ {const mf=myFurnLoad().map((i,ix)=>({i,ix})).filter(e=>!q||e.i.name.toLowerCase().includes(q)||'my furniture'.includes(q));
+  if(mf.length){h+='<div class="cat"><h2>My furniture</h2><div class="hint">Your saved pieces — on every plan you open. Select an item on any board and press “Save to My furniture” to add more.</div><div class="lib">';
+   mf.forEach(e=>{h+='<button data-myf="'+e.ix+'"><span class="myf-x" data-x="'+e.ix+'" title="Remove from My furniture">✕</span><span class="nm">'+esc(e.i.name)+'</span><span class="dm">'+esc(fmt(e.i.w,true)+' × '+fmt(e.i.d,true))+'</span><span class="sw" style="background:'+(COLORS[e.i.color]||'#ccc')+'"></span></button>';});
+   h+='</div><div class="row"><button id="myf-all">Add all to this board</button></div></div>';}}
  {const its=SHOP_DEFS.filter(i=>!q||i.name.toLowerCase().includes(q)||i.brand.toLowerCase().includes(q)||'real products shop'.includes(q));
   if(its.length){h+='<div class="cat"><h2>Real products · IKEA classics</h2><div class="hint">The maker’s listed sizes, with the product link saved on the item — double-check before you buy.</div><div class="lib">';
    its.forEach(i=>{h+='<button data-shop="'+SHOP_DEFS.indexOf(i)+'"><span class="nm">'+esc(i.name)+'</span><span class="dm">'+esc(fmt(i.w,true)+' × '+fmt(i.d,true))+'</span><span class="sw" style="background:'+(COLORS[i.color]||'#ccc')+'"></span></button>';});
@@ -811,6 +867,11 @@ function renderLibrary(){const p=$('#pane-Library');const q=libQuery.trim().toLo
  $('#libq').addEventListener('input',e=>{libQuery=e.target.value;const pos=e.target.selectionStart;renderLibrary();const el=$('#libq');el.focus();el.setSelectionRange(pos,pos);});
  $$('.lib button[data-cat]',p).forEach(b=>{const def=LIB.find(c=>c.cat===b.dataset.cat).items[+b.dataset.i];b.addEventListener('pointerdown',e=>libDown(e,def));});
  $$('.lib button[data-shop]',p).forEach(b=>b.addEventListener('pointerdown',e=>libDown(e,SHOP_DEFS[+b.dataset.shop])));
+ $$('.lib button[data-myf]',p).forEach(b=>{
+  b.addEventListener('pointerdown',e=>{if(e.target.classList.contains('myf-x'))return;const d0=myFurnLoad()[+b.dataset.myf];if(d0)libDown(e,d0);});});
+ $$('.myf-x',p).forEach(x=>x.addEventListener('click',e=>{e.stopPropagation();e.preventDefault();
+  const a=myFurnLoad();a.splice(+x.dataset.x,1);myFurnSave(a);renderLibrary();toast('Removed from My furniture');}));
+ const ma=$('#myf-all');if(ma)ma.addEventListener('click',myFurnAddAll);
  $('#custom-add').addEventListener('click',()=>{const it=addItem({name:'Custom item',w:100,d:50,color:'cobalt'});closeDrawers();$('#insp').classList.add('open');setTimeout(()=>{const f=$('#f-name');if(f){f.focus();f.select();}},0);});}
 
 function renderBoardList(){const p=$('#pane-Board');let h='';
@@ -878,9 +939,13 @@ function renderInspector(){const p=$('#insp');const s=getSel();let h='';
   else if(it.zone)h+='<div class="hint">A zone marks an area (e.g. low headroom). Furniture placed in it gets a warning.</div>';
   else h+='<div class="hint">Not inside a room.</div>';
   if(iss.length)h+='<div class="issues">'+iss.map(m=>'<div class="issue">'+esc(m)+'</div>').join('')+'</div>';else if(!it.under&&!it.zone)h+='<div class="okbox">No clashes.</div>';
+  if(it.photo)h+='<img class="item-photo" src="'+esc(it.photo)+'" alt="" loading="lazy">';
   if(it.link)h+='<div class="row"><button class="ghost small" id="b-shoplink">View the product'+(it.price?' · '+esc(it.price):'')+' ↗</button></div>';
+  h+='<div class="row"><button class="ghost small" id="b-mysave">☆ Save to My furniture</button></div>';
   h+='<div class="kv small"><b>Position</b><span id="f-pos">'+esc(fmt(it.x)+', '+fmt(it.y))+'</span></div>';
   h+='</div>';p.innerHTML=h;
+  const ip=p.querySelector('.item-photo');if(ip)ip.addEventListener('error',()=>{ip.style.display='none';});
+  $('#b-mysave').addEventListener('click',()=>myFurnAdd(it));
   if(it.link)$('#b-shoplink').addEventListener('click',()=>{window.open(it.link,'_blank','noopener');});
   const commit=fn=>{pushHistory();fn();changed();};
   $('#f-name').addEventListener('change',e=>commit(()=>{it.name=e.target.value||'Item';}));
