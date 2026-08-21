@@ -1,28 +1,29 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#141F33"><link rel="apple-touch-icon" href="icons/icon-180.png"><link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="Will It Fit"><title>Will It Fit</title>
+<html lang="en"><head><meta charset="utf-8"><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0C3532"><link rel="apple-touch-icon" href="icons/icon-180.png"><link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="Will It Fit"><title>Will It Fit</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Jost:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style id="css">
 :root{
-  --bg:#EEF0EC; --panel:#FFFFFF; --panel-2:#F6F7F4; --ink:#1B1F26; --muted:#5E6673; --line:#D5D9D2; --line-2:#E6E9E3;
-  --accent:#1F5FBF; --accent-soft:#DCE6F8; --on-accent:#FFFFFF; --warn:#C8491B; --warn-soft:#FBE5DC; --ok:#2E7D4F;
-  --floor:#E9E5DA; --floor-oak:#E3D3B4; --floor-tile:#DEE4E4; --floor-dark:#C9C4BA; --wall:#23272E; --grid:#D9DDD5; --grid-major:#C8CDC4;
-  --canvas:#E4E6E1; --shadow:0 8px 24px rgba(20,24,32,.12); --item-shadow:rgba(20,24,32,.15);
-  --sans:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,sans-serif; --disp:'Archivo','IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  /* Will it Fit brand: Deep Pine #0C3532 · Estate Teal #16544E · Seafoam #8FD9C9 · Mist #CDEFE5 · Paper #F3F4F1 */
+  --bg:#F3F4F1; --panel:#FFFFFF; --panel-2:#EBEFEA; --ink:#1E3833; --muted:#5E7A74; --line:#D3DCD5; --line-2:#E3E9E3;
+  --accent:#16544E; --accent-soft:#CDEFE5; --on-accent:#F3FBF7; --warn:#C8491B; --warn-soft:#FBE5DC; --ok:#2E7D4F;
+  --floor:#EAE6DA; --floor-oak:#E5D5B6; --floor-tile:#DCE6E2; --floor-dark:#CBC7BB; --wall:#0C3532; --grid:#DCE2DA; --grid-major:#CBD3CA;
+  --canvas:#ECEEE7; --shadow:0 8px 24px rgba(12,53,50,.12); --item-shadow:rgba(12,53,50,.16);
+  --sans:'Jost',system-ui,-apple-system,Segoe UI,sans-serif; --disp:'Jost',system-ui,sans-serif; --serif:'Cormorant Garamond',Georgia,serif; --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
-  --bg:#0E1524; --panel:#141F33; --panel-2:#192741; --ink:#E7EDF8; --muted:#94A6C4; --line:#263A5C; --line-2:#1F304E;
-  --accent:#6FB0FF; --accent-soft:#1D3557; --on-accent:#081221; --warn:#FF9A70; --warn-soft:#47291E; --ok:#63C79A;
-  --floor:#14263F; --floor-oak:#20304A; --floor-tile:#122B42; --floor-dark:#0F1E33; --wall:#D8E5F8; --grid:#152949; --grid-major:#1C355B;
-  --canvas:#0B1B33; --shadow:0 8px 24px rgba(2,8,20,.55); --item-shadow:rgba(2,8,20,.55);
+  --bg:#08201D; --panel:#0D2C29; --panel-2:#123632; --ink:#E6F3ED; --muted:#8FAEA5; --line:#1E4841; --line-2:#183C36;
+  --accent:#8FD9C9; --accent-soft:#16544E; --on-accent:#06201C; --warn:#F0A088; --warn-soft:#47291E; --ok:#7BCEA4;
+  --floor:#0F332E; --floor-oak:#1D3B2F; --floor-tile:#0E3A36; --floor-dark:#0A2723; --wall:#CDEFE5; --grid:#10312C; --grid-major:#17453F;
+  --canvas:#07211E; --shadow:0 8px 24px rgba(2,12,10,.55); --item-shadow:rgba(2,12,10,.55);
 }}
 :root[data-theme="dark"]{
-  --bg:#0E1524; --panel:#141F33; --panel-2:#192741; --ink:#E7EDF8; --muted:#94A6C4; --line:#263A5C; --line-2:#1F304E;
-  --accent:#6FB0FF; --accent-soft:#1D3557; --on-accent:#081221; --warn:#FF9A70; --warn-soft:#47291E; --ok:#63C79A;
-  --floor:#14263F; --floor-oak:#20304A; --floor-tile:#122B42; --floor-dark:#0F1E33; --wall:#D8E5F8; --grid:#152949; --grid-major:#1C355B;
-  --canvas:#0B1B33; --shadow:0 8px 24px rgba(2,8,20,.55); --item-shadow:rgba(2,8,20,.55);
+  --bg:#08201D; --panel:#0D2C29; --panel-2:#123632; --ink:#E6F3ED; --muted:#8FAEA5; --line:#1E4841; --line-2:#183C36;
+  --accent:#8FD9C9; --accent-soft:#16544E; --on-accent:#06201C; --warn:#F0A088; --warn-soft:#47291E; --ok:#7BCEA4;
+  --floor:#0F332E; --floor-oak:#1D3B2F; --floor-tile:#0E3A36; --floor-dark:#0A2723; --wall:#CDEFE5; --grid:#10312C; --grid-major:#17453F;
+  --canvas:#07211E; --shadow:0 8px 24px rgba(2,12,10,.55); --item-shadow:rgba(2,12,10,.55);
 }
 *,*::before,*::after{box-sizing:border-box}
 html,body{height:100%;margin:0}
@@ -57,7 +58,7 @@ h3{font-size:15px;font-weight:600}
 /* top bar */
 .top{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel);min-height:50px}
 .top .brand{display:flex;align-items:baseline;gap:10px;min-width:0}
-.top .brand h1,.top .brand .brandbtn{font-family:var(--disp);font-size:16px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;border:0;background:transparent;padding:4px 6px;border-radius:6px;color:var(--ink)}
+.top .brand h1,.top .brand .brandbtn{font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;border:0;background:transparent;padding:4px 6px;border-radius:6px;color:var(--ink)}
 .top .brand .brandbtn:hover{background:var(--panel-2)}
 .top .brand input{font-family:var(--disp);font-weight:600;font-size:14px;border:1px solid transparent;background:transparent;border-radius:6px;padding:4px 6px;min-width:0;width:min(34vw,260px)}
 .top .brand input:hover,.top .brand input:focus{border-color:var(--line);background:var(--panel-2)}
@@ -187,19 +188,19 @@ body.landing{overflow:auto}
 #app{height:100%}
 #landing{min-height:100%;background:var(--bg);color:var(--ink)}
 #landing .wrap{max-width:1140px;margin:0 auto;padding:0 24px}
-#landing h2{font-family:var(--disp);font-size:clamp(26px,3vw,36px);letter-spacing:-.02em;text-transform:none;color:var(--ink);font-weight:700;line-height:1.1;margin:0}
+#landing h2{font-family:var(--serif);font-size:clamp(28px,3.2vw,40px);letter-spacing:-.005em;text-transform:none;color:var(--ink);font-weight:600;line-height:1.08;margin:0}
 #landing h3{font-family:var(--disp);font-size:18px;font-weight:600;letter-spacing:-.01em;margin:0}
 #landing p{margin:0}
 #landing button.primary{border-radius:9px}
 .lp-nav{display:flex;align-items:center;gap:28px;padding:18px 0}
-.lp-logo{font-family:var(--disp);font-weight:700;font-size:18px;letter-spacing:-.01em;display:flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none}
-.lp-mark{width:22px;height:22px;border:2px solid var(--accent);border-radius:4px;position:relative;flex:none}
-.lp-mark::after{content:"";position:absolute;left:4px;top:4px;width:9px;height:7px;background:var(--accent);border-radius:1px}
+.lp-logo{font-family:var(--serif);font-weight:600;font-size:17px;letter-spacing:.18em;text-transform:uppercase;display:flex;align-items:center;gap:11px;color:var(--ink);text-decoration:none}
+.lp-mark{width:26px;height:26px;flex:none;color:var(--wall)}
+.lp-mark svg{width:100%;height:100%;display:block}
 .lp-nav nav{display:flex;gap:22px;margin-left:auto}
 .lp-nav nav a{color:var(--muted);text-decoration:none;font-size:14px}
 .lp-nav nav a:hover{color:var(--ink)}
 .lp-hero{display:grid;grid-template-columns:1.05fr 1fr;gap:56px;align-items:center;padding:48px 0 72px}
-.lp-hero h1{font-family:var(--disp);font-size:clamp(38px,5vw,62px);line-height:1.02;letter-spacing:-.028em;font-weight:700;margin:14px 0 18px;text-wrap:balance}
+.lp-hero h1{font-family:var(--serif);font-size:clamp(42px,5.4vw,68px);line-height:1.04;letter-spacing:-.01em;font-weight:600;margin:14px 0 18px;text-wrap:balance}
 .eyebrow{font-family:var(--disp);text-transform:uppercase;letter-spacing:.12em;font-size:11.5px;color:var(--accent);font-weight:600}
 .lede{font-size:18px;line-height:1.5;color:var(--muted);max-width:54ch}
 .lp-form{margin-top:28px}
@@ -303,7 +304,7 @@ body.landing{overflow:auto}
 </style>
 </head><body><div id="landing" class="lp">
 <div class="wrap">
- <header class="lp-nav"><a class="lp-logo" href="#top" id="top"><span class="lp-mark"></span>Will It Fit</a><nav><a href="#how">How it works</a><a href="#features">What you can do</a><a href="#example">Example</a><a href="#faq">FAQ</a></nav><button class="primary" id="nav-cta">Paste a listing</button></header>
+ <header class="lp-nav"><a class="lp-logo" href="#top" id="top"><span class="lp-mark"><svg viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg"><path d="M 79 133 L 7 133 L 7 7 L 133 7 L 133 133 L 115 133" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="square"/><path d="M 115 133 L 115 97" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="square"/><path d="M 79 133 A 36 36 0 0 1 115 97" fill="none" stroke="currentColor" stroke-width="2" stroke-opacity="0.55"/><rect x="11" y="11" width="78" height="12" rx="4" fill="currentColor"/><rect x="11" y="11" width="12" height="44" rx="4" fill="currentColor"/><rect x="77" y="11" width="12" height="44" rx="4" fill="currentColor"/><rect x="23" y="23" width="54" height="30" rx="3" fill="currentColor" fill-opacity="0.42"/><line x1="93" y1="33" x2="126" y2="33" stroke="currentColor" stroke-width="2" stroke-opacity="0.8"/><line x1="93" y1="27" x2="93" y2="39" stroke="currentColor" stroke-width="2" stroke-opacity="0.8"/><line x1="126" y1="27" x2="126" y2="39" stroke="currentColor" stroke-width="2" stroke-opacity="0.8"/></svg></span>Will It Fit</a><nav><a href="#how">How it works</a><a href="#features">What you can do</a><a href="#example">Example</a><a href="#faq">FAQ</a></nav><button class="primary" id="nav-cta">Paste a listing</button></header>
  <section class="lp-hero">
   <div class="lp-hero-copy">
    <p class="eyebrow">For buyers, renters and the people helping them move</p>
@@ -374,7 +375,7 @@ const uid=()=>Math.random().toString(36).slice(2,9);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clone=o=>JSON.parse(JSON.stringify(o));
-const FONTS='https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap';
+const FONTS='https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Jost:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap';
 const KEY='willitfit:draft:v2';
 const LANDING_SRC=(function(){const el=document.getElementById('landing');return el?el.outerHTML:'';})();
 const PLAN_ID='maple-house-2026-08-19b';
@@ -1149,7 +1150,7 @@ async function saveToPage(){if(!caps.artifact)return;const btn=$('#save-page');i
   else{toast('Could not save ('+(code||'error')+')');if(btn){btn.disabled=false;btn.textContent='Save to page';}}}}
 function planSnapshotSVG(maxPx,bgVar){const b=planBounds();const pad=40;const W=b.w+pad*2,H=b.d+pad*2;const scale=Math.min(4,Math.max(1,maxPx/Math.max(W,H)));
  const savedSel=sel,savedMode=mode;sel=null;mode='furnish';render();
- const css=getComputedStyle(document.documentElement);const vars=['--ink','--muted','--wall','--floor','--floor-oak','--floor-tile','--floor-dark','--accent','--warn','--canvas','--panel','--grid','--grid-major','--sans','--disp','--mono'].map(v=>v+':'+css.getPropertyValue(v)+';').join('');
+ const css=getComputedStyle(document.documentElement);const vars=['--ink','--muted','--wall','--floor','--floor-oak','--floor-tile','--floor-dark','--accent','--warn','--canvas','--panel','--grid','--grid-major','--sans','--disp','--serif','--mono'].map(v=>v+':'+css.getPropertyValue(v)+';').join('');
  const style='<style>:root{'+vars+'}'+$('#css').textContent.split('/* canvas */')[1].split('.toast')[0]+'</style>';
  const inner=world.innerHTML;sel=savedSel;mode=savedMode;render();
  return {W:W*scale,H:H*scale,
@@ -1175,7 +1176,7 @@ async function exportShareCard(){try{ensureDownloads();
  const snap=planSnapshotSVG(1500);
  const img=await svgToImage(snap.svg);
  const css=getComputedStyle(document.documentElement);const col=v=>css.getPropertyValue(v).trim();
- const sans=(css.getPropertyValue('--sans')||'sans-serif').trim(),disp=(css.getPropertyValue('--disp')||sans).trim(),monoF=(css.getPropertyValue('--mono')||'monospace').trim();
+ const sans=(css.getPropertyValue('--sans')||'sans-serif').trim(),disp=(css.getPropertyValue('--disp')||sans).trim(),monoF=(css.getPropertyValue('--mono')||'monospace').trim(),serifF=(css.getPropertyValue('--serif')||'Georgia,serif').trim();
  const CW=1600,CH=900;const c=document.createElement('canvas');c.width=CW;c.height=CH;const ctx=c.getContext('2d');
  ctx.fillStyle=col('--bg');ctx.fillRect(0,0,CW,CH);
  /* plan panel */
@@ -1188,8 +1189,12 @@ async function exportShareCard(){try{ensureDownloads();
  ctx.restore();
  /* right column */
  const rx=px0+pw+56,rw=CW-(px0+pw+56)-52;let ry=170;
- ctx.fillStyle=col('--accent');ctx.font='600 21px '+monoF;ctx.fillText('WILL IT FIT',rx,ry);ry+=62;
- ctx.fillStyle=col('--ink');ctx.font='700 46px '+disp;
+ ctx.fillStyle=col('--accent');ctx.font='600 26px '+serifF;
+ try{ctx.letterSpacing='7px';}catch(e){}
+ ctx.fillText('WILL IT FIT',rx,ry);
+ try{ctx.letterSpacing='0px';}catch(e){}
+ ry+=62;
+ ctx.fillStyle=col('--ink');ctx.font='600 48px '+serifF;
  ry=cardWrap(ctx,state.title||'My floor plan',rx,ry,rw,56,3)+18;
  const roomGroups=new Set(state.rooms.map(r2=>r2.name.trim().toLowerCase())).size;
  const nItems=state.items.filter(i=>!i.zone).length;
