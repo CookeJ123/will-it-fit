@@ -1633,7 +1633,7 @@ function wfHedged(items,run,stagger,deadline){
 
 /* our own Cloudflare Worker proxy (worker/worker.js) — first choice when configured.
    Bake the deployed URL into WF_WORKER_DEFAULT, or test via localStorage 'wf:worker'. */
-const WF_WORKER_DEFAULT='';
+const WF_WORKER_DEFAULT='https://willitfit-proxy.johncooke123.workers.dev';
 function wfWorkerBase(){let v='';try{v=window.WF_WORKER||localStorage.getItem('wf:worker')||'';}catch(e){}
  return String(v||WF_WORKER_DEFAULT).replace(/\/+$/,'');}
 function wfWorkerProxy(){const b=wfWorkerBase();return b?{name:'worker',u:x=>b+'/?u='+encodeURIComponent(x)}:null;}
