@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Will It Fit</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Jost:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -181,8 +181,15 @@ svg .handle.rot:hover{transform:scale(1.35)}
 .coach button{flex:none}
 /* mobile item pill */
 .mpill{display:none}
+.narrow-flex{display:none}
 @media (max-width:920px){
   .main{grid-template-columns:1fr}
+  /* iOS zooms the app when focusing inputs under 16px, and installed PWAs never zoom back */
+  input[type=text],input[type=number],input[type=url],select,textarea,.search{font-size:16px}
+  /* compact top bar: per-board toggles move into the Plan pane on small screens */
+  #units,#snap,#halos,#zoomout,#zoomin{display:none}
+  .top button{min-height:40px}
+  .top .brand h1,.top .brand .brandbtn{font-size:15px;letter-spacing:.1em}
   /* panels become bottom sheets on small screens */
   .side,.insp{position:absolute;left:0;right:0;bottom:0;top:auto;width:auto;max-height:58vh;z-index:20;border:1px solid var(--line);border-bottom:0;border-radius:16px 16px 0 0;box-shadow:0 -14px 34px rgba(4,18,15,.28);transform:translateY(106%);transition:transform .25s}
   .side::before,.insp::before{content:"";display:block;width:44px;height:4px;border-radius:2px;background:var(--line);margin:8px auto 2px;flex:none}
@@ -191,6 +198,7 @@ svg .handle.rot:hover{transform:scale(1.35)}
   .mpill .nm{font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:32vw}
   .mpill .dm{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
   .mpill button{min-width:40px;min-height:40px;font-size:16px}
+  .narrow-flex{display:flex !important}
   .top{flex-wrap:wrap;gap:6px 8px;padding:6px 8px}
   .top .narrow-only{display:inline-flex}
   .top .wide-only{display:none}
@@ -320,7 +328,7 @@ async function loadInitial(){
 
 /* ---------- page source for "save to page" ---------- */
 function pageHTML(s){const json=JSON.stringify(s).replace(/</g,'\\u003c');
- return '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Will It Fit</title>'+
+ return '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover"><title>Will It Fit</title>'+
  '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="'+FONTS+'">'+
  '<style id="css">'+$('#css').textContent+'</style></head><body><div id="root"></div>'+
  '<script id="state" type="application/json">'+json+'<\/script><script id="app">'+$('#app').textContent+'<\/script></body></html>';}
@@ -645,7 +653,13 @@ function shell(){root.innerHTML=
  $('#btn-insp').addEventListener('click',()=>{$('#side').classList.remove('open');$('#insp').classList.toggle('open');});
  $$('#tabs button').forEach(b=>b.addEventListener('click',()=>{libTab=b.dataset.tab;renderPanels();}));
  $('#scrim').addEventListener('click',e=>{if(e.target.id==='scrim')closeDlg();});
- window.addEventListener('resize',()=>render());}
+ window.addEventListener('resize',()=>render());
+ /* iOS: the keyboard scrolls the window and can leave it stranded — snap back on blur */
+ document.addEventListener('focusout',()=>{if(window.innerWidth>920)return;
+  if(document.body.classList.contains('landing'))return;
+  setTimeout(()=>{const ae=document.activeElement;
+   if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'))return;
+   window.scrollTo(0,0);},80);});}
 function closeDrawers(){$('#side').classList.remove('open');$('#insp').classList.remove('open');}
 function setMode(m){mode=m;if(m!=='measure')measure=null;if(m==='furnish'&&sel&&sel.kind!=='item')sel=null;if(m==='plan'&&sel&&sel.kind==='item')sel=null;if(m==='plan'&&libTab!=='Plan'){libTab='Plan';}if(m==='furnish'&&libTab==='Plan')libTab='Library';render();renderPanels();}
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2200);}
@@ -947,7 +961,9 @@ function renderPlanPane(){const p=$('#pane-Plan');const u=state.underlay;let h='
  else{h+='<div class="hint">Upload the floor plan (photo or screenshot) to trace rooms over it.</div><input type="file" id="u-file" accept="image/*">';}
  h+='</div>';
  h+='<div class="cat"><h2>Start again</h2><button id="blank-plan">New blank plan</button><div class="hint">Clears rooms, doors, windows and furniture (keeps the image).</div></div>';
- h+='<div class="cat"><h2>Settings</h2><div class="grid2"><label class="f"><span>Wall ('+unitLabel()+')</span><input type="number" id="s-wall" value="'+toUnit(state.wall)+'" step="1" min="1"></label><label class="f"><span>Grid ('+unitLabel()+')</span><input type="number" id="s-grid" value="'+toUnit(state.grid)+'" step="1" min="1"></label></div></div>';
+ h+='<div class="cat"><h2>Settings</h2>';
+ h+='<div class="row narrow-flex"><div class="seg"><button id="ms-m" class="'+(state.units!=='ft'?'on':'')+'">m</button><button id="ms-ft" class="'+(state.units==='ft'?'on':'')+'">ft</button></div><button id="ms-snap" class="'+(state.snap?'on':'')+'">Snap</button><button id="ms-halos" class="'+(state.halos!==false?'on':'')+'">Halos</button></div>';
+ h+='<div class="grid2"><label class="f"><span>Wall ('+unitLabel()+')</span><input type="number" id="s-wall" value="'+toUnit(state.wall)+'" step="1" min="1"></label><label class="f"><span>Grid ('+unitLabel()+')</span><input type="number" id="s-grid" value="'+toUnit(state.grid)+'" step="1" min="1"></label></div></div>';
  h+='<div class="cat"><h2>Shortcuts</h2><div class="hint"><kbd>R</kbd> rotate 90° · <kbd>⇧R</kbd> back · <kbd>Del</kbd> remove · <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicate · <kbd>L</kbd> lock · arrows nudge · <kbd>M</kbd> measure · <kbd>F</kbd> fit · <kbd>Alt</kbd>-drag: no snapping · scroll: zoom</div></div>';
  p.innerHTML=h;
  const gp=$('#goplan');if(gp)gp.addEventListener('click',()=>setMode('plan'));
@@ -960,7 +976,12 @@ function renderPlanPane(){const p=$('#pane-Plan');const u=state.underlay;let h='
   $('#u-rm').addEventListener('click',()=>{if(!confirm('Remove the floor plan image?'))return;pushHistory();state.underlay=null;if(sel&&sel.kind==='underlay')sel=null;changed();});}
  $('#blank-plan').addEventListener('click',()=>{if(!confirm('Clear the whole plan and start blank?'))return;pushHistory();state.rooms=[];state.openings=[];state.items=[];sel=null;mode='plan';changed();});
  $('#s-wall').addEventListener('change',e=>{pushHistory();state.wall=clamp(fromUnit(+e.target.value)||12,1,60);changed();});
- $('#s-grid').addEventListener('change',e=>{state.grid=clamp(fromUnit(+e.target.value)||5,1,100);changed();});}
+ $('#s-grid').addEventListener('change',e=>{state.grid=clamp(fromUnit(+e.target.value)||5,1,100);changed();});
+ const msm=$('#ms-m'),msf=$('#ms-ft'),mss=$('#ms-snap'),msh=$('#ms-halos');
+ if(msm)msm.addEventListener('click',()=>{state.units='m';changed();});
+ if(msf)msf.addEventListener('click',()=>{state.units='ft';changed();});
+ if(mss)mss.addEventListener('click',()=>{state.snap=!state.snap;changed();});
+ if(msh)msh.addEventListener('click',()=>{state.halos=state.halos===false;changed();});}
 
 function loadUnderlay(file){const rd=new FileReader();rd.onload=()=>{const img=new Image();img.onload=()=>{const max=1800;const sc=Math.min(1,max/Math.max(img.width,img.height));const c=document.createElement('canvas');c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);c.getContext('2d').drawImage(img,0,0,c.width,c.height);const src=c.toDataURL('image/jpeg',0.82);
   pushHistory();const b=planBounds();const cmPerPx=(b.w||800)/c.width;state.underlay={src,iw:c.width,ih:c.height,x:b.x,y:b.y,cmPerPx,opacity:0.6,show:true,locked:false};mode='plan';libTab='Plan';changed();toast('Image added. Now calibrate its scale.');};img.src=rd.result;};rd.readAsDataURL(file);}
