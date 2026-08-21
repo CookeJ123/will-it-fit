@@ -88,6 +88,10 @@ h3{font-size:15px;font-weight:600}
 .lib .nm{font-weight:500;font-size:12.5px;line-height:1.2}
 .lib .dm{font-family:var(--mono);font-size:11px;color:var(--muted)}
 .lib .sw{width:100%;height:4px;border-radius:2px;margin-top:3px}
+.lib button[data-myf]{position:relative;padding-right:20px}
+.myf-x{position:absolute;top:3px;right:4px;font-size:10px;line-height:1;color:var(--muted);cursor:pointer;padding:3px}
+.myf-x:hover{color:var(--warn)}
+.insp .item-photo{width:100%;max-height:170px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block}
 .list{display:flex;flex-direction:column;gap:2px}
 .list button{display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;border-color:transparent;padding:6px 8px}
 .list button:hover{background:var(--panel-2)}
@@ -134,7 +138,8 @@ svg .item.locked .body{stroke-dasharray:4 3}
 svg .item.zone .body{stroke:var(--muted);stroke-dasharray:5 4}
 svg .item.zone.sel .body{stroke:var(--accent)}
 svg .leaf{stroke:var(--wall);stroke-width:2;vector-effect:non-scaling-stroke}
-svg .swing{fill:none;stroke:var(--muted);stroke-width:1;vector-effect:non-scaling-stroke;stroke-dasharray:4 3}
+svg .swing{fill:var(--accent);fill-opacity:0;stroke:var(--muted);stroke-width:1;vector-effect:non-scaling-stroke;stroke-dasharray:4 3}
+svg.halos-on .swing{fill-opacity:.05}
 svg .gap{fill:var(--floor)}
 svg .win{stroke:var(--wall);stroke-width:1.5;vector-effect:non-scaling-stroke}
 svg .hit{fill:transparent}
@@ -149,6 +154,8 @@ svg .measure{stroke:var(--warn);stroke-width:1.5;vector-effect:non-scaling-strok
 svg .measure-t{font-family:var(--mono);fill:var(--warn);font-weight:600}
 svg .calib{fill:var(--warn)}
 svg .plan-dim .item{opacity:.45}
+svg .item .halo{fill:var(--accent);fill-opacity:.06;stroke:var(--accent);stroke-opacity:.3;stroke-width:1;vector-effect:non-scaling-stroke;stroke-dasharray:3 4;pointer-events:none}
+svg .item.sel .halo{fill-opacity:.1;stroke-opacity:.5}
 svg .item>.lift{transform-box:fill-box;transform-origin:center}
 svg .item.dragging>.lift{transform:scale(1.028)}
 svg .item.dragging{cursor:grabbing}
@@ -239,6 +246,16 @@ body.landing{overflow:auto}
 .lp-result .chips button.fp:hover{border-color:var(--muted)}
 .lp-result .chips button.fp.on{background:var(--accent-soft);border-color:var(--accent);font-weight:600}
 .lp-result .chips .ocr-chip{border-color:var(--accent);color:var(--accent)}
+/* listing photos tab + lightbox */
+.wf-photogrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.wf-photogrid button{padding:0;border-radius:8px;overflow:hidden;border:1px solid var(--line);aspect-ratio:4/3;background:var(--panel-2);cursor:zoom-in}
+.wf-photogrid img{width:100%;height:100%;object-fit:cover;display:block}
+#wf-lightbox{position:fixed;inset:0;background:rgba(4,18,15,.85);display:none;align-items:center;justify-content:center;z-index:60}
+#wf-lightbox img{max-width:92vw;max-height:92vh;border-radius:10px;box-shadow:var(--shadow);cursor:zoom-out}
+#wf-lightbox .lbnav{position:absolute;top:50%;transform:translateY(-50%);font-size:24px;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+#wf-lightbox #lb-prev{left:14px}
+#wf-lightbox #lb-next{right:14px}
+#wf-lightbox .lbcount{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:12px;color:#EAF4EF;background:rgba(8,32,29,.7);border-radius:6px;padding:3px 9px}
 .lp-result .row{display:flex;gap:10px;align-items:center;margin-top:4px}
 .lp-result .hint{font-size:12px;line-height:1.4}
 .trace .tr{stroke:var(--accent);stroke-width:4;fill:none;stroke-linejoin:round;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;animation:tr-draw 1s cubic-bezier(.4,0,.2,1) forwards;animation-delay:var(--d,0s)}
@@ -599,6 +616,23 @@ function decoSVG(it){const w=it.w,d=it.d;switch(it.deco){
   s+='<line class="deco" x1="0" y1="'+(-d/2+15)+'" x2="0" y2="'+(d/2-15)+'" style="stroke-width:1.5"/><path class="deco" d="M -7 '+(d/2-26)+' L 0 '+(d/2-14)+' L 7 '+(d/2-26)+'" style="stroke-width:1.5"/>';return s;}
  default:return '';}}
 
+/* clearance halos: the walking / opening space a piece needs, in item-local cm.
+   y- is the back (headboard, sofa back), y+ the front. */
+function haloRects(it){
+ if(it.under||it.zone)return [];
+ const w=it.w,d=it.d,n=(it.name||'').toLowerCase();
+ const out=[];
+ const front=cl=>out.push({x:-w/2,y:d/2,w:w,h:cl});
+ const back=cl=>out.push({x:-w/2,y:-d/2-cl,w:w,h:cl});
+ const sides=cl=>{out.push({x:-w/2-cl,y:-d/2,w:cl,h:d});out.push({x:w/2,y:-d/2,w:cl,h:d});};
+ if(it.deco==='bed'&&w>70){sides(55);front(55);}      // make the bed, get in and out
+ else if(it.deco==='sofa')front(45);                  // walkway / coffee-table gap
+ else if(it.deco==='ward')front(60);                  // doors open
+ else if(/\bdesk\b/.test(n))front(90);                // chair pull-out
+ else if(/chest|drawers|sideboard|dresser/.test(n))front(50); // drawers open
+ else if(/dining|round table/.test(n)){front(70);back(70);sides(70);} // chairs all round
+ else if(/wardrobe|armoire/.test(n))front(60);
+ return out;}
 function itemSVG(it,k){const fill=it.zone?'url(#hatch)':(COLORS[it.color]||it.color||COLORS.oak);const tc=it.zone?'var(--muted)':textColorFor(fill);const w=it.w,d=it.d;
  const s=sel&&sel.kind==='item'&&sel.id===it.id,bad=!!issues[it.id];
  const dragging=s&&drag&&drag.type==='move'&&drag.moved;
@@ -609,6 +643,8 @@ function itemSVG(it,k){const fill=it.zone?'url(#hatch)':(COLORS[it.color]||it.co
   if(it.shape==='L')return '<polygon class="'+cls+'" points="'+outlineLocal(it).map(p=>p.join(',')).join(' ')+'" fill="'+fl2+'"'+trs+'/>';
   return '<rect class="'+cls+'" x="'+(-w/2)+'" y="'+(-d/2)+'" width="'+w+'" height="'+d+'"'+(rx?' rx="'+rx+'"':'')+' fill="'+fl2+'"'+trs+'/>';};
  let body='';
+ if(state.halos!==false&&!it.locked)
+  for(const hz of haloRects(it))body+='<rect class="halo" x="'+hz.x+'" y="'+hz.y+'" width="'+hz.w+'" height="'+hz.h+'" rx="6"/>';
  if(!it.under&&!it.zone){
   /* consistent world-space light: rotate the shadow offset into item space */
   const a=it.rot*Math.PI/180,sr=Math.sin(a),cr=Math.cos(a);
@@ -668,7 +704,7 @@ function snapOpening(op,px,py){const t=state.wall;let best=null;const th=40/view
 
 /* ---------- mutations ---------- */
 function addItem(def,x,y){pushHistory();const c=viewCentreWorld();const it={id:uid(),name:def.name,w:def.w,d:def.d,x:x==null?c.x:x,y:y==null?c.y:y,rot:0,color:def.color||'oak',shape:def.shape||'rect',deco:def.deco||'',under:!!def.under,zone:!!def.zone,locked:false};
- if(def.a)it.a=def.a;if(def.b)it.b=def.b;if(def.link)it.link=def.link;if(def.price)it.price=def.price;
+ if(def.a)it.a=def.a;if(def.b)it.b=def.b;if(def.link)it.link=def.link;if(def.price)it.price=def.price;if(def.photo)it.photo=def.photo;
  if(state.snap){[it.x,it.y]=snapItemPos(it,it.x,it.y);}state.items.push(it);sel={kind:'item',id:it.id};changed();
  {const n=world&&world.querySelector('.item[data-id="'+it.id+'"]');if(n)n.classList.add('pop');}
  return it;}
@@ -748,6 +784,7 @@ function shell(){root.innerHTML=
   '<div class="sp"></div>'+
   '<div class="seg" id="units"><button data-u="m">m</button><button data-u="ft">ft</button></div>'+
   '<button id="snap" title="Snap to grid and walls">Snap</button>'+
+  '<button id="halos" title="Show the clearance space furniture needs (walking room, drawers, door swings)">Halos</button>'+
   '<div class="seg"><button id="undo" title="Undo (Ctrl+Z)">↶</button><button id="redo" title="Redo (Ctrl+Y)">↷</button></div></div>'+
   '<div class="sp"></div>'+
   '<div class="seg"><button id="zoomout" title="Zoom out (-)">−</button><button id="fit" title="Fit plan (F)">Fit</button><button id="zoomin" title="Zoom in (+)">+</button></div>'+
@@ -772,6 +809,7 @@ function shell(){root.innerHTML=
  $$('#modes button').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
  $$('#units button').forEach(b=>b.addEventListener('click',()=>{state.units=b.dataset.u;changed();}));
  $('#snap').addEventListener('click',()=>{state.snap=!state.snap;changed();});
+ $('#halos').addEventListener('click',()=>{state.halos=state.halos===false;changed();});
  $('#undo').addEventListener('click',undo);$('#redo').addEventListener('click',redo);
  $('#zoomin').addEventListener('click',()=>zoomAt(1.25));$('#zoomout').addEventListener('click',()=>zoomAt(0.8));$('#fit').addEventListener('click',fitView);
  $('#share').addEventListener('click',openShare);
@@ -788,9 +826,10 @@ function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show'
 function renderPanels(){ $('#title').value=state.title||'';
  $$('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));
  $$('#units button').forEach(b=>b.classList.toggle('on',b.dataset.u===state.units));
- $('#snap').classList.toggle('on',!!state.snap);$('#undo').disabled=!hist.length;$('#redo').disabled=!future.length;
+ $('#snap').classList.toggle('on',!!state.snap);$('#halos').classList.toggle('on',state.halos!==false);$('#undo').disabled=!hist.length;$('#redo').disabled=!future.length;
  const mc=$('#modechip');mc.textContent=mode==='plan'?'Editing the plan':mode==='measure'?'Measure: drag between two points':'';mc.className='modechip'+(mode==='plan'?' plan':'');mc.style.display=mode==='furnish'?'none':'';
  boardEl.className='board mode-'+mode;
+ svg.classList.toggle('halos-on',state.halos!==false);
  $$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===libTab));$$('.pane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+libTab));
  renderLibrary();renderBoardList();renderPlanPane();renderInspector();}
 
@@ -798,7 +837,7 @@ function renderPanels(){ $('#title').value=state.title||'';
 let shopText='',shopDraft=null,shopMsg='',shopBusy=false,shopGuide=null;
 /* bookmarklet: runs on the shop's own page (so nothing can block it), grabs the
    text around any "…cm" sizes + title + url, and hands it to the live site */
-const WF_BOOKMARKLET="javascript:(function(){var sl=(window.getSelection?String(window.getSelection()):'').trim();var t=document.body?document.body.innerText:'';var x;if(sl.length>10){x=sl.slice(0,6000);}else{var w=[],re=/\\d+(?:[.,]\\d+)?\\s*cm/gi,m,n=0;while((m=re.exec(t))&&n<3){var s=Math.max(0,m.index-500);w.push(t.slice(s,Math.min(t.length,m.index+500)));re.lastIndex=m.index+500;n++;}x=(w.join('\\n')||t.slice(0,3000)).slice(0,6000);}var og=document.querySelector('meta[property=\"og:title\"]');var p={u:location.href.slice(0,500),t:((og&&og.content)||document.title||'').slice(0,120),x:x};if(sl.length>10)p.s=1;window.open('https://cookej123.github.io/will-it-fit/'+'\\x23shopadd='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(p))))),'_blank');})();";
+const WF_BOOKMARKLET="javascript:(function(){var sl=(window.getSelection?String(window.getSelection()):'').trim();var t=document.body?document.body.innerText:'';var x;if(sl.length>10){x=sl.slice(0,6000);}else{var w=[],re=/\\d+(?:[.,]\\d+)?\\s*cm/gi,m,n=0;while((m=re.exec(t))&&n<3){var s=Math.max(0,m.index-500);w.push(t.slice(s,Math.min(t.length,m.index+500)));re.lastIndex=m.index+500;n++;}x=(w.join('\\n')||t.slice(0,3000)).slice(0,6000);}var og=document.querySelector('meta[property=\"og:title\"]');var oi=document.querySelector('meta[property=\"og:image\"]');var p={u:location.href.slice(0,500),t:((og&&og.content)||document.title||'').slice(0,120),x:x};if(sl.length>10)p.s=1;if(oi&&oi.content&&/^https?:/.test(oi.content))p.i=oi.content.slice(0,400);window.open('https://cookej123.github.io/will-it-fit/'+'\\x23shopadd='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(p))))),'_blank');})();";
 function parseDimsText(text){
  const t=String(text||'');
  const out={};
@@ -917,7 +956,8 @@ async function doShopRead(){
   const dims=(fetched&&fetched.dims)||pasted;
   if(dims&&dims.w){
    shopDraft={name:(fetched&&fetched.name)||(pasted&&pasted.name)||'Item from a shop',
-    w:dims.w,d:dims.d,h:dims.h,price:(fetched&&fetched.price)||(pasted&&pasted.price)||'',link:um[0]};}
+    w:dims.w,d:dims.d,h:dims.h,price:(fetched&&fetched.price)||(pasted&&pasted.price)||'',link:um[0],
+    photo:(fetched&&fetched.photo)||undefined};}
   else if(failed)shopGuide={link:um[0],why:'blocked'};
   else shopGuide={link:um[0],why:'nosizes'};
   renderLibrary();return;}
@@ -931,16 +971,42 @@ function shopAdd(){
  const it=addItem({name:shopDraft.name||'Item from a shop',w:clamp(Math.round(shopDraft.w),10,2000),d:clamp(Math.round(shopDraft.d),10,2000),color:g.color,deco:g.deco||'',under:!!g.under});
  if(shopDraft.link)it.link=shopDraft.link;
  if(shopDraft.price)it.price=shopDraft.price;
+ if(shopDraft.photo)it.photo=shopDraft.photo;
  changed();
  shopDraft=null;shopText='';shopMsg='';shopGuide=null;
  renderLibrary();closeDrawers();
  toast('Added at its real size - drag it into a room');}
+
+/* ---------- "my furniture": a saved list that follows you to every plan ---------- */
+function myFurnLoad(){try{const a=JSON.parse(localStorage.getItem('wf:myfurniture')||'[]');return Array.isArray(a)?a:[];}catch(e){return [];}}
+function myFurnSave(a){try{localStorage.setItem('wf:myfurniture',JSON.stringify(a.slice(0,60)));}catch(e){}}
+function myFurnAdd(it){
+ const a=myFurnLoad();
+ const key=o=>(o.name||'').toLowerCase()+'|'+Math.round(o.w)+'x'+Math.round(o.d);
+ if(a.some(o=>key(o)===key(it))){toast('Already in My furniture');return;}
+ a.push({name:it.name,w:Math.round(it.w),d:Math.round(it.d),color:it.color,shape:it.shape||'rect',deco:it.deco||'',under:!!it.under,a:it.a,b:it.b,link:it.link,price:it.price,photo:it.photo});
+ myFurnSave(a);toast('Saved — My furniture follows you to every plan');renderPanels();}
+function myFurnAddAll(){
+ const a=myFurnLoad();if(!a.length)return;
+ pushHistory();
+ const b=planBounds();let cx=b.x+b.w+90,cy=b.y,colW=0;
+ for(const d0 of a){
+  const it={id:uid(),name:d0.name,w:d0.w,d:d0.d,x:cx+d0.w/2,y:cy+d0.d/2,rot:0,color:d0.color||'oak',shape:d0.shape||'rect',deco:d0.deco||'',under:!!d0.under,zone:false,locked:false};
+  if(d0.a)it.a=d0.a;if(d0.b)it.b=d0.b;if(d0.link)it.link=d0.link;if(d0.price)it.price=d0.price;if(d0.photo)it.photo=d0.photo;
+  state.items.push(it);
+  cy+=d0.d+30;colW=Math.max(colW,d0.w);
+  if(cy>b.y+Math.max(b.d,300)){cy=b.y;cx+=colW+50;colW=0;}}
+ sel=null;changed();fitView();toast(a.length+' piece'+(a.length===1?'':'s')+' added beside the plan — drag them in');}
 
 let libQuery='';
 function renderLibrary(){const p=$('#pane-Library');const q=libQuery.trim().toLowerCase();let h='<input class="search" id="libq" type="text" placeholder="Search furniture…" value="'+esc(libQuery)+'" aria-label="Search furniture">';
  h+='<div class="hint">Click to add to the view, or drag onto the board. Edit sizes in the panel on the right.</div>';
  LIB.forEach(c=>{const its=c.items.filter(i=>!q||i.name.toLowerCase().includes(q)||c.cat.toLowerCase().includes(q));if(!its.length)return;h+='<div class="cat"><h2>'+esc(c.cat)+'</h2><div class="lib">';
   its.forEach((i,idx)=>{h+='<button data-cat="'+esc(c.cat)+'" data-i="'+c.items.indexOf(i)+'"><span class="nm">'+esc(i.name)+'</span><span class="dm">'+esc(fmt(i.w,true)+' × '+fmt(i.d,true))+'</span><span class="sw" style="background:'+(COLORS[i.color]||'#ccc')+'"></span></button>';});h+='</div></div>';});
+ {const mf=myFurnLoad().map((i,ix)=>({i,ix})).filter(e=>!q||e.i.name.toLowerCase().includes(q)||'my furniture'.includes(q));
+  if(mf.length){h+='<div class="cat"><h2>My furniture</h2><div class="hint">Your saved pieces — on every plan you open. Select an item on any board and press “Save to My furniture” to add more.</div><div class="lib">';
+   mf.forEach(e=>{h+='<button data-myf="'+e.ix+'"><span class="myf-x" data-x="'+e.ix+'" title="Remove from My furniture">✕</span><span class="nm">'+esc(e.i.name)+'</span><span class="dm">'+esc(fmt(e.i.w,true)+' × '+fmt(e.i.d,true))+'</span><span class="sw" style="background:'+(COLORS[e.i.color]||'#ccc')+'"></span></button>';});
+   h+='</div><div class="row"><button id="myf-all">Add all to this board</button></div></div>';}}
  {const its=SHOP_DEFS.filter(i=>!q||i.name.toLowerCase().includes(q)||i.brand.toLowerCase().includes(q)||'real products shop'.includes(q));
   if(its.length){h+='<div class="cat"><h2>Real products · IKEA classics</h2><div class="hint">The maker’s listed sizes, with the product link saved on the item — double-check before you buy.</div><div class="lib">';
    its.forEach(i=>{h+='<button data-shop="'+SHOP_DEFS.indexOf(i)+'"><span class="nm">'+esc(i.name)+'</span><span class="dm">'+esc(fmt(i.w,true)+' × '+fmt(i.d,true))+'</span><span class="sw" style="background:'+(COLORS[i.color]||'#ccc')+'"></span></button>';});
@@ -997,6 +1063,11 @@ function renderLibrary(){const p=$('#pane-Library');const q=libQuery.trim().toLo
  $('#libq').addEventListener('input',e=>{libQuery=e.target.value;const pos=e.target.selectionStart;renderLibrary();const el=$('#libq');el.focus();el.setSelectionRange(pos,pos);});
  $$('.lib button[data-cat]',p).forEach(b=>{const def=LIB.find(c=>c.cat===b.dataset.cat).items[+b.dataset.i];b.addEventListener('pointerdown',e=>libDown(e,def));});
  $$('.lib button[data-shop]',p).forEach(b=>b.addEventListener('pointerdown',e=>libDown(e,SHOP_DEFS[+b.dataset.shop])));
+ $$('.lib button[data-myf]',p).forEach(b=>{
+  b.addEventListener('pointerdown',e=>{if(e.target.classList.contains('myf-x'))return;const d0=myFurnLoad()[+b.dataset.myf];if(d0)libDown(e,d0);});});
+ $$('.myf-x',p).forEach(x=>x.addEventListener('click',e=>{e.stopPropagation();e.preventDefault();
+  const a=myFurnLoad();a.splice(+x.dataset.x,1);myFurnSave(a);renderLibrary();toast('Removed from My furniture');}));
+ const ma=$('#myf-all');if(ma)ma.addEventListener('click',myFurnAddAll);
  $('#custom-add').addEventListener('click',()=>{const it=addItem({name:'Custom item',w:100,d:50,color:'cobalt'});closeDrawers();$('#insp').classList.add('open');setTimeout(()=>{const f=$('#f-name');if(f){f.focus();f.select();}},0);});}
 
 function renderBoardList(){const p=$('#pane-Board');let h='';
@@ -1064,9 +1135,13 @@ function renderInspector(){const p=$('#insp');const s=getSel();let h='';
   else if(it.zone)h+='<div class="hint">A zone marks an area (e.g. low headroom). Furniture placed in it gets a warning.</div>';
   else h+='<div class="hint">Not inside a room.</div>';
   if(iss.length)h+='<div class="issues">'+iss.map(m=>'<div class="issue">'+esc(m)+'</div>').join('')+'</div>';else if(!it.under&&!it.zone)h+='<div class="okbox">No clashes.</div>';
+  if(it.photo)h+='<img class="item-photo" src="'+esc(it.photo)+'" alt="" loading="lazy">';
   if(it.link)h+='<div class="row"><button class="ghost small" id="b-shoplink">View the product'+(it.price?' · '+esc(it.price):'')+' ↗</button></div>';
+  h+='<div class="row"><button class="ghost small" id="b-mysave">☆ Save to My furniture</button></div>';
   h+='<div class="kv small"><b>Position</b><span id="f-pos">'+esc(fmt(it.x)+', '+fmt(it.y))+'</span></div>';
   h+='</div>';p.innerHTML=h;
+  const ip=p.querySelector('.item-photo');if(ip)ip.addEventListener('error',()=>{ip.style.display='none';});
+  $('#b-mysave').addEventListener('click',()=>myFurnAdd(it));
   if(it.link)$('#b-shoplink').addEventListener('click',()=>{window.open(it.link,'_blank','noopener');});
   const commit=fn=>{pushHistory();fn();changed();};
   $('#f-name').addEventListener('change',e=>commit(()=>{it.name=e.target.value||'Item';}));
@@ -1220,6 +1295,7 @@ async function initPlanner(){if(plannerReady)return;plannerReady=true;shell();
 async function openPlan(id,base,opts){opts=opts||{};await initPlanner();planId=id;planBase=clone(base);hist=[];future=[];sel=null;mode='furnish';measure=null;calib=null;libTab='Library';
  state=loadFor(base,!!opts.fresh);if(!state.units)state.units='m';if(!state.grid)state.grid=5;if(!state.wall)state.wall=14;if(state.snap==null)state.snap=true;
  showPlanner();computeIssues();renderPanels();fitView();
+ if(typeof wfPlannerExtras==='function')try{wfPlannerExtras();}catch(e){}
  try{if(sessionStorage.getItem('willitfit:justsaved')){sessionStorage.removeItem('willitfit:justsaved');toast('Saved into the page');}}catch(e){}
  if(opts.fromLink)toast('Loaded the layout from the link');else if(planUpdated)toast('This plan was updated — starting from the new version');
  if(opts.file)loadUnderlay(opts.file);}
@@ -1768,6 +1844,9 @@ function wfParseRightmove(html){
   if(Array.isArray(pd.floorplans)&&pd.floorplans.length){
    const fp=pd.floorplans.filter(f=>f&&typeof f.url==='string'&&/(jpe?g|png|gif|webp)(\?|$)/i.test(f.url));
    if(fp.length){out.floorplan=fp[0].url;out.floorplanCount=fp.length;out.floorplans=fp.map(f=>f.url).slice(0,8);}}
+  if(Array.isArray(pd.images)){
+   const ph=pd.images.map(im=>im&&im.url).filter(u=>typeof u==='string'&&/^https?:/.test(u));
+   if(ph.length)out.photos=ph.slice(0,14);}
   if(Array.isArray(pd.sizings)){
    for(const s of pd.sizings){if(!s)continue;
     const v=s.maximumSize||s.minimumSize;
@@ -1804,6 +1883,13 @@ function wfParseZoopla(html){
   if(m){const v=parseFloat(m[1]);out.areaSqm=/f/i.test(m[2])?v*0.092903:v;}
   if(!out.areaSqm){m=/"sizeSqft":(\d+)/.exec(norm);if(m){const v=+m[1];if(v>80&&v<20000){out.areaSqm=v*0.092903;out.areaEstimated=true;}}}}
  {const m=/"numBedrooms":(\d+)/.exec(norm);if(m)out.beds=+m[1];}
+ /* gallery photos: every image filename that is not one of the floor plans */
+ {const fpNames=new Set((out.floorplans||[]).concat(out.floorplan?[out.floorplan]:[]).map(u=>u.split('/').pop()));
+  const re=/"filename":"([0-9a-f]{16,}\.(?:jpe?g|png))"/gi;const ph=[];const seenP=new Set();let m2;
+  while((m2=re.exec(norm))&&ph.length<14){
+   if(fpNames.has(m2[1])||seenP.has(m2[1]))continue;
+   seenP.add(m2[1]);ph.push('https://lc.zoocdn.com/'+m2[1]);}
+  if(ph.length)out.photos=ph;}
  {const m=/<title>([^<]+?)\s*-\s*Zoopla<\/title>/i.exec(html)||/<title>([^<]+)<\/title>/i.exec(html);
   if(m){let t=m[1];
    const pm=/([£€][\d,]+(?:\s*pcm)?)/.exec(t);if(pm)out.price=pm[1];
@@ -1819,6 +1905,7 @@ function wfParseGeneric(html,portal){
  const out={portal:portal||'Listing'};
  {const m=/property="og:title"\s+content="([^"]+)"/i.exec(html)||/<title>([^<]+)<\/title>/i.exec(html);
   if(m)out.title=m[1].trim();}
+ {const m=/property="og:image"\s+content="(https?:[^"]+)"/i.exec(html);if(m)out.photos=[m[1]];}
  {const m=/([£€][\d,]{4,})/.exec(html);if(m)out.price=m[1];}
  {const re=/https?:\\?\/\\?\/[^"'\s\\)>]*(?:floor[-_]?plan|fpl|_FLP_?)[^"'\s\\)>]*\.(?:jpe?g|png|gif|webp)/gi;
   let m;const all=[];
@@ -1893,6 +1980,7 @@ window.wfProductFetch=async function(url){
  const out={link:url,dims:null};
  let m=/property="og:title"\s+content="([^"]+)"/i.exec(text)||/<title>([^<]+)<\/title>/i.exec(text)||/^Title:\s*([^\r\n]+)/m.exec(text);
  if(m)out.name=m[1].split(/\s*[|–—]\s*/)[0].trim().slice(0,70);
+ {const pm=/property="og:image"\s+content="(https?:[^"]+)"/i.exec(text);if(pm)out.photo=pm[1].slice(0,400);}
  /* schema.org Product blocks are the most reliable source when present */
  const lds=text.match(/<script[^>]*ld\+json[^>]*>([\s\S]*?)<\/script>/gi)||[];
  for(const block of lds){
@@ -1901,6 +1989,9 @@ window.wfProductFetch=async function(url){
    const prods=[].concat(j,j&&j['@graph']||[]).filter(o=>o&&/product/i.test(String(o['@type'])));
    for(const pr of prods){
     if(pr.name&&!out.name)out.name=String(pr.name).slice(0,70);
+    if(pr.image&&!out.photo){const im2=Array.isArray(pr.image)?pr.image[0]:pr.image;
+     if(typeof im2==='string'&&/^https?:/.test(im2))out.photo=im2.slice(0,400);
+     else if(im2&&typeof im2.url==='string')out.photo=im2.url.slice(0,400);}
     const offers=[].concat(pr.offers||[]);
     if(offers[0]&&offers[0].price&&!out.price)out.price='£'+offers[0].price;
     const dv=k=>{const v=pr[k];if(v==null)return null;
@@ -2122,6 +2213,7 @@ async function switchFloor(r,ix){
   r.plan=t.plan;r.traced=t.traced;r.traceStats=t.traceStats;r.traceMask=t.traceMask;
   r.scaleSource=t.scaleSource;r.traceFail=t.traceFail;r.traceRender=t.traceRender;r.floorIx=ix;
   r.planId=r.basePlanId+(ix?'-f'+(ix+1):'');
+  wfPlanCache[r.basePlanId+':'+ix]={plan:t.plan,traced:t.traced,traceStats:t.traceStats,traceMask:t.traceMask,traceRender:t.traceRender,named:true};
   pipeSet(3);setTimeout(()=>{$('#lp-pipe').hidden=true;},400);
   canvas.innerHTML=livePlanSVG(r);
   result.innerHTML=liveResultCard(r);result.classList.add('show');
@@ -2142,6 +2234,8 @@ async function runLive(url){
    if(extra&&extra.dataURL)canvas.innerHTML='<div class="lp-scan"><img src="'+extra.dataURL+'" alt=""><i></i></div>';});
   pipeSet(LIVE_PIPE.length);
   r.basePlanId=r.planId;r.floorIx=0;wfLastLive=r;
+  wfExtrasSave(r.planId,{floors:(r.listing.floorplans||[]).slice(0,8),photos:(r.listing.photos||[]).slice(0,14),title:r.listing.title||'',areaSqm:r.listing.areaSqm||0});
+  wfPlanCache[r.planId+':0']={plan:r.plan,traced:r.traced,traceStats:r.traceStats,traceMask:r.traceMask,traceRender:r.traceRender,named:true};
   canvas.innerHTML=livePlanSVG(r);
   setTimeout(()=>{pipe.hidden=true;},600);
   $('#lp-devtitle').textContent='Floor plan · '+(r.listing.title||'your listing');
@@ -2198,6 +2292,63 @@ function initLanding(){const urlEl=$('#lp-url');
  $('#lp-open-example').addEventListener('click',()=>openPlan('maple',SAMPLE));
  $('#lp-view-listing').addEventListener('click',()=>{window.open(EXAMPLE.url,'_blank','noopener');});
  ['nav-cta','lp-cta2'].forEach(id=>$('#'+id).addEventListener('click',()=>{window.scrollTo({top:0,behavior:'smooth'});setTimeout(()=>urlEl.focus(),300);}));}
+/* ===== per-listing extras (floor plans, photos) that follow the plan into the planner ===== */
+const wfPlanCache={};
+function wfBaseId(id){return String(id||'').replace(/-f\d+$/,'');}
+function wfExtrasSave(baseId,extras){try{localStorage.setItem('wf:extras:'+baseId,JSON.stringify(extras));}catch(e){}}
+function wfExtrasLoad(baseId){try{return JSON.parse(localStorage.getItem('wf:extras:'+baseId)||'null');}catch(e){return null;}}
+function wfPlannerExtras(){
+ const base=wfBaseId(planId);
+ const ex=wfExtrasLoad(base)||{};
+ wfRenderFloorHud(base,ex);
+ wfRenderPhotosTab(base,ex);}
+/* --- floor switcher chip in the board HUD --- */
+function wfRenderFloorHud(base,ex){
+ const hud=document.querySelector('.board .hud');
+ let el=document.getElementById('floorhud');
+ const floors=ex.floors||[];
+ if(!hud||floors.length<2){if(el)el.remove();return;}
+ if(!el||el.parentElement!==hud){if(el)el.remove();el=document.createElement('span');el.id='floorhud';el.className='chip';hud.insertBefore(el,hud.firstChild);}
+ const m=/-f(\d+)$/.exec(planId);const cur=m?+m[1]-1:0;
+ el.innerHTML='Floor '+floors.map(function(u,i){
+  return '<button data-f="'+i+'" style="margin-left:4px;min-width:24px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:var(--mono);border:1px solid '+(i===cur?'var(--accent)':'var(--line)')+';background:'+(i===cur?'var(--accent-soft)':'var(--panel)')+';color:var(--ink)">'+(i+1)+'</button>';}).join('');
+ [...el.querySelectorAll('button')].forEach(b=>b.addEventListener('click',()=>{const ix=+b.dataset.f;if(ix!==cur)wfOpenFloor(base,ex,ix);}));}
+async function wfOpenFloor(base,ex,ix){
+ const key=base+':'+ix;
+ let t=wfPlanCache[key];
+ if(!t){
+  toast('Fetching floor plan '+(ix+1)+'…');
+  try{t=await wfTraceFloorUrl({title:ex.title,areaSqm:ex.areaSqm},ex.floors[ix],ix);wfPlanCache[key]=t;}
+  catch(e){toast('Couldn’t load floor plan '+(ix+1)+' — try again in a moment');return;}}
+ await openPlan(base+(ix?'-f'+(ix+1):''),t.plan,{fresh:false});
+ if(t.traced&&!t.named){t.named=true;wfNameRooms({plan:t.plan,planId:base+(ix?'-f'+(ix+1):''),traced:true,traceMask:t.traceMask});}
+ toast('Floor '+(ix+1)+(t.traced?'':' — trace it over the image in Edit plan'));}
+/* --- listing photos tab in the side panel --- */
+function wfRenderPhotosTab(base,ex){
+ const tabs=document.getElementById('tabs');
+ if(!tabs)return;
+ let btn=tabs.querySelector('button[data-tab="Photos"]');
+ let pane=document.getElementById('pane-Photos');
+ const photos=ex.photos||[];
+ if(!photos.length){if(btn)btn.remove();if(pane)pane.remove();if(libTab==='Photos'){libTab='Library';renderPanels();}return;}
+ if(!btn){btn=document.createElement('button');btn.dataset.tab='Photos';btn.textContent='Photos';tabs.appendChild(btn);
+  btn.addEventListener('click',()=>{libTab='Photos';renderPanels();});}
+ if(!pane){pane=document.createElement('div');pane.className='pane';pane.id='pane-Photos';document.getElementById('side').appendChild(pane);}
+ pane.innerHTML='<div class="hint">Photos from the listing — for remembering which room is which.</div><div class="wf-photogrid">'
+  +photos.map((u,i)=>'<button data-ph="'+i+'"><img src="'+esc(u)+'" loading="lazy" alt="Listing photo '+(i+1)+'"></button>').join('')+'</div>';
+ [...pane.querySelectorAll('button[data-ph]')].forEach(b=>b.addEventListener('click',()=>wfPhotoLightbox(photos,+b.dataset.ph)));}
+function wfPhotoLightbox(photos,ix){
+ let bx=document.getElementById('wf-lightbox');
+ if(!bx){bx=document.createElement('div');bx.id='wf-lightbox';document.body.appendChild(bx);
+  bx.addEventListener('click',e=>{if(e.target.id==='wf-lightbox'||e.target.tagName==='IMG')bx.style.display='none';});}
+ bx.style.display='flex';
+ const show=i=>{bx.innerHTML='<img src="'+esc(photos[i])+'" alt="">'
+   +(photos.length>1?'<button class="lbnav" id="lb-prev" aria-label="Previous photo">‹</button><button class="lbnav" id="lb-next" aria-label="Next photo">›</button>':'')
+   +'<span class="lbcount">'+(i+1)+' / '+photos.length+'</span>';
+  const pv=document.getElementById('lb-prev'),nx=document.getElementById('lb-next');
+  if(pv)pv.addEventListener('click',e=>{e.stopPropagation();show((i-1+photos.length)%photos.length);});
+  if(nx)nx.addEventListener('click',e=>{e.stopPropagation();show((i+1)%photos.length);});};
+ show(ix);}
 /* ===== OCR room naming — tesseract.js from the CDN (skipped where CSP blocks it) ===== */
 let wfLastLive=null,wfTessLoad=null;
 function wfLoadTess(){if(window.Tesseract)return Promise.resolve();
@@ -2332,7 +2483,7 @@ function shopFromHash(){const m=/[#&]shopadd=([^&]+)/.exec(location.hash||'');if
   const nameT=((p.t||'').split(/\s*[|–—]\s*/)[0]||'').trim().slice(0,70);
   /* p.s: the user selected one product's text on the page — its own name beats the page title */
   const name=(p.s&&d&&d.name)?String(d.name).slice(0,70):nameT;
-  if(d&&d.w)return {ok:true,name:name||(d&&d.name)||'Item from a shop',w:d.w,d:d.d,h:d.h,price:d.price,link:p.u};
+  if(d&&d.w)return {ok:true,name:name||(d&&d.name)||'Item from a shop',w:d.w,d:d.d,h:d.h,price:d.price,link:p.u,photo:(typeof p.i==='string'&&/^https?:/.test(p.i))?p.i:undefined};
   return {ok:false,name:name||'that page',link:p.u,text:p.x||''};
  }catch(e){return null;}}
 function recentDrafts(){const out=[];
