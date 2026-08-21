@@ -1241,6 +1241,12 @@ function autotraceFloorplan(img, opts){
  /* ---- 2. thresholds: Otsu (clamped) for walls, near-white for "anything drawn" ---- */
  const hist=new Float64Array(256);
  for(let i=0;i<N;i++)hist[lum[i]]++;
+ /* photo / 3D-render detector: line drawings live at the histogram extremes (paper
+    white + wall dark) while textured renders fill the mid-tones. Tracing a render
+    yields phantom rooms, so hand it back for underlay-only mode instead.
+    Calibrated: line plans 0.03–0.13 mid-tone fraction, 3D renders 0.44+. */
+ {let midC=0;for(let t=70;t<=200;t++)midC+=hist[t];
+  if(midC/N>0.30)return {ok:false,reason:'photo-style plan (3D render)'};}
  let sum=0;for(let t=0;t<256;t++)sum+=t*hist[t];
  let sumB=0,wB=0,maxVar=0,otsu=127;
  for(let t=0;t<256;t++){wB+=hist[t];if(!wB)continue;const wF=N-wB;if(!wF)break;sumB+=t*hist[t];
@@ -1618,7 +1624,8 @@ function autotraceFloorplan(img, opts){
    w:wcm,rot:d.horiz?0:90,flip:false});}
 
  const totM2=rooms2.reduce((s,r)=>s+r.area,0)*cmPerPx*cmPerPx/10000;
- const res={ok:true,rooms:roomsFinal,openings:doors,cmPerPx,scaleSource,
+ const coverage=Math.round(rooms2.reduce((s,r)=>s+r.area,0)/freeCount*100)/100;
+ const res={ok:true,rooms:roomsFinal,openings:doors,cmPerPx,scaleSource,coverage,
   mask:{gi:gmask,W,H}, // per-pixel room-group index (image px), for OCR room naming
   stats:{roomGroups:new Set(roomsFinal.map(r=>r.name)).size,rects:roomsFinal.length,doors:doors.length,areaM2:Math.round(totM2*10)/10}};
  if(opts.debug)res.debug={W,H,gmask,nGroups};
