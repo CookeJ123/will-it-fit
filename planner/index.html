@@ -13,16 +13,16 @@
   --sans:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,sans-serif; --disp:'Archivo','IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
-  --bg:#151A21; --panel:#1C222B; --panel-2:#222932; --ink:#E6E9EE; --muted:#9AA4B2; --line:#2E3742; --line-2:#273039;
-  --accent:#7FA9F2; --accent-soft:#22355A; --on-accent:#0F1620; --warn:#F08A66; --warn-soft:#4A2A20; --ok:#6CC594;
-  --floor:#2B323C; --floor-oak:#3A3529; --floor-tile:#28343A; --floor-dark:#20252C; --wall:#DDE2E9; --grid:#222A34; --grid-major:#2B343F;
-  --canvas:#111519; --shadow:0 8px 24px rgba(0,0,0,.45); --item-shadow:rgba(0,0,0,.5);
+  --bg:#0E1524; --panel:#141F33; --panel-2:#192741; --ink:#E7EDF8; --muted:#94A6C4; --line:#263A5C; --line-2:#1F304E;
+  --accent:#6FB0FF; --accent-soft:#1D3557; --on-accent:#081221; --warn:#FF9A70; --warn-soft:#47291E; --ok:#63C79A;
+  --floor:#14263F; --floor-oak:#20304A; --floor-tile:#122B42; --floor-dark:#0F1E33; --wall:#D8E5F8; --grid:#152949; --grid-major:#1C355B;
+  --canvas:#0B1B33; --shadow:0 8px 24px rgba(2,8,20,.55); --item-shadow:rgba(2,8,20,.55);
 }}
 :root[data-theme="dark"]{
-  --bg:#151A21; --panel:#1C222B; --panel-2:#222932; --ink:#E6E9EE; --muted:#9AA4B2; --line:#2E3742; --line-2:#273039;
-  --accent:#7FA9F2; --accent-soft:#22355A; --on-accent:#0F1620; --warn:#F08A66; --warn-soft:#4A2A20; --ok:#6CC594;
-  --floor:#2B323C; --floor-oak:#3A3529; --floor-tile:#28343A; --floor-dark:#20252C; --wall:#DDE2E9; --grid:#222A34; --grid-major:#2B343F;
-  --canvas:#111519; --shadow:0 8px 24px rgba(0,0,0,.45); --item-shadow:rgba(0,0,0,.5);
+  --bg:#0E1524; --panel:#141F33; --panel-2:#192741; --ink:#E7EDF8; --muted:#94A6C4; --line:#263A5C; --line-2:#1F304E;
+  --accent:#6FB0FF; --accent-soft:#1D3557; --on-accent:#081221; --warn:#FF9A70; --warn-soft:#47291E; --ok:#63C79A;
+  --floor:#14263F; --floor-oak:#20304A; --floor-tile:#122B42; --floor-dark:#0F1E33; --wall:#D8E5F8; --grid:#152949; --grid-major:#1C355B;
+  --canvas:#0B1B33; --shadow:0 8px 24px rgba(2,8,20,.55); --item-shadow:rgba(2,8,20,.55);
 }
 *,*::before,*::after{box-sizing:border-box}
 html,body{height:100%;margin:0}
@@ -147,6 +147,15 @@ svg .measure{stroke:var(--warn);stroke-width:1.5;vector-effect:non-scaling-strok
 svg .measure-t{font-family:var(--mono);fill:var(--warn);font-weight:600}
 svg .calib{fill:var(--warn)}
 svg .plan-dim .item{opacity:.45}
+svg .item>.lift{transform-box:fill-box;transform-origin:center}
+svg .item.dragging>.lift{transform:scale(1.028)}
+svg .item.dragging{cursor:grabbing}
+@keyframes wf-settle{0%{transform:scale(1.028)}55%{transform:scale(.988)}100%{transform:scale(1)}}
+@keyframes wf-pop{0%{transform:scale(.65);opacity:0}65%{transform:scale(1.06);opacity:1}100%{transform:scale(1)}}
+svg .item.settle>.lift{animation:wf-settle .18s ease-out}
+svg .item.pop>.lift{animation:wf-pop .22s cubic-bezier(.2,.9,.3,1.2)}
+svg .handle.rot{transition:transform .12s;transform-box:fill-box;transform-origin:center}
+svg .handle.rot:hover{transform:scale(1.35)}
 .toast{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;box-shadow:var(--shadow);opacity:0;transition:opacity .2s;pointer-events:none;z-index:50}
 .toast.show{opacity:1}
 /* dialogs */
@@ -170,7 +179,7 @@ svg .plan-dim .item{opacity:.45}
   .top .tools{display:flex;order:10;flex-basis:100%;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap}
   .top .tools .sp{display:none}
 }
-@media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+@media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important} }
 </style>
 </head><body><div id="root"></div>
 <script id="state" type="application/json">null</script>
@@ -406,6 +415,7 @@ function decoSVG(it){const w=it.w,d=it.d;switch(it.deco){
 
 function itemSVG(it,k){const fill=it.zone?'url(#hatch)':(COLORS[it.color]||it.color||COLORS.oak);const tc=it.zone?'var(--muted)':textColorFor(fill);const w=it.w,d=it.d;
  const s=sel&&sel.kind==='item'&&sel.id===it.id,bad=!!issues[it.id];
+ const dragging=s&&drag&&drag.type==='move'&&drag.moved;
  const soft=it.deco==='sofa'||it.deco==='bed'||it.deco==='chair';
  const rx=(soft&&it.shape!=='round')?Math.min(9,Math.min(w,d)*0.1):0;
  const mk=(cls,fl2,dx,dy)=>{const trs=dx?' transform="translate('+dx+' '+dy+')"':'';
@@ -416,7 +426,8 @@ function itemSVG(it,k){const fill=it.zone?'url(#hatch)':(COLORS[it.color]||it.co
  if(!it.under&&!it.zone){
   /* consistent world-space light: rotate the shadow offset into item space */
   const a=it.rot*Math.PI/180,sr=Math.sin(a),cr=Math.cos(a);
-  let dx=2.2*cr+3.2*sr,dy=-2.2*sr+3.2*cr;if(it.mirror)dx=-dx;
+  const lift=dragging?2.4:1; // picked-up items float higher off the floor
+  let dx=(2.2*cr+3.2*sr)*lift,dy=(-2.2*sr+3.2*cr)*lift;if(it.mirror)dx=-dx;
   body+=mk('shdw','var(--item-shadow)',Math.round(dx*10)/10,Math.round(dy*10)/10);}
  body+=mk('body',fill);
  if(!it.zone)body+=mk('sheen','url(#sheen)');
@@ -427,7 +438,7 @@ function itemSVG(it,k){const fill=it.zone?'url(#hatch)':(COLORS[it.color]||it.co
  if(sw>=42&&sd>=16){const fs=11/k;const ltr='rotate('+(upside?180:0)+')'+(it.mirror?' scale(-1 1)':'');
   const showDims=sw>=80&&sd>=30;const ly=showDims?-fs*0.15:fs*0.35;
   label='<g transform="'+ltr+'"><text x="0" y="'+ly+'" text-anchor="middle" font-size="'+fs+'" fill="'+tc+'" font-weight="500">'+esc(it.name)+'</text>'+(showDims?'<text x="0" y="'+(ly+fs*1.15)+'" text-anchor="middle" font-size="'+(fs*0.9)+'" fill="'+tc+'" style="font-family:var(--mono);opacity:.8">'+esc(fmt(w,true)+' × '+fmt(d,true))+'</text>':'')+'</g>';}
- return '<g class="item'+(s?' sel':'')+(bad?' bad':'')+(it.locked?' locked':'')+(it.zone?' zone':'')+'" data-kind="item" data-id="'+it.id+'" transform="'+tr+'">'+body+decoSVG(it)+label+'</g>';}
+ return '<g class="item'+(s?' sel':'')+(dragging?' dragging':'')+(bad?' bad':'')+(it.locked?' locked':'')+(it.zone?' zone':'')+'" data-kind="item" data-id="'+it.id+'" transform="'+tr+'"><g class="lift">'+body+decoSVG(it)+label+'</g></g>';}
 
 function itemOverlay(it,k){const px=v=>v/k;let o='';const polys=worldPolys(it);const ab=aabbOf(polys);
  // guides to walls
@@ -471,7 +482,10 @@ function snapOpening(op,px,py){const t=state.wall;let best=null;const th=40/view
 
 /* ---------- mutations ---------- */
 function addItem(def,x,y){pushHistory();const c=viewCentreWorld();const it={id:uid(),name:def.name,w:def.w,d:def.d,x:x==null?c.x:x,y:y==null?c.y:y,rot:0,color:def.color||'oak',shape:def.shape||'rect',deco:def.deco||'',under:!!def.under,zone:!!def.zone,locked:false};
- if(def.a)it.a=def.a;if(def.b)it.b=def.b;if(state.snap){[it.x,it.y]=snapItemPos(it,it.x,it.y);}state.items.push(it);sel={kind:'item',id:it.id};changed();return it;}
+ if(def.a)it.a=def.a;if(def.b)it.b=def.b;if(def.link)it.link=def.link;if(def.price)it.price=def.price;
+ if(state.snap){[it.x,it.y]=snapItemPos(it,it.x,it.y);}state.items.push(it);sel={kind:'item',id:it.id};changed();
+ {const n=world&&world.querySelector('.item[data-id="'+it.id+'"]');if(n)n.classList.add('pop');}
+ return it;}
 function deleteSel(){if(!sel)return;pushHistory();if(sel.kind==='item')state.items=state.items.filter(i=>i.id!==sel.id);else if(sel.kind==='room')state.rooms=state.rooms.filter(i=>i.id!==sel.id);else if(sel.kind==='opening')state.openings=state.openings.filter(i=>i.id!==sel.id);else if(sel.kind==='underlay')state.underlay=null;sel=null;changed();}
 function duplicateSel(){const s=getSel();if(!s)return;pushHistory();const c=clone(s);c.id=uid();if(sel.kind==='item'){c.x+=30;c.y+=30;state.items.push(c);}else if(sel.kind==='room'){c.x+=c.w+state.wall;state.rooms.push(c);}else if(sel.kind==='opening'){c.x+=20;c.y+=20;state.openings.push(c);}else return;sel={kind:sel.kind,id:c.id};changed();}
 function rotateSel(deg){const s=getSel();if(!s||sel.kind==='room'||sel.kind==='underlay')return;pushHistory();s.rot=norm((s.rot||0)+deg);changed();}
@@ -514,7 +528,8 @@ function onMove(e){if(pointers.has(e.pointerId))pointers.set(e.pointerId,{x:e.cl
   computeIssues();render();liveInspector();}}
 function onUp(e){pointers.delete(e.pointerId);boardEl.classList.remove('grabbing');if(drag&&drag.type==='pinch'){drag=null;return;}
  if(!drag)return;const d=drag;drag=null;if(d.type==='measure'){if(measure&&Math.hypot(measure.x2-measure.x1,measure.y2-measure.y1)<2)measure=null;render();return;}
- if(d.type==='pan')return;if(d.moved)changed();}
+ if(d.type==='pan')return;if(d.moved){changed();
+  if(sel&&sel.kind==='item'&&d.type==='move'){const n=world&&world.querySelector('.item[data-id="'+sel.id+'"]');if(n)n.classList.add('settle');}}}
 function onWheel(e){e.preventDefault();const r=svg.getBoundingClientRect();if(e.ctrlKey||e.metaKey||!e.shiftKey&&Math.abs(e.deltaY)>=Math.abs(e.deltaX)&&!e.deltaX){zoomAt(Math.exp(-e.deltaY*0.0015),e.clientX-r.left,e.clientY-r.top);}else{view.tx-=e.deltaX;view.ty-=e.deltaY;render();}}
 function onKey(e){const tag=(e.target.tagName||'').toLowerCase();if(tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable){if(e.key==='Escape')e.target.blur();return;}
  const mod=e.ctrlKey||e.metaKey;
@@ -596,7 +611,7 @@ function renderPanels(){ $('#title').value=state.title||'';
 let shopText='',shopDraft=null,shopMsg='',shopBusy=false;
 /* bookmarklet: runs on the shop's own page (so nothing can block it), grabs the
    text around any "…cm" sizes + title + url, and hands it to the live site */
-const WF_BOOKMARKLET="javascript:(function(){var t=document.body?document.body.innerText:'';var w=[],re=/\\d+(?:[.,]\\d+)?\\s*cm/gi,m,n=0;while((m=re.exec(t))&&n<3){var s=Math.max(0,m.index-500);w.push(t.slice(s,Math.min(t.length,m.index+500)));re.lastIndex=m.index+500;n++;}var og=document.querySelector('meta[property=\"og:title\"]');var p={u:location.href.slice(0,500),t:((og&&og.content)||document.title||'').slice(0,120),x:(w.join('\\n')||t.slice(0,3000)).slice(0,6000)};window.open('https://cookej123.github.io/will-it-fit/'+'\\x23shopadd='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(p))))),'_blank');})();";
+const WF_BOOKMARKLET="javascript:(function(){var sl=(window.getSelection?String(window.getSelection()):'').trim();var t=document.body?document.body.innerText:'';var x;if(sl.length>10){x=sl.slice(0,6000);}else{var w=[],re=/\\d+(?:[.,]\\d+)?\\s*cm/gi,m,n=0;while((m=re.exec(t))&&n<3){var s=Math.max(0,m.index-500);w.push(t.slice(s,Math.min(t.length,m.index+500)));re.lastIndex=m.index+500;n++;}x=(w.join('\\n')||t.slice(0,3000)).slice(0,6000);}var og=document.querySelector('meta[property=\"og:title\"]');var p={u:location.href.slice(0,500),t:((og&&og.content)||document.title||'').slice(0,120),x:x};if(sl.length>10)p.s=1;window.open('https://cookej123.github.io/will-it-fit/'+'\\x23shopadd='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(p))))),'_blank');})();";
 function parseDimsText(text){
  const t=String(text||'');
  const out={};
@@ -672,6 +687,34 @@ function guessKind(name){const n=(name||'').toLowerCase();
  if(/table|desk|sideboard|console|dresser|drawers|bookcase|shelv/.test(n))return {color:'oak'};
  if(/\btv\b|television/.test(n))return {color:'ink'};
  return {color:'cobalt'};}
+
+/* ---------- real products: classic pieces at the maker's listed sizes ---------- */
+const SHOP_LIB=[
+ {brand:'IKEA',link:q=>'https://www.ikea.com/gb/en/search/?q='+encodeURIComponent(q),items:[
+  {name:'KLIPPAN 2-seat sofa',w:180,d:88,q:'KLIPPAN sofa'},
+  {name:'EKTORP 3-seat sofa',w:218,d:88,q:'EKTORP sofa'},
+  {name:'KIVIK 3-seat sofa',w:228,d:95,q:'KIVIK sofa'},
+  {name:'SÖDERHAMN 3-seat sofa',w:198,d:99,q:'SODERHAMN sofa'},
+  {name:'POÄNG armchair',w:68,d:82,q:'POANG armchair'},
+  {name:'STRANDMON wing chair',w:82,d:96,q:'STRANDMON'},
+  {name:'MALM bed frame (double)',w:156,d:209,q:'MALM bed frame'},
+  {name:'MALM bed frame (king)',w:176,d:209,q:'MALM bed frame'},
+  {name:'HEMNES day-bed',w:86,d:211,q:'HEMNES day bed'},
+  {name:'PAX wardrobe frame 100',w:100,d:58,q:'PAX wardrobe 100'},
+  {name:'BILLY bookcase',w:80,d:28,q:'BILLY bookcase'},
+  {name:'KALLAX shelf 2×2',w:77,d:39,q:'KALLAX 2x2'},
+  {name:'KALLAX shelf 4×4',w:147,d:39,q:'KALLAX 4x4'},
+  {name:'MALM chest of 4 drawers',w:80,d:48,q:'MALM chest 4 drawers'},
+  {name:'LACK side table',w:55,d:55,q:'LACK side table'},
+  {name:'LISABO dining table',w:140,d:78,q:'LISABO table'},
+  {name:'INGATORP extendable table',w:155,d:87,q:'INGATORP table'},
+  {name:'BESTÅ TV bench 180',w:180,d:42,q:'BESTA TV bench 180'},
+  {name:'MICKE desk',w:105,d:50,q:'MICKE desk'},
+ ]},
+];
+const SHOP_DEFS=[];
+SHOP_LIB.forEach(g=>g.items.forEach(i=>{const k=guessKind(i.name);
+ SHOP_DEFS.push({name:i.name,w:i.w,d:i.d,color:k.color,deco:k.deco||'',under:!!k.under,link:g.link(i.q),brand:g.brand});}));
 async function doShopRead(){
  const txt=shopText.trim();if(!txt||shopBusy)return;
  shopMsg='';shopDraft=null;
@@ -709,6 +752,10 @@ function renderLibrary(){const p=$('#pane-Library');const q=libQuery.trim().toLo
  h+='<div class="hint">Click to add to the view, or drag onto the board. Edit sizes in the panel on the right.</div>';
  LIB.forEach(c=>{const its=c.items.filter(i=>!q||i.name.toLowerCase().includes(q)||c.cat.toLowerCase().includes(q));if(!its.length)return;h+='<div class="cat"><h2>'+esc(c.cat)+'</h2><div class="lib">';
   its.forEach((i,idx)=>{h+='<button data-cat="'+esc(c.cat)+'" data-i="'+c.items.indexOf(i)+'"><span class="nm">'+esc(i.name)+'</span><span class="dm">'+esc(fmt(i.w,true)+' × '+fmt(i.d,true))+'</span><span class="sw" style="background:'+(COLORS[i.color]||'#ccc')+'"></span></button>';});h+='</div></div>';});
+ {const its=SHOP_DEFS.filter(i=>!q||i.name.toLowerCase().includes(q)||i.brand.toLowerCase().includes(q)||'real products shop'.includes(q));
+  if(its.length){h+='<div class="cat"><h2>Real products · IKEA classics</h2><div class="hint">The maker’s listed sizes, with the product link saved on the item — double-check before you buy.</div><div class="lib">';
+   its.forEach(i=>{h+='<button data-shop="'+SHOP_DEFS.indexOf(i)+'"><span class="nm">'+esc(i.name)+'</span><span class="dm">'+esc(fmt(i.w,true)+' × '+fmt(i.d,true))+'</span><span class="sw" style="background:'+(COLORS[i.color]||'#ccc')+'"></span></button>';});
+   h+='</div></div>';}}
  h+='<div class="cat"><h2>From a shop</h2>';
  h+='<div class="hint">'+(typeof window.wfProductFetch==='function'
   ?'Paste a product link, or copy the size text off the product page. The piece lands here at its real size.'
@@ -723,7 +770,7 @@ function renderLibrary(){const p=$('#pane-Library');const q=libQuery.trim().toLo
   if(shopDraft.price||shopDraft.link)h+='<div class="hint">'+(shopDraft.price?esc(shopDraft.price)+' · ':'')+(shopDraft.link?'link saved with the item':'')+'</div>';
   h+='<div class="row"><button class="primary" id="shop-addb">Add to the board</button><button class="ghost" id="shop-swap" title="Swap width and depth">Swap W/D</button><button class="ghost" id="shop-cancel">Cancel</button></div></div>';
  }
- h+='<div class="hint" style="margin-top:2px">Shops that block reading (Next, IKEA…): drag this button to your bookmarks bar, then click it while you are on the product page —</div>';
+ h+='<div class="hint" style="margin-top:2px">Shops that block reading (Next, IKEA…): drag this button to your bookmarks bar, then click it while you are on the product page. On a page with several products, select the one you want (drag over its name and sizes) before clicking —</div>';
  h+='<a id="shop-bm" class="bmlet" href="#" title="Drag me to your bookmarks bar">+ Add to Will It Fit</a>';
  h+='</div>';
  h+='<div class="cat"><h2>Custom</h2><button id="custom-add">+ Custom item (enter any size)</button></div>';
@@ -744,7 +791,8 @@ function renderLibrary(){const p=$('#pane-Library');const q=libQuery.trim().toLo
    $('#shop-cancel').addEventListener('click',()=>{shopDraft=null;renderLibrary();});
   }}
  $('#libq').addEventListener('input',e=>{libQuery=e.target.value;const pos=e.target.selectionStart;renderLibrary();const el=$('#libq');el.focus();el.setSelectionRange(pos,pos);});
- $$('.lib button',p).forEach(b=>{const def=LIB.find(c=>c.cat===b.dataset.cat).items[+b.dataset.i];b.addEventListener('pointerdown',e=>libDown(e,def));});
+ $$('.lib button[data-cat]',p).forEach(b=>{const def=LIB.find(c=>c.cat===b.dataset.cat).items[+b.dataset.i];b.addEventListener('pointerdown',e=>libDown(e,def));});
+ $$('.lib button[data-shop]',p).forEach(b=>b.addEventListener('pointerdown',e=>libDown(e,SHOP_DEFS[+b.dataset.shop])));
  $('#custom-add').addEventListener('click',()=>{const it=addItem({name:'Custom item',w:100,d:50,color:'cobalt'});closeDrawers();$('#insp').classList.add('open');setTimeout(()=>{const f=$('#f-name');if(f){f.focus();f.select();}},0);});}
 
 function renderBoardList(){const p=$('#pane-Board');let h='';
@@ -857,14 +905,19 @@ function liveInspector(){const s=getSel();if(!s)return;const pos=$('#f-pos');if(
 /* ---------- share dialog ---------- */
 function openDlg(html){$('#dlg').innerHTML=html;$('#scrim').classList.add('on');}
 function closeDlg(){$('#scrim').classList.remove('on');}
-async function openShare(){const canSave=!!caps.artifact&&!readOnly;const code=await encodeState(stripForShare(state));
+function ensureDownloads(){ /* outside the artifact sandbox a plain anchor download works */
+ if(caps.downloads||(window.claude&&typeof window.claude.use==='function'))return;
+ caps.downloads={save:async o=>{const blob=(o.data instanceof Blob)?o.data:new Blob([o.data],{type:'application/octet-stream'});
+  const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=o.filename||'download';
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);}};}
+async function openShare(){ensureDownloads();const canSave=!!caps.artifact&&!readOnly;const code=await encodeState(stripForShare(state));
  let h='<div class="row" style="justify-content:space-between"><h3>Share this board</h3><button class="ghost" id="dlg-x" aria-label="Close">✕</button></div>';
  h+='<section><h2>Save into this page</h2>'+(canSave?'<div class="hint">Writes the current layout into this page, so anyone who opens the link sees it. '+(state.savedAt?'Last saved '+esc(new Date(state.savedAt).toLocaleString())+'.':'Not saved into the page yet.')+'</div><button class="primary" id="save-page">Save to page</button>':
    (caps.artifact?'<div class="hint">This view is read-only: you can arrange things here, but only the owner (or an editor) can save into the page. Send them a board code instead.</div>':'<div class="hint">Saving into the page is not available in this view. Use a board code or link below.</div>'))+'</section>';
  h+='<section><h2>Link with the layout baked in</h2><div class="hint">Best-effort: some viewers drop the part after <span class="mono">#</span>. If it opens blank, use the code.</div><div class="row"><button id="copy-link">Copy link</button><span class="hint" id="link-note"></span></div></section>';
  h+='<section><h2>Board code</h2><div class="hint">Paste this into the box on any copy of this page to load the layout. '+(state.underlay&&state.underlay.src?'The floor-plan image is left out of codes and links to keep them short; save to page to keep it.':'')+'</div><textarea id="code" rows="3" readonly>'+esc(code)+'</textarea><div class="row"><button id="copy-code">Copy code</button><span class="hint mono">'+code.length+' chars</span></div></section>';
  h+='<section><h2>Load a board code</h2><textarea id="code-in" rows="2" placeholder="Paste a board code here"></textarea><div class="row"><button id="load-code">Load</button></div></section>';
- if(caps.downloads)h+='<section><h2>Download</h2><div class="row"><button id="dl-json">Board file (.json)</button><button id="dl-png">Picture (.png)</button></div></section>';
+ if(caps.downloads)h+='<section><h2>Download</h2><div class="row"><button id="dl-json">Board file (.json)</button><button id="dl-png">Picture (.png)</button><button id="dl-card">Share card (.png)</button></div></section>';
  h+='<section><h2>Start over</h2><div class="row"><button id="reset-sample">Reset to the traced plan (fittings only)</button><button id="reset-saved"'+(embeddedState()?'':' disabled')+'>Back to last saved version</button></div></section>';
  openDlg(h);
  $('#dlg-x').addEventListener('click',closeDlg);
@@ -874,6 +927,7 @@ async function openShare(){const canSave=!!caps.artifact&&!readOnly;const code=a
  $('#load-code').addEventListener('click',async()=>{try{const s=await decodeState($('#code-in').value);if(!validState(s))throw 0;pushHistory();const u=state.underlay;state=s;if(!state.underlay&&u)state.underlay=u;sel=null;changed();closeDlg();fitView();toast('Board loaded');}catch(e){toast('That code could not be read');}});
  const dj=$('#dl-json');if(dj)dj.addEventListener('click',async()=>{try{await caps.downloads.save({filename:(state.title||'board').replace(/[^\w\- ]+/g,'').trim()+'.json',data:JSON.stringify(state,null,1)});toast('Saved');}catch(e){if(e&&e.code!=='declined')toast('Download not available here');}});
  const dp=$('#dl-png');if(dp)dp.addEventListener('click',exportPNG);
+ const dc=$('#dl-card');if(dc)dc.addEventListener('click',exportShareCard);
  $('#reset-sample').addEventListener('click',()=>{if(!confirm('Replace everything with the original traced plan? Your furniture will be removed.'))return;pushHistory();state=clone(SAMPLE);sel=null;changed();closeDlg();fitView();});
  const rs=$('#reset-saved');if(rs)rs.addEventListener('click',()=>{const e=embeddedState();if(!e)return;if(!confirm('Discard your local changes and go back to the last version saved into the page?'))return;pushHistory();state=e;sel=null;changed();closeDlg();fitView();});}
 function stripForShare(s){const c=clone(s);if(c.underlay){c.underlay=Object.assign({},c.underlay,{src:null});if(!c.underlay.src)c.underlay=null;}return c;}
@@ -890,17 +944,66 @@ async function saveToPage(){if(!caps.artifact)return;const btn=$('#save-page');i
   else if(code==='too_large'){toast('Too large to save — try a smaller floor-plan image');if(btn){btn.disabled=false;btn.textContent='Save to page';}}
   else if(code==='rate_limited'){toast('Saving too often — wait a moment');if(btn){btn.disabled=false;btn.textContent='Save to page';}}
   else{toast('Could not save ('+(code||'error')+')');if(btn){btn.disabled=false;btn.textContent='Save to page';}}}}
-async function exportPNG(){try{const b=planBounds();const pad=40;const W=b.w+pad*2,H=b.d+pad*2;const scale=Math.min(4,Math.max(1,2400/Math.max(W,H)));
+function planSnapshotSVG(maxPx,bgVar){const b=planBounds();const pad=40;const W=b.w+pad*2,H=b.d+pad*2;const scale=Math.min(4,Math.max(1,maxPx/Math.max(W,H)));
  const savedSel=sel,savedMode=mode;sel=null;mode='furnish';render();
  const css=getComputedStyle(document.documentElement);const vars=['--ink','--muted','--wall','--floor','--floor-oak','--floor-tile','--floor-dark','--accent','--warn','--canvas','--panel','--grid','--grid-major','--sans','--disp','--mono'].map(v=>v+':'+css.getPropertyValue(v)+';').join('');
  const style='<style>:root{'+vars+'}'+$('#css').textContent.split('/* canvas */')[1].split('.toast')[0]+'</style>';
  const inner=world.innerHTML;sel=savedSel;mode=savedMode;render();
- const svgStr='<svg xmlns="http://www.w3.org/2000/svg" width="'+(W*scale)+'" height="'+(H*scale)+'" viewBox="'+(b.x-pad)+' '+(b.y-pad)+' '+W+' '+H+'">'+style+'<rect x="'+(b.x-pad)+'" y="'+(b.y-pad)+'" width="'+W+'" height="'+H+'" fill="'+css.getPropertyValue('--canvas')+'"/>'+inner+'</svg>';
- const blob=new Blob([svgStr],{type:'image/svg+xml;charset=utf-8'});const url=URL.createObjectURL(blob);const img=new Image();
- await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=url;});
- const c=document.createElement('canvas');c.width=W*scale;c.height=H*scale;c.getContext('2d').drawImage(img,0,0);URL.revokeObjectURL(url);
+ return {W:W*scale,H:H*scale,
+  svg:'<svg xmlns="http://www.w3.org/2000/svg" width="'+(W*scale)+'" height="'+(H*scale)+'" viewBox="'+(b.x-pad)+' '+(b.y-pad)+' '+W+' '+H+'">'+style+(bgVar===null?'':'<rect x="'+(b.x-pad)+'" y="'+(b.y-pad)+'" width="'+W+'" height="'+H+'" fill="'+css.getPropertyValue(bgVar||'--canvas')+'"/>')+inner+'</svg>'};}
+async function svgToImage(svgStr){const url=URL.createObjectURL(new Blob([svgStr],{type:'image/svg+xml;charset=utf-8'}));
+ const img=new Image();await new Promise((res,rej)=>{img.onload=res;img.onerror=()=>rej(new Error('svg render failed'));img.src=url;});
+ setTimeout(()=>URL.revokeObjectURL(url),2000);return img;}
+async function exportPNG(){try{ensureDownloads();
+ const snap=planSnapshotSVG(2400);
+ const img=await svgToImage(snap.svg);
+ const c=document.createElement('canvas');c.width=snap.W;c.height=snap.H;c.getContext('2d').drawImage(img,0,0);
  const png=await new Promise(r=>c.toBlob(r,'image/png'));await caps.downloads.save({filename:(state.title||'board').replace(/[^\w\- ]+/g,'').trim()+'.png',data:png});toast('Saved');}
  catch(e){if(!(e&&e.code==='declined'))toast('Could not make the picture');}}
+function cardRR(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function cardWrap(ctx,text,x,y,maxW,lh,maxLines){const words=String(text).split(/\s+/);let line='',lines=0;
+ for(let i=0;i<words.length;i++){const t=line?line+' '+words[i]:words[i];
+  if(ctx.measureText(t).width>maxW&&line){ctx.fillText(line,x,y);y+=lh;line=words[i];lines++;
+   if(maxLines&&lines>=maxLines-1){for(;i<words.length;i++){const t2=line+'…';if(ctx.measureText(line+' '+words[i]).width>maxW)break;line=line?line+' '+words[i]:words[i];}break;}}
+  else line=t;}
+ if(line){ctx.fillText(line,x,y);y+=lh;}
+ return y;}
+async function exportShareCard(){try{ensureDownloads();
+ const snap=planSnapshotSVG(1500);
+ const img=await svgToImage(snap.svg);
+ const css=getComputedStyle(document.documentElement);const col=v=>css.getPropertyValue(v).trim();
+ const sans=(css.getPropertyValue('--sans')||'sans-serif').trim(),disp=(css.getPropertyValue('--disp')||sans).trim(),monoF=(css.getPropertyValue('--mono')||'monospace').trim();
+ const CW=1600,CH=900;const c=document.createElement('canvas');c.width=CW;c.height=CH;const ctx=c.getContext('2d');
+ ctx.fillStyle=col('--bg');ctx.fillRect(0,0,CW,CH);
+ /* plan panel */
+ const px0=52,py0=52,pw=968,ph=CH-104;
+ ctx.save();ctx.shadowColor='rgba(10,16,28,.28)';ctx.shadowBlur=36;ctx.shadowOffsetY=10;
+ cardRR(ctx,px0,py0,pw,ph,22);ctx.fillStyle=col('--canvas');ctx.fill();ctx.restore();
+ ctx.save();cardRR(ctx,px0,py0,pw,ph,22);ctx.clip();
+ const s2=Math.min((pw-64)/img.width,(ph-64)/img.height);
+ ctx.drawImage(img,px0+(pw-img.width*s2)/2,py0+(ph-img.height*s2)/2,img.width*s2,img.height*s2);
+ ctx.restore();
+ /* right column */
+ const rx=px0+pw+56,rw=CW-(px0+pw+56)-52;let ry=170;
+ ctx.fillStyle=col('--accent');ctx.font='600 21px '+monoF;ctx.fillText('WILL IT FIT',rx,ry);ry+=62;
+ ctx.fillStyle=col('--ink');ctx.font='700 46px '+disp;
+ ry=cardWrap(ctx,state.title||'My floor plan',rx,ry,rw,56,3)+18;
+ const roomGroups=new Set(state.rooms.map(r2=>r2.name.trim().toLowerCase())).size;
+ const nItems=state.items.filter(i=>!i.zone).length;
+ const area=state.rooms.reduce((s3,r3)=>s3+r3.w*r3.d,0);
+ ctx.font='400 24px '+sans;ctx.fillStyle=col('--muted');
+ const rows=[];
+ if(roomGroups)rows.push(roomGroups+' room'+(roomGroups===1?'':'s')+' · '+fmtArea(area));
+ rows.push(nItems+' piece'+(nItems===1?'':'s')+' of furniture placed');
+ rows.forEach(t=>{ctx.fillText(t,rx,ry);ry+=40;});
+ ry+=10;
+ ctx.font='600 26px '+sans;ctx.fillStyle=issueList.length?col('--warn'):col('--ok');
+ ctx.fillText(issueList.length?issueList.length+' thing'+(issueList.length===1?'':'s')+' to check':'Everything fits ✓',rx,ry);
+ ctx.font='500 19px '+monoF;ctx.fillStyle=col('--muted');
+ ctx.fillText('cookej123.github.io/will-it-fit',rx,CH-84);
+ const png=await new Promise(r4=>c.toBlob(r4,'image/png'));
+ await caps.downloads.save({filename:((state.title||'board').replace(/[^\w\- ]+/g,'').trim()||'board')+' card.png',data:png});toast('Share card saved');}
+ catch(e){if(!(e&&e.code==='declined'))toast('Could not make the card');}}
 
 /* ---------- boot ---------- */
 async function boot(){shell();state=await loadInitial();
