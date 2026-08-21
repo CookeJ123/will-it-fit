@@ -794,7 +794,7 @@ function renderPanels(){ $('#title').value=state.title||'';
  renderLibrary();renderBoardList();renderPlanPane();renderInspector();}
 
 /* ---------- "from a shop": paste a product link or its size text ---------- */
-let shopText='',shopDraft=null,shopMsg='',shopBusy=false;
+let shopText='',shopDraft=null,shopMsg='',shopBusy=false,shopGuide=null;
 /* bookmarklet: runs on the shop's own page (so nothing can block it), grabs the
    text around any "…cm" sizes + title + url, and hands it to the live site */
 const WF_BOOKMARKLET="javascript:(function(){var sl=(window.getSelection?String(window.getSelection()):'').trim();var t=document.body?document.body.innerText:'';var x;if(sl.length>10){x=sl.slice(0,6000);}else{var w=[],re=/\\d+(?:[.,]\\d+)?\\s*cm/gi,m,n=0;while((m=re.exec(t))&&n<3){var s=Math.max(0,m.index-500);w.push(t.slice(s,Math.min(t.length,m.index+500)));re.lastIndex=m.index+500;n++;}x=(w.join('\\n')||t.slice(0,3000)).slice(0,6000);}var og=document.querySelector('meta[property=\"og:title\"]');var p={u:location.href.slice(0,500),t:((og&&og.content)||document.title||'').slice(0,120),x:x};if(sl.length>10)p.s=1;window.open('https://cookej123.github.io/will-it-fit/'+'\\x23shopadd='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(p))))),'_blank');})();";
@@ -903,9 +903,11 @@ SHOP_LIB.forEach(g=>g.items.forEach(i=>{const k=guessKind(i.name);
  SHOP_DEFS.push({name:i.name,w:i.w,d:i.d,color:k.color,deco:k.deco||'',under:!!k.under,link:g.link(i.q),brand:g.brand});}));
 async function doShopRead(){
  const txt=shopText.trim();if(!txt||shopBusy)return;
- shopMsg='';shopDraft=null;
+ shopMsg='';shopDraft=null;shopGuide=null;
  const um=/https?:\/\/[^\s"'<>]+/.exec(txt);
  const pasted=parseDimsText(um?txt.replace(um[0],' '):txt);
+ /* link + pasted sizes together: the text already answers, skip the slow fetch */
+ if(um&&pasted&&pasted.w){shopDraft=Object.assign({},pasted);shopDraft.link=um[0];renderLibrary();return;}
  if(um&&typeof window.wfProductFetch==='function'){
   shopBusy=true;renderLibrary();
   let fetched=null,failed=false;
@@ -915,8 +917,8 @@ async function doShopRead(){
   if(dims&&dims.w){
    shopDraft={name:(fetched&&fetched.name)||(pasted&&pasted.name)||'Item from a shop',
     w:dims.w,d:dims.d,h:dims.h,price:(fetched&&fetched.price)||(pasted&&pasted.price)||'',link:um[0]};}
-  else if(failed)shopMsg='That shop blocks remote reading. Easiest fix: on the product page press Ctrl+A then Ctrl+C (select all, copy), come back and paste the lot here - we will find the sizes. Or drag the bookmark button below to your bookmarks bar and click it on the product page.';
-  else shopMsg='Read the page but could not find sizes on it. On the product page press Ctrl+A then Ctrl+C and paste everything here - we will dig the sizes out.';
+  else if(failed)shopGuide={link:um[0],why:'blocked'};
+  else shopGuide={link:um[0],why:'nosizes'};
   renderLibrary();return;}
  if(pasted&&pasted.w){shopDraft=pasted;if(um)shopDraft.link=um[0];}
  else if(um)shopMsg='Links cannot be fetched in this copy of the planner. Copy the size text off the product page and paste it here (keeping the link in the paste is fine).';
@@ -929,7 +931,7 @@ function shopAdd(){
  if(shopDraft.link)it.link=shopDraft.link;
  if(shopDraft.price)it.price=shopDraft.price;
  changed();
- shopDraft=null;shopText='';shopMsg='';
+ shopDraft=null;shopText='';shopMsg='';shopGuide=null;
  renderLibrary();closeDrawers();
  toast('Added at its real size - drag it into a room');}
 
@@ -949,6 +951,14 @@ function renderLibrary(){const p=$('#pane-Library');const q=libQuery.trim().toLo
  h+='<textarea id="shop-in" rows="2" placeholder="e.g. Hartford 3-seater  W: 226cm D: 96cm" aria-label="Product link or size text"></textarea>';
  h+='<div class="row"><button class="primary" id="shop-go"'+(shopBusy?' disabled':'')+'>'+(shopBusy?'Reading the page…':'Read it')+'</button></div>';
  if(shopMsg)h+='<div class="hint" style="color:var(--warn)">'+esc(shopMsg)+'</div>';
+ if(shopGuide){
+  h+='<div style="border:1.5px solid var(--accent);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--accent-soft)">';
+  h+='<div class="small" style="font-weight:600">'+(shopGuide.why==='blocked'
+   ?'That shop won’t let us read it from here — but you can, in two taps:'
+   :'We read the page but the sizes weren’t in what we got — grab them yourself in two taps:')+'</div>';
+  h+='<div class="row"><button id="shop-open-page">1 · Open the product page ↗</button><button class="primary" id="shop-clip">2 · Paste what you copied</button></div>';
+  h+='<div class="hint">On the page: select the product name and its sizes (or select all — Ctrl+A, or long-press on a phone), copy, come back and hit 2. The product link stays on the item.</div>';
+  h+='</div>';}
  if(shopDraft){
   h+='<div style="border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--panel-2)">';
   h+='<label class="f"><span>Name</span><input id="shop-nm" type="text" value="'+esc(shopDraft.name||'')+'"></label>';
@@ -967,6 +977,13 @@ function renderLibrary(){const p=$('#pane-Library');const q=libQuery.trim().toLo
   $('#shop-go').addEventListener('click',doShopRead);
   const bm=$('#shop-bm');bm.setAttribute('href',WF_BOOKMARKLET);
   bm.addEventListener('click',e=>{e.preventDefault();toast('Drag the button to your bookmarks bar, then click it on a shop’s product page');});
+  const so=$('#shop-open-page');if(so)so.addEventListener('click',()=>{if(shopGuide)window.open(shopGuide.link,'_blank','noopener');
+   const b2=$('#shop-clip');if(b2)b2.style.boxShadow='0 0 0 3px var(--accent)';});
+  const sc=$('#shop-clip');if(sc)sc.addEventListener('click',async()=>{
+   let t='';try{t=await navigator.clipboard.readText();}catch(e){}
+   if(!t||!t.trim()){shopMsg='Couldn’t read the clipboard — click the box above and press Ctrl+V instead.';renderLibrary();const si2=$('#shop-in');if(si2)si2.focus();return;}
+   shopText=(shopGuide&&shopGuide.link?shopGuide.link+'\n':'')+t.slice(0,12000);
+   doShopRead();});
   if(shopDraft){
    $('#shop-nm').addEventListener('change',e=>{shopDraft.name=e.target.value;});
    $('#shop-w').addEventListener('change',e=>{shopDraft.w=+e.target.value||shopDraft.w;});
