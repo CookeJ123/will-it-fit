@@ -1818,7 +1818,9 @@ function wfHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeA
 window.wfProductFetch=async function(url){
  const P=WF_PROXIES;
  /* direct first: some shops allow CORS, and it fails fast when they don't */
- const chain=[{name:'direct',u:x=>x},P.corssh,P.allorigins,P.jinaMd,P.codetabs,P.jinaHtml];
+ /* corssh appears twice: it is the only free proxy that reaches Next at all, and
+    its refusals are transient — a second try at the end of the chain often lands */
+ const chain=[{name:'direct',u:x=>x},P.corssh,P.allorigins,P.jinaMd,P.codetabs,P.jinaHtml,P.corssh];
  {const wk=wfWorkerProxy();if(wk)chain.splice(1,0,wk);}
  const text=await wfHedged(chain,p=>wfFetchT(p.u(url),{headers:p.headers||{}},p.name.indexOf('jina')===0?35000:15000)
   .then(r=>{if(!r.ok)throw new Error('http '+r.status);return r.text();})
@@ -1855,6 +1857,25 @@ window.wfProductFetch=async function(url){
   while((k=kw.exec(plain))&&!best)best=parseDimsText(plain.slice(Math.max(0,k.index-120),k.index+600));
   if(!best)best=parseDimsText(plain.slice(0,120000));
   if(best){out.dims={w:best.w,d:best.d,h:best.h};if(!out.price&&best.price)out.price=best.price;}}
+ /* hydration JSON: React shops (Next & co) often render sizes client-side, so the
+    dims live only inside script blobs — which the plain-text pass just stripped.
+    Scan the RAW html: windows around "dimension…" first, then around compact
+    "W225 x H95…" shapes; JSON punctuation is blanked before parsing. */
+ if(!out.dims){
+  const windows=[];
+  const push=ix=>{if(ix>=0)windows.push(text.slice(Math.max(0,ix-150),ix+650));};
+  {const re=/dimension|measurement/gi;let m2,n2=0;
+   while((m2=re.exec(text))&&n2<10){push(m2.index);n2++;re.lastIndex=m2.index+300;}}
+  {const re=/[WHDL]\s?:?\s?\d{2,3}(?:[.,]\d)?\s?(?:cm|mm)?\s?(?:x|×|\\u00d7)\s?[WHDL]/gi;let m2,n2=0;
+   while((m2=re.exec(text))&&n2<10){push(m2.index);n2++;re.lastIndex=m2.index+300;}}
+  for(const wnd of windows){
+   const clean=wnd
+    .replace(/\\u00d7/gi,'×').replace(/\\u00a0/gi,' ').replace(/\\u0022/g,'"').replace(/\\[rnt]/g,' ')
+    .replace(/<[^>]+>/g,' ')
+    .replace(/&nbsp;|&#160;/g,' ')
+    .replace(/["'{}\[\]\\,;]/g,' ');
+   const got=parseDimsText(clean);
+   if(got&&got.w&&got.d){out.dims={w:got.w,d:got.d,h:got.h};if(!out.price&&got.price)out.price=got.price;break;}}}
  return out;};
 
 /* ---------- retrace one specific floor plan image (multi-plan listings) ----------
