@@ -66,13 +66,15 @@ class ShareViewController: UIViewController {
 
     private func finish(with payload: [String: Any]?) {
         var ok = false
+        var listing = false
         if let p = payload, !((p["u"] as? String ?? "").isEmpty && (p["x"] as? String ?? "").isEmpty),
            let data = try? JSONSerialization.data(withJSONObject: p),
            let defaults = UserDefaults(suiteName: Self.groupId) {
             defaults.set(data.base64EncodedString(), forKey: Self.pendingKey)
             ok = true
+            listing = (p["k"] as? String) == "l"
         }
-        showCard(ok: ok)
+        showCard(ok: ok, listing: listing)
         if ok && Self.tryOpenApp {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { self.openContainerApp() }
         }
@@ -98,7 +100,7 @@ class ShareViewController: UIViewController {
 
     // MARK: tiny brand card
 
-    private func showCard(ok: Bool) {
+    private func showCard(ok: Bool, listing: Bool = false) {
         let card = UIView()
         card.translatesAutoresizingMaskIntoConstraints = false
         card.backgroundColor = UIColor(red: 0.047, green: 0.208, blue: 0.196, alpha: 1) // Deep Pine
@@ -113,7 +115,8 @@ class ShareViewController: UIViewController {
 
         let sub = UILabel()
         sub.translatesAutoresizingMaskIntoConstraints = false
-        sub.text = ok ? "It will be waiting in the Library." : "Try sharing a product page or its size text."
+        sub.text = ok ? (listing ? "The floor plan will open in the app." : "It will be waiting in the Library.")
+                      : "Try sharing a product or listing page."
         sub.textColor = UIColor(red: 0.561, green: 0.851, blue: 0.788, alpha: 1)     // Seafoam
         sub.font = .systemFont(ofSize: 13)
         sub.textAlignment = .center

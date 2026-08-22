@@ -317,8 +317,9 @@ html.app-mode .lp-nav{padding:14px 0 6px}
 #wf-lightbox #lb-prev{left:14px}
 #wf-lightbox #lb-next{right:14px}
 #wf-lightbox .lbcount{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:12px;color:#EAF4EF;background:rgba(8,32,29,.7);border-radius:6px;padding:3px 9px}
-.lp-result .row{display:flex;gap:10px;align-items:center;margin-top:4px}
+.lp-result .row{display:flex;gap:10px;align-items:center;margin-top:4px;flex-wrap:wrap}
 .lp-result .hint{font-size:12px;line-height:1.4}
+.lp-result a.bmlet{display:inline-block;padding:8px 12px;border:1.5px dashed var(--accent);border-radius:9px;color:var(--accent);font-family:var(--disp);font-weight:600;font-size:13px;text-decoration:none;cursor:grab;background:var(--accent-soft)}
 .trace .tr{stroke:var(--accent);stroke-width:4;fill:none;stroke-linejoin:round;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;animation:tr-draw 1s cubic-bezier(.4,0,.2,1) forwards;animation-delay:var(--d,0s)}
 .trace .tr.win{stroke:var(--teal,#6FA8A6);stroke-width:6}
 .trace .fx{fill:var(--accent);fill-opacity:.08;stroke:var(--accent);stroke-width:2;opacity:0;animation:tr-fade .5s forwards;animation-delay:var(--d,0s)}
@@ -1082,7 +1083,7 @@ function renderPanels(){ $('#title').value=state.title||'';
 let shopText='',shopDraft=null,shopMsg='',shopBusy=false,shopGuide=null;
 /* bookmarklet: runs on the shop's own page (so nothing can block it), grabs the
    text around any "…cm" sizes + title + url, and hands it to the live site */
-const WF_BOOKMARKLET="javascript:(function(){var sl=(window.getSelection?String(window.getSelection()):'').trim();var t=document.body?document.body.innerText:'';var x;if(sl.length>10){x=sl.slice(0,6000);}else{var w=[],re=/\\d+(?:[.,]\\d+)?\\s*cm/gi,m,n=0;while((m=re.exec(t))&&n<3){var s=Math.max(0,m.index-500);w.push(t.slice(s,Math.min(t.length,m.index+500)));re.lastIndex=m.index+500;n++;}x=(w.join('\\n')||t.slice(0,3000)).slice(0,6000);}var og=document.querySelector('meta[property=\"og:title\"]');var oi=document.querySelector('meta[property=\"og:image\"]');var p={u:location.href.slice(0,500),t:((og&&og.content)||document.title||'').slice(0,120),x:x};if(sl.length>10)p.s=1;if(oi&&oi.content&&/^https?:/.test(oi.content))p.i=oi.content.slice(0,400);window.open('https://cookej123.github.io/will-it-fit/'+'\\x23shopadd='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(p))))),'_blank');})();";
+const WF_BOOKMARKLET="javascript:(function(){var E=function(q){return 'https://cookej123.github.io/will-it-fit/'+'\\x23shopadd='+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(q)))));};var h=window.WF_BM_HOST||location.hostname;if(/rightmove\\.co|zoopla\\.co|onthemarket\\.com|primelocation\\.com/i.test(h)){var H=document.documentElement.innerHTML,fp=[],ph=[],S={};var A=function(u){u=String(u).split('\\\\/').join('/');if(u.indexOf('http')===0&&!S[u]&&fp.length<6){S[u]=1;fp.push(u.slice(0,400));}};var re=/https?:\\\\?\\/\\\\?\\/[^\"'\\s>\\\\]*(?:floor[-_]?plan|_FLP_)[^\"'\\s>\\\\]*\\.(?:jpe?g|png|gif|webp)/gi,m;while(m=re.exec(H))A(m[0]);var ix=H.indexOf('floorPlan');while(ix>=0&&fp.length<6){var w2=H.slice(ix,ix+4000),r2=/\\\\?\"filename\\\\?\":\\\\?\"([0-9a-f]{16,}\\.(?:jpe?g|png|gif))/gi,m2;while(m2=r2.exec(w2))A('https://lc.zoocdn.com/'+m2[1]);ix=H.indexOf('floorPlan',ix+9);}var im=document.images,i;for(i=0;i<im.length&&ph.length<10;i++){var s=im[i].currentSrc||im[i].src||'';if(/^https?:/.test(s)&&im[i].naturalWidth>350&&!S[s]){S[s]=1;ph.push(s.slice(0,400));}}var t2=document.body?document.body.innerText:'';var am=/([\\d,]+(?:\\.\\d+)?)\\s*(?:sq\\.?\\s?m\\b|sqm\\b|m²|square met|sq\\.?\\s?ft|sqft|ft²|square f)/i.exec(t2);var pr2=/([£€][\\d,]{4,}(?:\\s?pcm)?)/.exec(t2);var og2=document.querySelector('meta[property=\"og:title\"]');var q2={k:'l',u:location.href.slice(0,500),t:((og2&&og2.content)||document.title||'').slice(0,140),fp:fp,ph:ph};if(am)q2.a=am[0].slice(0,40);if(pr2)q2.pr=pr2[1].slice(0,30);window.open(E(q2),'_blank');return;}var sl=(window.getSelection?String(window.getSelection()):'').trim();var t=document.body?document.body.innerText:'';var x;if(sl.length>10){x=sl.slice(0,6000);}else{var w=[],re3=/\\d+(?:[.,]\\d+)?\\s*cm/gi,m3,n=0;while((m3=re3.exec(t))&&n<3){var s3=Math.max(0,m3.index-500);w.push(t.slice(s3,Math.min(t.length,m3.index+500)));re3.lastIndex=m3.index+500;n++;}x=(w.join('\\n')||t.slice(0,3000)).slice(0,6000);}var og=document.querySelector('meta[property=\"og:title\"]');var oi=document.querySelector('meta[property=\"og:image\"]');var p={u:location.href.slice(0,500),t:((og&&og.content)||document.title||'').slice(0,120),x:x};if(sl.length>10)p.s=1;if(oi&&oi.content&&/^https?:/.test(oi.content))p.i=oi.content.slice(0,400);window.open(E(p),'_blank');})();";
 function parseDimsText(text){
  const t=String(text||'');
  const out={};
@@ -2226,13 +2227,18 @@ function wfBuildPlan(meta,imgPack,trace){
 function wfHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))>>>0;return h.toString(36);}
 
 /* ---------- community dims cache: check ours first, share every success back ---------- */
+/* local/private URLs (dev pages, test mocks) must never touch the shared caches */
+function wfPublicUrl(u){
+ try{const h=new URL(u).hostname.toLowerCase();
+  return !/^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|0\.|\[|.*\.local$)/.test(h)&&h.indexOf('.')>0;}
+ catch(e){return false;}}
 window.wfDimsShare=function(url,data){
  const b=wfWorkerBase();
- if(!b||!data||!data.dims||!(data.dims.w>=10&&data.dims.d>=10))return;
+ if(!b||!wfPublicUrl(url)||!data||!data.dims||!(data.dims.w>=10&&data.dims.d>=10))return;
  try{fetch(b+'/dims',{method:'POST',headers:{'Content-Type':'application/json'},
   body:JSON.stringify({u:url,name:data.name,w:data.dims.w,d:data.dims.d,h:data.dims.h,price:data.price,photo:data.photo})}).catch(()=>{});}catch(e){}};
 async function wfDimsLookup(url){
- const b=wfWorkerBase();if(!b)return null;
+ const b=wfWorkerBase();if(!b||!wfPublicUrl(url))return null;
  try{
   const r=await wfFetchT(b+'/dims?u='+encodeURIComponent(url),{},4500);
   if(!r.ok)return null;
@@ -2240,6 +2246,53 @@ async function wfDimsLookup(url){
   if(j&&j.w>=10&&j.d>=10)return {link:url,name:j.name,dims:{w:j.w,d:j.d,h:j.h},price:j.price,photo:j.photo,community:true};
  }catch(e){}
  return null;}
+
+/* ---------- community LISTINGS cache: the answer to portal bot walls ----------
+   Zoopla (and increasingly others) challenge every remote reader, but the
+   visitor's own browser sees the page fine. The bookmarklet / iOS share sheet
+   harvests the floor-plan URLs there and shares them back; the plan images
+   themselves live on open CDNs, so one person's import gives everyone else an
+   instant trace from the bare URL. */
+window.wfListingShare=function(url,meta){
+ const b=wfWorkerBase();
+ if(!b||!wfPublicUrl(url)||!meta||!meta.floorplan||meta.community)return;
+ const fp=(meta.floorplans&&meta.floorplans.length?meta.floorplans:[meta.floorplan]).slice(0,8);
+ try{fetch(b+'/listing',{method:'POST',headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({u:url,t:meta.title,fp:fp,ph:(meta.photos||[]).slice(0,14),a:meta.areaSqm,
+   ae:meta.areaEstimated?1:0,b:meta.beds,st:meta.subType,pr:meta.price})}).catch(()=>{});}catch(e){}};
+async function wfListingLookup(url){
+ const b=wfWorkerBase();if(!b||!wfPublicUrl(url))return null;
+ try{
+  const r=await wfFetchT(b+'/listing?u='+encodeURIComponent(url),{},4500);
+  if(!r.ok)return null;
+  const j=await r.json();
+  if(!(j&&Array.isArray(j.fp)&&j.fp.length))return null;
+  const d=detectPortal(url);
+  const meta={portal:(d&&d.portal!=='Other')?d.portal:'Listing',community:true,
+   floorplan:j.fp[0],floorplans:j.fp.slice(0,8),floorplanCount:j.fp.length};
+  if(j.t)meta.title=j.t;
+  if(j.pr)meta.price=j.pr;
+  if(j.b!=null)meta.beds=j.b;
+  if(j.st)meta.subType=j.st;
+  if(j.ph&&j.ph.length)meta.photos=j.ph.slice(0,14);
+  if(j.a>5&&j.a<2000){meta.areaSqm=j.a;if(j.ae)meta.areaEstimated=true;}
+  return meta;
+ }catch(e){}
+ return null;}
+/* a bookmarklet / share-sheet listing payload {k:'l',u,t,fp,ph,a,pr} -> meta */
+window.wfMetaFromShared=function(p){
+ const d=detectPortal(p.u||'');
+ const clean=u=>String(u||'').replace(/\\\//g,'/').replace(/_max_\d+x\d+(?=\.\w+(\?|$))/,'');
+ const fp=(p.fp||[]).map(clean).filter(u=>/^https?:/.test(u)).slice(0,8);
+ const meta={portal:(d&&d.portal!=='Other')?d.portal:'Listing',shared:true};
+ if(p.t)meta.title=String(p.t).replace(/\s*[-|–—]\s*(Rightmove|Zoopla|OnTheMarket|PrimeLocation).*$/i,'')
+  .replace(/\s+(?:for sale|to rent)\s*$/i,'').trim().slice(0,140);
+ if(fp.length){meta.floorplan=fp[0];meta.floorplans=fp;meta.floorplanCount=fp.length;}
+ const ph=(p.ph||[]).map(clean).filter(u=>/^https?:/.test(u)&&fp.indexOf(u)<0).slice(0,14);
+ if(ph.length)meta.photos=ph;
+ if(p.a){const a=wfAreaFromText(String(p.a));if(a)meta.areaSqm=a;}
+ if(p.pr&&/^[£€][\d,]+/.test(String(p.pr)))meta.price=String(p.pr).slice(0,30);
+ return meta;};
 
 /* ---------- shop product pages: name, price, real dimensions ---------- */
 window.wfProductFetch=async function(url){
@@ -2331,20 +2384,36 @@ async function wfTraceFloorUrl(meta,url,ix){
   traceFail:trace&&!trace.ok?trace.reason:null};}
 
 /* ---------- the whole pipeline ---------- */
-async function resolveListingLive(url,onStage){
+async function resolveListingLive(url,onStage,sharedMeta){
  const p=detectPortal(url)||{portal:'Other',id:null};
  const portal=p.portal==='Other'?'Listing':p.portal;
  onStage(0);
- let html;
- try{html=await wfFetchListingHTML(url,p.portal);}
- catch(e){throw {code:'fetch',portal,detail:e.message};}
- onStage(1);
- let meta;
- if(p.portal==='Rightmove')meta=wfParseRightmove(html);
- else if(p.portal==='Zoopla')meta=wfParseZoopla(html);
- else meta=wfParseGeneric(html,portal);
- if(!meta.floorplan){const g=wfParseGeneric(html,portal);if(g.floorplan)meta.floorplan=g.floorplan;
-  if(!meta.floorplan)throw {code:'nofloorplan',portal,meta};}
+ let meta=null;
+ if(sharedMeta&&sharedMeta.floorplan){
+  /* bookmarklet / share-sheet import: the visitor's own browser already read
+     the page, so there is nothing to fetch — and everyone else benefits */
+  meta=sharedMeta;
+  window.wfListingShare(url,meta);
+  onStage(1);}
+ /* Zoopla challenges every remote reader, so the community cache goes FIRST
+    there; for other portals it is the fallback when the fetch chain fails */
+ if(!meta&&p.portal==='Zoopla'){meta=await wfListingLookup(url);if(meta)onStage(1);}
+ if(!meta){
+  let html=null;
+  try{html=await wfFetchListingHTML(url,p.portal);}
+  catch(e){
+   meta=await wfListingLookup(url);
+   if(!meta)throw {code:'fetch',portal,detail:e.message};
+   onStage(1);}
+  if(html){
+   onStage(1);
+   if(p.portal==='Rightmove')meta=wfParseRightmove(html);
+   else if(p.portal==='Zoopla')meta=wfParseZoopla(html);
+   else meta=wfParseGeneric(html,portal);
+   if(!meta.floorplan){const g=wfParseGeneric(html,portal);if(g.floorplan)meta.floorplan=g.floorplan;
+    if(!meta.floorplan)throw {code:'nofloorplan',portal,meta};}
+   window.wfListingShare(url,meta);}}
+ if(!meta.floorplan)throw {code:'nofloorplan',portal,meta};
  onStage(2);
  let imgPack;
  try{imgPack=await wfFetchPlanImage(meta.floorplan);}
@@ -2447,6 +2516,7 @@ function liveResultCard(r){
  if(r.listing.beds!=null)chips.push(r.listing.beds+' bed'+(r.listing.subType?' '+r.listing.subType.toLowerCase():''));
  else if(r.listing.subType)chips.push(r.listing.subType);
  if(r.listing.price)chips.push(r.listing.price);
+ if(r.listing.community)chips.push('shared by the community');
  if(r.listing.areaSqm)chips.push((Math.round(r.listing.areaSqm*10)/10)+' m²'+(r.listing.areaEstimated?' (est.)':''));
  else if(r.traceStats)chips.push('~'+r.traceStats.areaM2+' m² traced');
  if(r.traceStats)chips.push(r.traceStats.roomGroups+' room'+(r.traceStats.roomGroups===1?'':'s')+' · '+r.traceStats.doors+' door'+(r.traceStats.doors===1?'':'s'));
@@ -2466,6 +2536,14 @@ function liveResultCard(r){
   (hint?'<span class="hint muted">'+esc(hint)+'</span>':'')+
   '<div class="row"><button class="primary" id="lp-open-live">Open the planner</button><button class="ghost" id="lp-again">Try another link</button></div>';}
 function liveErrorCard(err){
+ /* Zoopla walls off every remote reader — but the visitor's own browser gets in
+    fine, so the bookmarklet is the reliable route (and it feeds the community
+    cache, so each listing only ever needs it once). */
+ if(err.code==='fetch'&&err.portal==='Zoopla'){
+  return '<span class="k note">Zoopla blocks automated readers</span>'+
+   '<span class="hint muted">The reliable way in: drag the button below to your bookmarks bar (once), open the listing, then press the bookmark on the listing page — the floor plan lands back here, and it’s saved for the next person who pastes this link. On a phone, upload the floor plan image instead.</span>'+
+   '<div class="row"><a class="bmlet" id="lp-bmlet" href="'+WF_BOOKMARKLET+'" title="Drag me to your bookmarks bar">+ Add to Will It Fit</a>'+
+   '<button class="primary" id="lp-upload-instead">Upload the plan</button><button class="ghost" id="lp-again">Try another link</button></div>';}
  const M={
   fetch:['That listing wouldn’t load','The portal (or our free readers) may be blocking requests right now. Try again in a minute — or upload the floor plan image and we’ll trace that instead.'],
   nofloorplan:['No floor plan on that listing','We fetched the listing but couldn’t find a floor plan image in it. If you have the plan, upload it and we’ll trace it.'],
@@ -2481,6 +2559,7 @@ function wireResultButtons(r){
   await openPlan(r.planId,r.plan,{fresh:false});
   if(!r.traced){mode='plan';libTab='Plan';renderPanels();render();}});
  const up=$('#lp-upload-instead');if(up)up.addEventListener('click',()=>$('#lp-file').click());
+ const bm=$('#lp-bmlet');if(bm)bm.addEventListener('click',e=>e.preventDefault());
  const ex=$('#lp-see-example');if(ex)ex.addEventListener('click',()=>{runPipeline({exact:false,portal:'Rightmove',id:EXAMPLE.id,listing:EXAMPLE,plan:SAMPLE});});
  if(r&&r.listing&&r.listing.floorplans&&r.listing.floorplans.length>1)
   $$('#lp-result .fp').forEach(b=>b.addEventListener('click',()=>{const ix=+b.dataset.f;if(ix!==(r.floorIx||0))switchFloor(r,ix);}));}
@@ -2503,7 +2582,7 @@ async function switchFloor(r,ix){
   $('#lp-pipe').hidden=true;
   const k=$('#lp-result .k');if(k)k.textContent='Plan '+(ix+1)+' wouldn’t load — still showing plan '+((r.floorIx||0)+1);
  }finally{liveBusy=false;}}
-async function runLive(url){
+async function runLive(url,shared){
  if(liveBusy)return;liveBusy=true;wfRevealDevice();const go=$('#lp-go');go.disabled=true;
  const pipe=$('#lp-pipe'),result=$('#lp-result'),canvas=$('#lp-canvas');
  pipeTimers.forEach(clearTimeout);pipeTimers=[];result.classList.remove('show');
@@ -2512,7 +2591,7 @@ async function runLive(url){
  pipeShow(LIVE_PIPE);pipeSet(0);
  try{
   const r=await resolveListingLive(url,(i,extra)=>{pipeSet(i);
-   if(extra&&extra.dataURL)canvas.innerHTML='<div class="lp-scan"><img src="'+extra.dataURL+'" alt=""><i></i></div>';});
+   if(extra&&extra.dataURL)canvas.innerHTML='<div class="lp-scan"><img src="'+extra.dataURL+'" alt=""><i></i></div>';},shared);
   pipeSet(LIVE_PIPE.length);
   r.basePlanId=r.planId;r.floorIx=0;wfLastLive=r;
   wfExtrasSave(r.planId,{floors:(r.listing.floorplans||[]).slice(0,8),photos:(r.listing.photos||[]).slice(0,14),title:r.listing.title||'',areaSqm:r.listing.areaSqm||0});
@@ -2822,6 +2901,9 @@ function shopFromHash(){const m=/[#&]shopadd=([^&]+)/.exec(location.hash||'');if
  try{
   const p=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
   history.replaceState(null,'',location.pathname+location.search);
+  /* k:'l' = a LISTING import from the bookmarklet / share sheet (portal pages
+     that block remote readers) — routed to the live pipeline, not the shop flow */
+  if(p.k==='l')return {listing:true,p:p};
   const d=parseDimsText(p.x||'');
   const nameT=((p.t||'').split(/\s*[|–—]\s*/)[0]||'').trim().slice(0,70);
   /* p.s: the user selected one product's text on the page — its own name beats the page title */
@@ -2856,6 +2938,12 @@ async function start(){
  if(location.hostname==='cookej123.github.io'&&'serviceWorker' in navigator){
   try{navigator.serviceWorker.register('sw.js');}catch(e){}}
  const shopIt=shopFromHash();
+ if(shopIt&&shopIt.listing){
+  showLanding();initLanding();
+  if(shopIt.p.u){
+   const meta=window.wfMetaFromShared(shopIt.p);
+   runLive(shopIt.p.u,meta.floorplan?meta:undefined);}
+  return;}
  if(shopIt){
   if(shopIt.ok)shopDraft=shopIt;
   else{shopText=(shopIt.link?shopIt.link+'\n':'')+shopIt.text;shopMsg='Check the paste and press Read it.';}
