@@ -1,0 +1,106 @@
+name: iOS TestFlight
+
+# Builds the Will It Fit iPhone app on GitHub's free macOS runners and uploads
+# it to TestFlight — no Mac needed, ever. Signing is fully automatic via an
+# App Store Connect API key.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   ASC_KEY_ID     – App Store Connect API key ID        (e.g. 2X9R4HXF34)
+#   ASC_ISSUER_ID  – App Store Connect issuer ID          (a UUID)
+#   ASC_KEY_P8     – full contents of the AuthKey_….p8 file
+#   APPLE_TEAM_ID  – the Apple Developer team ID          (e.g. ABCDE12345)
+# Until they exist, the build job skips itself with a notice.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['ios-app/**', '.github/workflows/ios.yml']
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.c.outputs.ok }}
+    steps:
+      - id: c
+        env:
+          K: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          if [ -n "$K" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Apple signing secrets not configured yet - build skipped. Add ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 and APPLE_TEAM_ID in Settings > Secrets and variables > Actions, then re-run."
+          fi
+
+  build:
+    needs: preflight
+    if: needs.preflight.outputs.ok == 'true'
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest stable Xcode
+        run: |
+          XC=$(ls -d /Applications/Xcode*.app | grep -vi beta | sort -V | tail -n1)
+          echo "Using $XC"
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+
+      - name: Write App Store Connect API key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Archive (build number = run number)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project ios-app/ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            2>&1 | tee "$RUNNER_TEMP/archive.log" | grep -E 'error|warning: .*(signing|provisioning)|Signing|Archive|BUILD' || true
+          test -d "$RUNNER_TEMP/App.xcarchive"
+
+      - name: Upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist ios-app/exportOptions.plist \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            2>&1 | tee "$RUNNER_TEMP/export.log"
+
+      - name: Keep build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-logs
+          path: |
+            ${{ runner.temp }}/archive.log
+            ${{ runner.temp }}/export.log
+          if-no-files-found: ignore
+          retention-days: 14

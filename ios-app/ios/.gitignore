@@ -1,0 +1,13 @@
+App/build
+App/Pods
+App/output
+DerivedData
+xcuserdata
+
+# Cordova plugins for Capacitor
+capacitor-cordova-ios-plugins
+
+# NB: unlike stock Capacitor we COMMIT App/App/public, App/App/capacitor.config.json
+# and App/App/config.xml — the CI build has no Node and never runs `cap copy`,
+# so the web payload and generated configs must live in the repo.
+# Refresh them with ios-app\wf_ios_sync.ps1 after web changes.

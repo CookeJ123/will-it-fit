@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy — Will It Fit</title>
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&family=Jost:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--pine:#0C3532;--teal:#16544E;--seafoam:#8FD9C9;--mist:#CDEFE5;--paper:#F3F4F1;--ink:#12312D}
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--paper);color:var(--ink);font-family:'Jost',system-ui,sans-serif;line-height:1.65;font-size:16.5px}
+  .top{background:var(--pine);color:var(--paper);padding:26px 20px}
+  .top .wm{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;letter-spacing:.24em;text-transform:uppercase;font-size:19px}
+  .top .wm a{color:inherit;text-decoration:none}
+  main{max-width:760px;margin:0 auto;padding:38px 20px 70px}
+  h1{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;font-size:40px;color:var(--pine);margin-bottom:6px}
+  .eff{color:var(--teal);letter-spacing:.12em;text-transform:uppercase;font-size:12.5px;margin-bottom:28px}
+  h2{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;font-size:24px;color:var(--pine);margin:30px 0 8px}
+  p{margin:0 0 14px}
+  .card{background:#fff;border:1px solid var(--mist);border-radius:14px;padding:18px 20px;margin:22px 0}
+  .card p{margin:0}
+  a{color:var(--teal)}
+  ul{padding-left:22px;margin:0 0 14px}
+  li{margin-bottom:6px}
+</style>
+</head>
+<body>
+<div class="top"><span class="wm"><a href="./">Will It Fit</a></span></div>
+<main>
+  <h1>Privacy</h1>
+  <p class="eff">Effective 22 August 2026 · applies to the website and the iOS app</p>
+
+  <div class="card"><p><strong>The short version:</strong> Will It Fit has no accounts, no ads, no analytics
+  and no tracking. Your floor plans and furniture boards never leave your device. The only thing
+  ever shared is anonymous product size data that helps the next person.</p></div>
+
+  <h2>What stays on your device</h2>
+  <p>Your boards — traced floor plans, furniture placements, saved furniture, settings — are stored in
+  your browser's local storage (or the app's equivalent) on your device only. We run no server that
+  receives, stores or can see them. Clearing your browser data (or deleting the app) deletes them.</p>
+
+  <h2>When you paste a listing link</h2>
+  <p>The listing page and its floor plan image are fetched through our own relay (a Cloudflare
+  Worker) or public fetch services, because property portals don't allow browsers to read them
+  directly. The link is used only to fetch the page at that moment. Standard, short-lived
+  infrastructure logs aside, we don't record which listings you look at.</p>
+
+  <h2>The community size cache</h2>
+  <p>When a furniture product's dimensions are successfully read (from a shop link, the bookmarklet,
+  the share sheet or pasted text), the product's <em>link, name, dimensions, price and product photo
+  URL</em> may be saved to a shared cache so the next person pasting the same product gets an instant
+  answer. Nothing about <em>you</em> is attached — no identifier, no account, no device information.
+  Entries expire automatically after 180 days.</p>
+
+  <h2>The iOS app and share sheet</h2>
+  <p>The "Add to Will It Fit" share extension reads the page you're sharing on your device, extracts
+  the product name, link and size text, and hands it to the app. It is processed exactly like a
+  pasted product and feeds the same community cache described above — nothing else is collected.</p>
+
+  <h2>Third parties</h2>
+  <ul>
+    <li>GitHub Pages hosts this site (GitHub's own logs apply, as for any website).</li>
+    <li>Cloudflare runs our fetch relay and the community cache.</li>
+    <li>Google Fonts serves the typefaces on this page and the site.</li>
+  </ul>
+  <p>We sell nothing to anyone. There is nothing to sell.</p>
+
+  <h2>Contact</h2>
+  <p>Questions or requests: open an issue at
+  <a href="https://github.com/CookeJ123/will-it-fit">github.com/CookeJ123/will-it-fit</a>.</p>
+</main>
+</body>
+</html>
