@@ -15,8 +15,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     // share-sheet handoff: the WFShare extension stashes its payload in the App
-    // Group; pick it up every time the app comes to the front
+    // Group; pick it up every time the app comes to the front. Also (re)attach
+    // the in-app listing reader's script-message bridge.
     func sceneDidBecomeActive(_ scene: UIScene) {
+        WFListingReader.shared.attach(to: window)
         WFHandoff.drainAndInject(window: window)
     }
 

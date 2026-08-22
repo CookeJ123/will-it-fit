@@ -2535,10 +2535,20 @@ function liveResultCard(r){
   '<div class="chips">'+chips.map(c=>'<span>'+esc(c)+'</span>').join('')+'</div>'+floors+
   (hint?'<span class="hint muted">'+esc(hint)+'</span>':'')+
   '<div class="row"><button class="primary" id="lp-open-live">Open the planner</button><button class="ghost" id="lp-again">Try another link</button></div>';}
+function wfNativeReader(){try{return !!(window.Capacitor&&window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.wfListingRead);}catch(e){return false;}}
 function liveErrorCard(err){
- /* Zoopla walls off every remote reader — but the visitor's own browser gets in
-    fine, so the bookmarklet is the reliable route (and it feeds the community
-    cache, so each listing only ever needs it once). */
+ /* portals wall off every remote reader — but the visitor's own device gets in
+    fine. In the app: an invisible in-app WebKit read (automatic). In a browser:
+    the bookmarklet. Both feed the community cache, so each listing only ever
+    needs one person, once. */
+ if(err.code==='fetch'&&err.portal!=='Rightmove'&&wfNativeReader()&&!err.appFallback){
+  return '<span class="k">Reading the listing inside the app</span>'+
+   '<span class="hint muted">'+esc(err.portal)+' blocks remote readers, so the app is opening the listing itself — this takes a few seconds. If a security check appears, tap it and we’ll carry on.</span>'+
+   '<div class="row"><button class="ghost" id="lp-again">Cancel</button></div>';}
+ if(err.code==='fetch'&&err.portal!=='Rightmove'&&window.Capacitor){
+  return '<span class="k note">'+esc(err.portal)+' blocks automated readers</span>'+
+   '<span class="hint muted">Open the listing in Safari, then Share → “Add to Will It Fit” — the floor plan lands here and is saved for the next person who pastes this link.</span>'+
+   '<div class="row"><button class="primary" id="lp-upload-instead">Upload the plan</button><button class="ghost" id="lp-again">Try another link</button></div>';}
  if(err.code==='fetch'&&err.portal==='Zoopla'){
   return '<span class="k note">Zoopla blocks automated readers</span>'+
    '<span class="hint muted">The reliable way in: drag the button below to your bookmarks bar (once), open the listing, then press the bookmark on the listing page — the floor plan lands back here, and it’s saved for the next person who pastes this link. On a phone, upload the floor plan image instead.</span>'+
@@ -2607,9 +2617,19 @@ async function runLive(url,shared){
   pipe.hidden=true;
   canvas.innerHTML=traceSVG(true);
   $('#lp-devtitle').textContent='Floor plan · Maple House, Chineham';
-  result.innerHTML=liveErrorCard(err&&err.code?err:{code:'fetch'});
+  const e2=err&&err.code?err:{code:'fetch',portal:p.portal};
+  if(!e2.portal)e2.portal=p.portal;
+  result.innerHTML=liveErrorCard(e2);
   result.classList.add('show');
   wireResultButtons(null);
+  /* in the app: hand the URL to the native in-app reader — it loads the page
+     as a real visitor, harvests the plan and re-enters via #shopadd= */
+  if(e2.code==='fetch'&&wfNativeReader()){
+   try{window.webkit.messageHandlers.wfListingRead.postMessage(String(url));}catch(e3){}
+   setTimeout(()=>{const k=$('#lp-result .k');
+    if(k&&/Reading the listing inside the app/i.test(k.textContent)){
+     result.innerHTML=liveErrorCard(Object.assign({},e2,{appFallback:true}));
+     wireResultButtons(null);}},40000);}
   if(window.console&&err)console.warn('resolve failed',err);
  }finally{liveBusy=false;go.disabled=false;}}
 async function openTracedUpload(f){
@@ -2944,6 +2964,12 @@ async function start(){
    const meta=window.wfMetaFromShared(shopIt.p);
    runLive(shopIt.p.u,meta.floorplan?meta:undefined);}
   return;}
+ /* a bare PORTAL link shared with no page text (e.g. from the Zoopla app's own
+    share sheet) is a listing, not a product — run the live pipeline, which
+    tries the community cache and then the in-app reader */
+ if(shopIt&&shopIt.ok===false&&shopIt.link&&!shopIt.text){
+  const dp=detectPortal(shopIt.link);
+  if(dp&&dp.portal!=='Other'){showLanding();initLanding();runLive(shopIt.link);return;}}
  if(shopIt){
   if(shopIt.ok)shopDraft=shopIt;
   else{shopText=(shopIt.link?shopIt.link+'\n':'')+shopIt.text;shopMsg='Check the paste and press Read it.';}

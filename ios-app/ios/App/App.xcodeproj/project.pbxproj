@@ -12,6 +12,7 @@
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		FADE00000000000000000002 /* WFHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = FADE00000000000000000001 /* WFHandoff.swift */; };
+		FADE00000000000000000032 /* WFListingReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = FADE00000000000000000031 /* WFListingReader.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
@@ -58,6 +59,7 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		FADE00000000000000000001 /* WFHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WFHandoff.swift; sourceTree = "<group>"; };
+		FADE00000000000000000031 /* WFListingReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WFListingReader.swift; sourceTree = "<group>"; };
 		FADE00000000000000000003 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		FADE00000000000000000010 /* WFShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = WFShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -123,6 +125,7 @@
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				FADE00000000000000000001 /* WFHandoff.swift */,
+				FADE00000000000000000031 /* WFListingReader.swift */,
 				FADE00000000000000000003 /* App.entitlements */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
@@ -249,6 +252,7 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				FADE00000000000000000002 /* WFHandoff.swift in Sources */,
+				FADE00000000000000000032 /* WFListingReader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
