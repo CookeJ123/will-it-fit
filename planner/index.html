@@ -9,20 +9,20 @@
   /* Will it Fit brand: Deep Pine #0C3532 · Estate Teal #16544E · Seafoam #8FD9C9 · Mist #CDEFE5 · Paper #F3F4F1 */
   --bg:#F3F4F1; --panel:#FFFFFF; --panel-2:#EBEFEA; --ink:#1E3833; --muted:#5E7A74; --line:#D3DCD5; --line-2:#E3E9E3;
   --accent:#16544E; --accent-soft:#CDEFE5; --on-accent:#F3FBF7; --warn:#C8491B; --warn-soft:#FBE5DC; --ok:#2E7D4F;
-  --floor:#EAE6DA; --floor-oak:#E5D5B6; --floor-tile:#DCE6E2; --floor-dark:#CBC7BB; --wall:#0C3532; --grid:#DCE2DA; --grid-major:#CBD3CA;
+  --floor:#EAE6DA; --floor-oak:#E5D5B6; --floor-tile:#DCE6E2; --floor-dark:#CBC7BB; --wall:#0C3532; --grid:#DCE2DA; --grid-major:#CBD3CA; --fix-white:#F7F7F4;
   --canvas:#ECEEE7; --shadow:0 8px 24px rgba(12,53,50,.12); --item-shadow:rgba(12,53,50,.16);
   --sans:'Jost',system-ui,-apple-system,Segoe UI,sans-serif; --disp:'Jost',system-ui,sans-serif; --serif:'Cormorant Garamond',Georgia,serif; --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
   --bg:#08201D; --panel:#0D2C29; --panel-2:#123632; --ink:#E6F3ED; --muted:#8FAEA5; --line:#1E4841; --line-2:#183C36;
   --accent:#8FD9C9; --accent-soft:#16544E; --on-accent:#06201C; --warn:#F0A088; --warn-soft:#47291E; --ok:#7BCEA4;
-  --floor:#0F332E; --floor-oak:#1D3B2F; --floor-tile:#0E3A36; --floor-dark:#0A2723; --wall:#CDEFE5; --grid:#10312C; --grid-major:#17453F;
+  --floor:#0F332E; --floor-oak:#1D3B2F; --floor-tile:#0E3A36; --floor-dark:#0A2723; --wall:#CDEFE5; --grid:#10312C; --grid-major:#17453F; --fix-white:#164541;
   --canvas:#07211E; --shadow:0 8px 24px rgba(2,12,10,.55); --item-shadow:rgba(2,12,10,.55);
 }}
 :root[data-theme="dark"]{
   --bg:#08201D; --panel:#0D2C29; --panel-2:#123632; --ink:#E6F3ED; --muted:#8FAEA5; --line:#1E4841; --line-2:#183C36;
   --accent:#8FD9C9; --accent-soft:#16544E; --on-accent:#06201C; --warn:#F0A088; --warn-soft:#47291E; --ok:#7BCEA4;
-  --floor:#0F332E; --floor-oak:#1D3B2F; --floor-tile:#0E3A36; --floor-dark:#0A2723; --wall:#CDEFE5; --grid:#10312C; --grid-major:#17453F;
+  --floor:#0F332E; --floor-oak:#1D3B2F; --floor-tile:#0E3A36; --floor-dark:#0A2723; --wall:#CDEFE5; --grid:#10312C; --grid-major:#17453F; --fix-white:#164541;
   --canvas:#07211E; --shadow:0 8px 24px rgba(2,12,10,.55); --item-shadow:rgba(2,12,10,.55);
 }
 *,*::before,*::after{box-sizing:border-box}
@@ -59,7 +59,7 @@ h3{font-size:15px;font-weight:600}
 .top{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel);min-height:50px}
 .top .brand{display:flex;align-items:baseline;gap:10px;min-width:0}
 .top .brand h1{font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap}
-.top .brand input{font-family:var(--disp);font-weight:600;font-size:14px;border:1px solid transparent;background:transparent;border-radius:6px;padding:4px 6px;min-width:0;width:min(34vw,260px)}
+.top .brand input{font-family:var(--disp);font-weight:600;font-size:14px;border:1px solid transparent;background:transparent;border-radius:6px;padding:4px 6px;min-width:0;width:min(34vw,340px);text-overflow:ellipsis}
 .top .brand input:hover,.top .brand input:focus{border-color:var(--line);background:var(--panel-2)}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
 .seg button{border:0;border-radius:0;padding:5px 10px;background:transparent}
@@ -239,7 +239,7 @@ const KEY='willitfit:draft:v1';
 const PLAN_ID='maple-house-2026-08-19b';
 
 /* ---------- palette & library ---------- */
-const COLORS={linen:'#EDE6D6',oak:'#D6B27E',walnut:'#8F6B4B',fabric:'#9EACBD',navy:'#4A6588',sage:'#9DB39A',white:'#F7F7F4',ink:'#3B4048',rug:'#CDB8A3',clay:'#CF8E70',cobalt:'#7A9BDC',teal:'#6FA8A6',mustard:'#D9B25C'};
+const COLORS={linen:'#EDE6D6',oak:'#D6B27E',walnut:'#8F6B4B',fabric:'#9EACBD',navy:'#4A6588',sage:'#9DB39A',white:'var(--fix-white)',ink:'#3B4048',rug:'#CDB8A3',clay:'#CF8E70',cobalt:'#7A9BDC',teal:'#6FA8A6',mustard:'#D9B25C'};
 const FLOORS={plain:'var(--floor)',oak:'var(--floor-oak)',tile:'var(--floor-tile)',dark:'var(--floor-dark)'};
 const LIB=[
  {cat:'Bedroom',items:[
@@ -1025,7 +1025,7 @@ function myFurnAddAll(){
 
 let libQuery='';
 function renderLibrary(){const p=$('#pane-Library');const q=libQuery.trim().toLowerCase();let h='<input class="search" id="libq" type="text" placeholder="Search furniture…" value="'+esc(libQuery)+'" aria-label="Search furniture">';
- h+='<div class="hint">Click to add to the view, or drag onto the board. Edit sizes in the panel on the right.</div>';
+ h+='<div class="hint">Click to add to the view, or drag onto the board. Edit sizes from the item’s panel.</div>';
  LIB.forEach(c=>{const its=c.items.filter(i=>!q||i.name.toLowerCase().includes(q)||c.cat.toLowerCase().includes(q));if(!its.length)return;h+='<div class="cat"><h2>'+esc(c.cat)+'</h2><div class="lib">';
   its.forEach((i,idx)=>{h+='<button data-cat="'+esc(c.cat)+'" data-i="'+c.items.indexOf(i)+'"><span class="nm">'+esc(i.name)+'</span><span class="dm">'+esc(fmt(i.w,true)+' × '+fmt(i.d,true))+'</span><span class="sw" style="background:'+(COLORS[i.color]||'#ccc')+'"></span></button>';});h+='</div></div>';});
  {const mf=myFurnLoad().map((i,ix)=>({i,ix})).filter(e=>!q||e.i.name.toLowerCase().includes(q)||'my furniture'.includes(q));
@@ -1228,8 +1228,10 @@ function ensureDownloads(){ /* outside the artifact sandbox a plain anchor downl
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);}};}
 async function openShare(){ensureDownloads();const canSave=!!caps.artifact&&!readOnly;const code=await encodeState(stripForShare(state));
  let h='<div class="row" style="justify-content:space-between"><h3>Share this board</h3><button class="ghost" id="dlg-x" aria-label="Close">✕</button></div>';
- h+='<section><h2>Save into this page</h2>'+(canSave?'<div class="hint">Writes the current layout into this page, so anyone who opens the link sees it. '+(state.savedAt?'Last saved '+esc(new Date(state.savedAt).toLocaleString())+'.':'Not saved into the page yet.')+'</div><button class="primary" id="save-page">Save to page</button>':
-   (caps.artifact?'<div class="hint">This view is read-only: you can arrange things here, but only the owner (or an editor) can save into the page. Send them a board code instead.</div>':'<div class="hint">Saving into the page is not available in this view. Use a board code or link below.</div>'))+'</section>';
+ /* the save-to-page section only exists where saving is possible (or visibly
+    read-only) — explaining an absent feature is just noise */
+ if(canSave)h+='<section><h2>Save into this page</h2><div class="hint">Writes the current layout into this page, so anyone who opens the link sees it. '+(state.savedAt?'Last saved '+esc(new Date(state.savedAt).toLocaleString())+'.':'Not saved into the page yet.')+'</div><button class="primary" id="save-page">Save to page</button></section>';
+ else if(caps.artifact)h+='<section><h2>Save into this page</h2><div class="hint">This view is read-only: you can arrange things here, but only the owner (or an editor) can save into the page. Send them a board code instead.</div></section>';
  h+='<section><h2>Link with the layout baked in</h2><div class="hint">Best-effort: some viewers drop the part after <span class="mono">#</span>. If it opens blank, use the code.</div><div class="row"><button id="copy-link">Copy link</button><span class="hint" id="link-note"></span></div></section>';
  h+='<section><h2>Board code</h2><div class="hint">Paste this into the box on any copy of this page to load the layout. '+(state.underlay&&state.underlay.src?'The floor-plan image is left out of codes and links to keep them short; save to page to keep it.':'')+'</div><textarea id="code" rows="3" readonly>'+esc(code)+'</textarea><div class="row"><button id="copy-code">Copy code</button><span class="hint mono">'+code.length+' chars</span></div></section>';
  h+='<section><h2>Load a board code</h2><textarea id="code-in" rows="2" placeholder="Paste a board code here"></textarea><div class="row"><button id="load-code">Load</button></div></section>';
@@ -1262,7 +1264,7 @@ async function saveToPage(){if(!caps.artifact)return;const btn=$('#save-page');i
   else{toast('Could not save ('+(code||'error')+')');if(btn){btn.disabled=false;btn.textContent='Save to page';}}}}
 function planSnapshotSVG(maxPx,bgVar){const b=planBounds();const pad=40;const W=b.w+pad*2,H=b.d+pad*2;const scale=Math.min(4,Math.max(1,maxPx/Math.max(W,H)));
  const savedSel=sel,savedMode=mode;sel=null;mode='furnish';render();
- const css=getComputedStyle(document.documentElement);const vars=['--ink','--muted','--wall','--floor','--floor-oak','--floor-tile','--floor-dark','--accent','--warn','--canvas','--panel','--grid','--grid-major','--sans','--disp','--serif','--mono'].map(v=>v+':'+css.getPropertyValue(v)+';').join('');
+ const css=getComputedStyle(document.documentElement);const vars=['--ink','--muted','--wall','--floor','--floor-oak','--floor-tile','--floor-dark','--accent','--warn','--canvas','--panel','--grid','--grid-major','--sans','--disp','--serif','--mono','--fix-white'].map(v=>v+':'+css.getPropertyValue(v)+';').join('');
  const style='<style>:root{'+vars+'}'+$('#css').textContent.split('/* canvas */')[1].split('.toast')[0]+'</style>';
  const inner=world.innerHTML;sel=savedSel;mode=savedMode;render();
  return {W:W*scale,H:H*scale,
