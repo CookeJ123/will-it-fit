@@ -2089,14 +2089,23 @@ function wfValidListing(t,portal){
  return /<title|floor.?plan/i.test(t);}
 function wfFetchListingHTML(url,portal){
  const P=WF_PROXIES;
- /* the jina reader can hit a bot challenge on the first render and succeed on a
-    retry once its browser cache warms up, so it appears twice for Zoopla */
- const chain=portal==='Zoopla'?[P.jinaHtml,P.corssh,P.allorigins,P.jinaHtml,P.codetabs,P.jinaHtml]
+ /* Zoopla's wall is a JS proof-of-work challenge every one of these plain
+    fetchers gets shown identically, every time — repeated testing across
+    sessions found zero benefit from retrying jina against it, so the chain
+    stays short and gets to the community-cache/bookmarklet fallback fast.
+    The `worker` entry (unshifted below) is the one with real teeth: our own
+    Cloudflare Worker can render Zoopla through a REAL Chromium instance
+    (Browser Rendering) when configured — see worker/DEPLOY.md. */
+ const chain=portal==='Zoopla'?[P.corssh,P.allorigins,P.jinaHtml,P.codetabs]
   :[P.corssh,P.allorigins,P.jinaHtml,P.codetabs,P.jinaMd];
  const wk=wfWorkerProxy();if(wk)chain.unshift(wk);
- return wfHedged(chain,p=>wfFetchT(p.u(url),{headers:p.headers||{}},p.name.indexOf('jina')===0?40000:16000)
+ /* a Zoopla request to `worker` may be a real Chromium render (Browser
+    Rendering), not a quick passthrough — give it jina-length budget rather
+    than the normal 16s, or it gets killed before it can ever pay off */
+ const slow=p=>p.name.indexOf('jina')===0||(p.name==='worker'&&portal==='Zoopla');
+ return wfHedged(chain,p=>wfFetchT(p.u(url),{headers:p.headers||{}},slow(p)?40000:16000)
   .then(r=>{if(!r.ok)throw new Error('http '+r.status);return r.text();})
-  .then(t=>{if(!wfValidListing(t,portal))throw new Error('unusable response');return t;}),4000,90000);}
+  .then(t=>{if(!wfValidListing(t,portal))throw new Error('unusable response');return t;}),4000,portal==='Zoopla'?46000:90000);}
 
 /* ---------- Rightmove: devalue-encoded window.__PAGE_MODEL ---------- */
 function wfParseDevalue(html){
