@@ -680,7 +680,22 @@ function snapOpening(op,px,py){const t=state.wall;let best=null;const th=40/view
  return horiz?{x:along,y:best.line,rot:rr}:{x:best.line,y:along,rot:rr};}
 
 /* ---------- mutations ---------- */
-function addItem(def,x,y){pushHistory();const c=viewCentreWorld();const it={id:uid(),name:def.name,w:def.w,d:def.d,x:x==null?c.x:x,y:y==null?c.y:y,rot:0,color:def.color||'oak',shape:def.shape||'rect',deco:def.deco||'',under:!!def.under,zone:!!def.zone,locked:false};
+let lastAddAutoPlaced=false; /* transient: read by the click-to-add toast right after addItem() returns, never persisted */
+function addItem(def,x,y){pushHistory();
+ let pr=0;lastAddAutoPlaced=false;
+ if(x==null&&y==null&&!def.zone&&!def.under){
+  /* land it in a real, collision-free spot rather than blindly at view-centre,
+     which can drop a brand-new piece squarely on a wall or in a doorway —
+     exactly the first click onboarding sends a new user to make */
+  try{const spots=autoFitSpots({id:'_addprobe',w:def.w,d:def.d,rot:0,x:0,y:0});
+   if(spots.length){
+    /* prefer landing unrotated (against the top wall) when that's on offer —
+       predictable, matches the item's default drawn orientation — rather
+       than whichever wall happened to sort first in the combined list */
+    const upright=spots.filter(s=>s.rot===0);
+    const pool=upright.length?upright:spots;
+    const s=pool[(pool.length-1)>>1];x=s.x;y=s.y;pr=s.rot;lastAddAutoPlaced=true;}}catch(e){}}
+ const c=viewCentreWorld();const it={id:uid(),name:def.name,w:def.w,d:def.d,x:x==null?c.x:x,y:y==null?c.y:y,rot:pr,color:def.color||'oak',shape:def.shape||'rect',deco:def.deco||'',under:!!def.under,zone:!!def.zone,locked:false};
  if(def.a)it.a=def.a;if(def.b)it.b=def.b;if(def.link)it.link=def.link;if(def.price)it.price=def.price;if(def.photo)it.photo=def.photo;
  if(state.snap){[it.x,it.y]=snapItemPos(it,it.x,it.y);}state.items.push(it);sel={kind:'item',id:it.id};changed();
  {const n=world&&world.querySelector('.item[data-id="'+it.id+'"]');if(n)n.classList.add('pop');}
@@ -759,7 +774,7 @@ function onKey(e){const tag=(e.target.tagName||'').toLowerCase();if(tag==='input
 function libDown(e,def){const b=e.currentTarget;b.setPointerCapture(e.pointerId);libDrag={def,sx:e.clientX,sy:e.clientY,moved:false,ghost:null};
  const mv=ev=>{if(!libDrag)return;if(!libDrag.moved&&Math.hypot(ev.clientX-libDrag.sx,ev.clientY-libDrag.sy)<6)return;if(!libDrag.moved){libDrag.moved=true;const g=document.createElement('div');g.textContent=def.name;g.style.cssText='position:fixed;z-index:99;pointer-events:none;background:var(--accent);color:var(--on-accent);padding:4px 8px;border-radius:6px;font-size:12px;transform:translate(-50%,-50%)';document.body.appendChild(g);libDrag.ghost=g;}libDrag.ghost.style.left=ev.clientX+'px';libDrag.ghost.style.top=ev.clientY+'px';};
  const up=ev=>{b.removeEventListener('pointermove',mv);b.removeEventListener('pointerup',up);b.removeEventListener('pointercancel',up);if(!libDrag)return;const ld=libDrag;libDrag=null;if(ld.ghost)ld.ghost.remove();
-  if(!ld.moved){if(mode!=='furnish')setMode('furnish');addItem(def);if(window.innerWidth<=920)closeDrawers();toast(def.name+' added to the middle of the view');return;}
+  if(!ld.moved){if(mode!=='furnish')setMode('furnish');addItem(def);if(window.innerWidth<=920)closeDrawers();toast(def.name+(lastAddAutoPlaced?' added — placed against a wall with room to spare':' added to the middle of the view'));return;}
   const r=svg.getBoundingClientRect();if(ev.clientX>=r.left&&ev.clientX<=r.right&&ev.clientY>=r.top&&ev.clientY<=r.bottom){const w={x:(ev.clientX-r.left-view.tx)/view.k,y:(ev.clientY-r.top-view.ty)/view.k};if(mode!=='furnish')setMode('furnish');addItem(def,w.x,w.y);closeDrawers();}};
  b.addEventListener('pointermove',mv);b.addEventListener('pointerup',up);b.addEventListener('pointercancel',up);}
 
