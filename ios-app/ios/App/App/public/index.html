@@ -308,6 +308,37 @@ html.app-mode .lp-nav{padding:14px 0 6px}
 .lp-bcard:hover .bx{opacity:1}
 .lp-bcard .bx:hover{color:var(--warn);border-color:var(--warn)}
 @media (pointer:coarse){.lp-bcard .bx{opacity:.85}}
+/* compare listings: pick 2-3 boards from the grid, see them side by side */
+.lp-boards-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:6px 0 16px}
+.lp-bcard .bchk{position:absolute;top:6px;left:6px;z-index:2;width:24px;height:24px;border-radius:50%;background:var(--panel);border:1.5px solid var(--line);align-items:center;justify-content:center;font-size:12px;color:transparent;display:none}
+.lp-bcard.cmp-mode .bchk{display:flex}
+.lp-bcard.cmp-mode .bx{display:none}
+.lp-bcard.cmp-sel{box-shadow:0 0 0 2px var(--accent)}
+.lp-bcard.cmp-sel .bchk{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.lp-cmpbar{position:sticky;bottom:14px;display:flex;align-items:center;gap:12px;justify-content:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:10px 16px;margin-top:14px}
+#wf-compare{position:fixed;inset:0;background:rgba(4,18,15,.5);display:none;align-items:center;justify-content:center;z-index:70;padding:16px}
+#wf-compare .cmpdlg{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);width:min(920px,100%);max-height:92vh;overflow:auto;padding:20px 22px 22px}
+.cmp-cols{display:grid;gap:14px;margin:16px 0 20px}
+.cmp-col{background:var(--panel-2);border-radius:12px;padding:14px}
+.cmp-col h4{font-size:14.5px;line-height:1.3;margin-bottom:8px}
+.cmp-col .chips{display:flex;flex-wrap:wrap;gap:5px}
+.cmp-col .chips span{font-family:var(--mono);font-size:11px;background:var(--panel);border:1px solid var(--line-2);border-radius:6px;padding:3px 7px}
+.cmp-col .chips span.hero{background:var(--accent-soft);border-color:var(--accent);font-weight:600}
+.cmp-matrix-wrap{overflow-x:auto}
+table.cmp-matrix{width:100%;border-collapse:collapse;font-size:13px}
+table.cmp-matrix th,table.cmp-matrix td{padding:7px 8px;text-align:left;border-bottom:1px solid var(--line-2);white-space:nowrap}
+table.cmp-matrix th{font-family:var(--disp);font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600}
+table.cmp-matrix td.cmp-v{text-align:center;font-weight:700;cursor:default}
+table.cmp-matrix td.cmp-v.good{color:var(--ok)}
+table.cmp-matrix td.cmp-v.mid,table.cmp-matrix td.cmp-v.bad{color:var(--warn)}
+/* narrow screens: a wide N-column table just runs off the edge with nothing
+   to signal it scrolls — a per-home checklist reads better on a phone, and
+   this IS fundamentally a phone product. Reuses the Fit report's .fr-row
+   verdict styling (already theme-aware, already color-coded). */
+.cmp-list{display:none}
+.cmp-lcol{margin-bottom:16px}
+.cmp-lcol h5{font-family:var(--disp);font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:4px;padding-bottom:6px;border-bottom:1px solid var(--line-2)}
+@media (max-width:700px){.cmp-cols{grid-template-columns:1fr !important}.cmp-matrix-wrap{display:none}.cmp-list{display:block}}
 /* listing photos tab + lightbox */
 .wf-photogrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .wf-photogrid button{padding:0;border-radius:8px;overflow:hidden;border:1px solid var(--line);aspect-ratio:4/3;background:var(--panel-2);cursor:zoom-in}
@@ -570,12 +601,13 @@ function spotValid(tmp,room,others,swings){
   if(hab.minX<room.x-0.6||hab.maxX>room.x+room.w+0.6||hab.minY<room.y-0.6||hab.maxY>room.y+room.d+0.6)return false;
   for(const o of others)if(!o.it.zone&&polysHit([poly],o.polys))return false;}
  return true;}
-function autoFitSpots(it){
- const others=state.items.filter(o=>o.id!==it.id&&!o.under).map(o=>({it:o,polys:worldPolys(o)}));
- const swings=state.openings.filter(o=>o.kind==='door').map(doorSwingPoly);
+function autoFitSpots(it,st){
+ st=st||state;
+ const others=st.items.filter(o=>o.id!==it.id&&!o.under).map(o=>({it:o,polys:worldPolys(o)}));
+ const swings=st.openings.filter(o=>o.kind==='door').map(doorSwingPoly);
  const spots=[];
  const STEP=10;
- for(const room of state.rooms){
+ for(const room of st.rooms){
   /* back against each wall: top 0°, right 90°, bottom 180°, left 270° */
   for(const [wall,th] of [['top',0],['right',90],['bottom',180],['left',270]]){
    const fpW=(th%180===0)?it.w:it.d, fpD=(th%180===0)?it.d:it.w;
@@ -2444,6 +2476,9 @@ async function resolveListingLive(url,onStage,sharedMeta){
 
 /* ===================== landing / product front end ===================== */
 const EXAMPLE={planId:'maple',title:'Maple House, Reading Road, Chineham',sub:'1-bed first-floor maisonette · Basingstoke RG24',portal:'Rightmove',id:'87856044',url:'https://www.rightmove.co.uk/properties/87856044',price:'£230,000 · sold STC',area:'50.9 m² + 1.6 m² eaves',rooms:6,doors:7,windows:3};
+/* the example never goes through runLive's extras-save, so Compare needs its
+   own — same fields, called from every "open the example" entry point */
+function wfExampleExtras(){wfExtrasSave('maple',{title:EXAMPLE.title,areaSqm:wfAreaFromText(EXAMPLE.area)||0,price:EXAMPLE.price||'',beds:null});}
 function detectPortal(url){url=(url||'').trim();if(!url)return null;let m;
  if((m=/rightmove\.co\.uk\/properties\/(\d+)/i.exec(url)))return {portal:'Rightmove',id:m[1]};
  if((m=/zoopla\.co\.uk\/(?:for-sale|to-rent|new-homes)\/details\/(\d+)/i.exec(url)))return {portal:'Zoopla',id:m[1]};
@@ -2482,7 +2517,7 @@ function runPipeline(res){wfRevealDevice();const pipe=$('#lp-pipe'),result=$('#l
   result.innerHTML=(res.exact?'<span class="k">Found your listing</span>':'<span class="k">The example listing</span>')+
    '<span class="t">'+esc(res.listing.title)+'</span><div class="chips"><span>'+esc(res.listing.sub)+'</span><span>'+esc(res.listing.area)+'</span><span>'+res.listing.rooms+' rooms</span><span>'+res.listing.doors+' doors</span><span>'+res.listing.windows+' windows</span></div>'+
    '<div class="row"><button class="primary" id="lp-open">Open the planner</button><button class="ghost" id="lp-again">Try another link</button></div>';
-  result.classList.add('show');$('#lp-open').addEventListener('click',()=>openPlan('maple',SAMPLE));$('#lp-again').addEventListener('click',()=>{result.classList.remove('show');$('#lp-url').focus();$('#lp-url').select();$('#lp-devtitle').textContent='Floor plan · Maple House, Chineham';});
+  result.classList.add('show');$('#lp-open').addEventListener('click',()=>{wfExampleExtras();openPlan('maple',SAMPLE);});$('#lp-again').addEventListener('click',()=>{result.classList.remove('show');$('#lp-url').focus();$('#lp-url').select();$('#lp-devtitle').textContent='Floor plan · Maple House, Chineham';});
  },(PIPE[PIPE.length-1][1]+350)*speed));}
 
 /* ===== live pipeline (any real Rightmove/Zoopla/other listing) ===== */
@@ -2609,7 +2644,7 @@ async function runLive(url,shared){
    if(extra&&extra.dataURL)canvas.innerHTML='<div class="lp-scan"><img src="'+extra.dataURL+'" alt=""><i></i></div>';},shared);
   pipeSet(LIVE_PIPE.length);
   r.basePlanId=r.planId;r.floorIx=0;wfLastLive=r;
-  wfExtrasSave(r.planId,{floors:(r.listing.floorplans||[]).slice(0,8),photos:(r.listing.photos||[]).slice(0,14),title:r.listing.title||'',areaSqm:r.listing.areaSqm||0});
+  wfExtrasSave(r.planId,{floors:(r.listing.floorplans||[]).slice(0,8),photos:(r.listing.photos||[]).slice(0,14),title:r.listing.title||'',areaSqm:r.listing.areaSqm||0,price:r.listing.price||'',beds:r.listing.beds!=null?r.listing.beds:null});
   wfPlanCache[r.planId+':0']={plan:r.plan,traced:r.traced,traceStats:r.traceStats,traceMask:r.traceMask,traceRender:r.traceRender,named:true};
   canvas.innerHTML=livePlanSVG(r);
   setTimeout(()=>{pipe.hidden=true;},600);
@@ -2674,7 +2709,7 @@ function initLanding(){const urlEl=$('#lp-url');
   runLive(v);});
  $('#lp-example').addEventListener('click',()=>{urlEl.value=EXAMPLE.url;upd();$('#lp-form').requestSubmit();});
  $('#lp-file').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;e.target.value='';openTracedUpload(f);});
- $('#lp-open-example').addEventListener('click',()=>openPlan('maple',SAMPLE));
+ $('#lp-open-example').addEventListener('click',()=>{wfExampleExtras();openPlan('maple',SAMPLE);});
  $('#lp-view-listing').addEventListener('click',()=>{window.open(EXAMPLE.url,'_blank','noopener');});
  ['nav-cta','lp-cta2'].forEach(id=>$('#'+id).addEventListener('click',()=>{window.scrollTo({top:0,behavior:'smooth'});setTimeout(()=>urlEl.focus(),300);}));
  if(document.documentElement.classList.contains('app-mode')){
@@ -2711,6 +2746,92 @@ function wfBoardThumb(st){
  (st.items||[]).slice(0,50).forEach(it=>{if(it.zone||it.under)return;
   o+='<rect x="'+(it.x-it.w/2)+'" y="'+(it.y-it.d/2)+'" width="'+it.w+'" height="'+it.d+'" rx="5" fill="'+(COLORS[it.color]||'#B8A48E')+'" opacity=".9" transform="rotate('+(it.rot||0)+' '+it.x+' '+it.y+')"/>';});
  return o+'</svg>';}
+/* ===== compare listings: price/area/£-per-m² and a furniture fit matrix,
+   side by side across 2-3 saved boards ===== */
+let wfCmp=false,wfCmpSel=[];
+function wfPriceNum(s){if(!s)return null;const m=/[£€]\s?([\d,]+)/.exec(s);return m?parseFloat(m[1].replace(/,/g,'')):null;}
+function wfRoomCount(st){return new Set((st.rooms||[]).map(r=>r.name)).size;}
+function wfCmpVerdict(dims,st){
+ if(!st||!st.rooms||!st.rooms.length)return {verdict:'no',n:0,rooms:[]};
+ /* a synthetic probe, never placed — "would this piece fit ANYWHERE",
+    reusing the exact search the in-plan auto-fit button uses */
+ const spots=autoFitSpots({id:'_cmp_probe',w:dims.w,d:dims.d,x:0,y:0,rot:0},st);
+ const rooms=[...new Set(spots.map(s=>s.room))];
+ return {verdict:spots.length===0?'no':spots.length<=2?'tight':'fit',n:spots.length,rooms};}
+function wfCmpStats(base,st,ex){
+ const title=(st.title||ex.title||'My floor plan').replace(/\s*—.*$/,'');
+ const areaSqm=ex.areaSqm||0;const priceN=wfPriceNum(ex.price);
+ /* £/m² only means something for a sale price, not rent — pcm listings skip it */
+ const perM2=(areaSqm&&priceN&&!/pcm/i.test(ex.price||''))?Math.round(priceN/areaSqm):null;
+ return {base,title,price:ex.price||'',areaSqm,beds:ex.beds,perM2,rooms:wfRoomCount(st),
+  items:(st.items||[]).filter(it=>!it.locked).length,state:st};}
+function wfCompareText(cols,myf){
+ let t='WILL IT FIT — comparing '+cols.length+' homes\n\n';
+ cols.forEach(c=>{t+=c.title+(c.price?' · '+c.price:'')+(c.areaSqm?' · '+(Math.round(c.areaSqm*10)/10)+' m²':'')+(c.perM2?' · £'+c.perM2.toLocaleString()+'/m²':'')+'\n';});
+ if(myf.length){t+='\n';myf.forEach(it=>{
+  t+=it.name+': '+cols.map(c=>{const r=wfCmpVerdict({w:it.w,d:it.d},c.state);
+   return c.title+' '+(r.verdict==='fit'?'OK':r.verdict==='tight'?'TIGHT':'NO');}).join(' · ')+'\n';});}
+ return t+'\ncookej123.github.io/will-it-fit';}
+/* toast() lives in #root, which doesn't exist until a plan has been opened
+   this session — comparing straight from the boards home may never have hit
+   that. Fall back to our own tiny transient banner when #toast is absent. */
+let wfToastLpTimer=null;
+function wfToast(msg){
+ const t=document.getElementById('toast');
+ if(t){toast(msg);return;}
+ let b=document.getElementById('wf-toast-lp');
+ if(!b){b=document.createElement('div');b.id='wf-toast-lp';
+  b.style.cssText='position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;z-index:80;opacity:0;transition:opacity .2s;pointer-events:none';
+  document.body.appendChild(b);}
+ b.textContent=msg;b.style.opacity='1';clearTimeout(wfToastLpTimer);wfToastLpTimer=setTimeout(()=>{b.style.opacity='0';},2200);}
+function closeCompare(){const bx=document.getElementById('wf-compare');if(bx)bx.style.display='none';}
+function openCompare(bases){
+ const boards=wfAllBoards();
+ const cols=bases.map(b=>{const g=boards.find(x=>x.base===b);if(!g)return null;
+  return wfCmpStats(b,g.latest.state,wfExtrasLoad(b)||{});}).filter(Boolean);
+ if(cols.length<2)return;
+ let bx=document.getElementById('wf-compare');
+ if(!bx){bx=document.createElement('div');bx.id='wf-compare';document.body.appendChild(bx);
+  bx.addEventListener('click',e=>{if(e.target.id==='wf-compare')closeCompare();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeCompare();});}
+ const myf=myFurnLoad();
+ let h='<div class="cmpdlg" role="dialog" aria-modal="true">';
+ h+='<div class="row" style="justify-content:space-between"><h3>Comparing '+cols.length+' homes</h3><button class="ghost" id="cmp-x" aria-label="Close">✕</button></div>';
+ h+='<div class="cmp-cols" style="grid-template-columns:repeat('+cols.length+',1fr)">'+cols.map(c=>{
+  const chips=[];
+  if(c.price)chips.push('<span class="hero">'+esc(c.price)+'</span>');
+  if(c.areaSqm)chips.push('<span>'+(Math.round(c.areaSqm*10)/10)+' m²</span>');
+  if(c.perM2)chips.push('<span>£'+c.perM2.toLocaleString()+'/m²</span>');
+  if(c.beds!=null)chips.push('<span>'+c.beds+' bed</span>');
+  chips.push('<span>'+c.rooms+' room'+(c.rooms===1?'':'s')+'</span>');
+  chips.push('<span>'+c.items+' item'+(c.items===1?'':'s')+' placed</span>');
+  return '<div class="cmp-col"><h4>'+esc(c.title)+'</h4><div class="chips">'+chips.join('')+'</div></div>';}).join('')+'</div>';
+ if(!myf.length){
+  h+='<div class="hint">Save the furniture you care about — the ☆ in a plan’s inspector — and it’ll show here, checked against every home you compare.</div>';
+ }else{
+  /* every (item,home) verdict computed once, reused for the table AND the
+     mobile list — CSS picks which one is actually shown at this width */
+  const verdictOf=(it,c)=>{const r=wfCmpVerdict({w:it.w,d:it.d},c.state);
+   const icon=r.verdict==='fit'?'✓':r.verdict==='tight'?'⚠':'✗';
+   const cls=r.verdict==='fit'?'good':r.verdict==='tight'?'mid':'bad';
+   const ti=r.verdict==='no'?'No clear spot on this floor':'Fits in '+(r.rooms.slice(0,2).join(', ')||'this home');
+   return {icon,cls,ti};};
+  h+='<div class="cmp-matrix-wrap"><table class="cmp-matrix"><thead><tr><th>Furniture</th>'+cols.map(c=>'<th>'+esc(c.title)+'</th>').join('')+'</tr></thead><tbody>'
+   +myf.map(it=>{
+    const cells=cols.map(c=>{const v=verdictOf(it,c);
+     return '<td class="cmp-v '+v.cls+'" title="'+esc(v.ti)+'">'+v.icon+'</td>';}).join('');
+    return '<tr><td>'+esc(it.name)+' <span class="hint mono">'+Math.round(it.w)+'×'+Math.round(it.d)+'</span></td>'+cells+'</tr>';}).join('')
+   +'</tbody></table></div>'
+   +'<div class="cmp-list">'+cols.map(c=>'<div class="cmp-lcol"><h5>'+esc(c.title)+'</h5>'
+    +myf.map(it=>{const v=verdictOf(it,c);
+     return '<div class="fr-row '+v.cls+'"><span class="fr-i">'+v.icon+'</span><div>'+esc(it.name)+' <span class="hint mono">'+Math.round(it.w)+'×'+Math.round(it.d)+'</span></div></div>';}).join('')
+    +'</div>').join('')+'</div>'
+   +'<div class="row" style="margin-top:12px"><button class="primary" id="cmp-copy">Copy as text</button><span class="hint">Paste it straight into WhatsApp.</span></div>';}
+ h+='</div>';
+ bx.innerHTML=h;bx.style.display='flex';
+ document.getElementById('cmp-x').addEventListener('click',closeCompare);
+ const cc=document.getElementById('cmp-copy');
+ if(cc)cc.addEventListener('click',async()=>{const ok=await copyText(wfCompareText(cols,myf));wfToast(ok?'Comparison copied':'Couldn’t copy here');});}
 function wfRenderBoards(){
  const holder=document.getElementById('lp-boards');if(!holder)return;
  const boards=wfAllBoards();
@@ -2726,22 +2847,38 @@ function wfRenderBoards(){
    return;}
   holder.hidden=true;holder.innerHTML='';return;}
  holder.hidden=false;
- holder.innerHTML='<div class="head" style="margin:6px 0 16px"><p class="eyebrow">Welcome back</p><h2>Your boards</h2></div>'
+ const canCmp=boards.length>=2;
+ if(!canCmp)wfCmp=false;
+ holder.innerHTML='<div class="lp-boards-head"><div><p class="eyebrow">Welcome back</p><h2>Your boards</h2></div>'
+  +(canCmp?'<button class="'+(wfCmp?'on':'ghost')+'" id="lp-cmp-toggle">'+(wfCmp?'Cancel comparing':'Compare homes')+'</button>':'')+'</div>'
   +'<div class="lp-boardgrid">'+boards.map((g,i)=>{
    const st=g.latest.state;const ex=wfExtrasLoad(g.base)||{};
    const title=st.title||ex.title||'My floor plan';
    const items=(st.items||[]).filter(it=>!it.locked).length;
    const nf=(ex.floors||[]).length;
-   return '<div class="lp-bcard" data-b="'+i+'" role="button" tabindex="0" aria-label="Open '+esc(title)+'">'
+   const sel=wfCmpSel.indexOf(g.base)>=0;
+   return '<div class="lp-bcard'+(wfCmp?' cmp-mode':'')+(sel?' cmp-sel':'')+'" data-b="'+i+'" role="button" tabindex="0" aria-label="'+(wfCmp?(sel?'Remove from comparison: ':'Add to comparison: '):'Open ')+esc(title)+'">'
+    +'<span class="bchk" aria-hidden="true">✓</span>'
     +'<span class="bx" data-x="'+i+'" title="Delete this board" role="button" aria-label="Delete">✕</span>'
     +'<div class="bthumb">'+wfBoardThumb(st)+'</div>'
-    +'<div class="bbody"><div class="bt">'+esc(title)+'</div><div class="bm">'+items+' item'+(items===1?'':'s')+(nf>1?' · '+nf+' floors':'')+(g.latest.t?' · '+wfAgo(g.latest.t):'')+'</div></div></div>';}).join('')+'</div>';
+    +'<div class="bbody"><div class="bt">'+esc(title)+'</div><div class="bm">'+items+' item'+(items===1?'':'s')+(nf>1?' · '+nf+' floors':'')+(g.latest.t?' · '+wfAgo(g.latest.t):'')+'</div></div></div>';}).join('')+'</div>'
+  +(wfCmp?'<div class="lp-cmpbar"><span class="hint">'+(wfCmpSel.length<2?'Pick '+(2-wfCmpSel.length)+' more to compare':wfCmpSel.length+' selected')+' <span class="muted">(up to 3)</span></span><button class="primary" id="lp-cmp-go" '+(wfCmpSel.length<2?'disabled':'')+'>Compare '+(wfCmpSel.length||'')+'</button></div>':'');
+ const tog=document.getElementById('lp-cmp-toggle');
+ if(tog)tog.addEventListener('click',()=>{wfCmp=!wfCmp;wfCmpSel=[];wfRenderBoards();});
+ const go=document.getElementById('lp-cmp-go');
+ if(go)go.addEventListener('click',()=>openCompare(wfCmpSel.slice()));
  boards.forEach((g,i)=>{
   const card=holder.querySelector('[data-b="'+i+'"]');
-  const open=()=>openPlan(g.latest.pid,g.latest.state,{fresh:false});
+  const open=()=>{
+   if(wfCmp){
+    const ix=wfCmpSel.indexOf(g.base);
+    if(ix>=0)wfCmpSel.splice(ix,1);
+    else{if(wfCmpSel.length>=3)wfCmpSel.shift();wfCmpSel.push(g.base);}
+    wfRenderBoards();return;}
+   openPlan(g.latest.pid,g.latest.state,{fresh:false});};
   card.addEventListener('click',e=>{if(e.target.classList.contains('bx'))return;open();});
   card.addEventListener('keydown',e=>{if(e.key==='Enter')open();});});
- [...holder.querySelectorAll('.bx')].forEach(x=>x.addEventListener('click',e=>{e.stopPropagation();
+ if(!wfCmp)[...holder.querySelectorAll('.bx')].forEach(x=>x.addEventListener('click',e=>{e.stopPropagation();
   const g=boards[+x.dataset.x];
   if(!confirm('Delete this board? The furniture layout for this listing will be removed from this device.'))return;
   try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);

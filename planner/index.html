@@ -347,12 +347,13 @@ function spotValid(tmp,room,others,swings){
   if(hab.minX<room.x-0.6||hab.maxX>room.x+room.w+0.6||hab.minY<room.y-0.6||hab.maxY>room.y+room.d+0.6)return false;
   for(const o of others)if(!o.it.zone&&polysHit([poly],o.polys))return false;}
  return true;}
-function autoFitSpots(it){
- const others=state.items.filter(o=>o.id!==it.id&&!o.under).map(o=>({it:o,polys:worldPolys(o)}));
- const swings=state.openings.filter(o=>o.kind==='door').map(doorSwingPoly);
+function autoFitSpots(it,st){
+ st=st||state;
+ const others=st.items.filter(o=>o.id!==it.id&&!o.under).map(o=>({it:o,polys:worldPolys(o)}));
+ const swings=st.openings.filter(o=>o.kind==='door').map(doorSwingPoly);
  const spots=[];
  const STEP=10;
- for(const room of state.rooms){
+ for(const room of st.rooms){
   /* back against each wall: top 0°, right 90°, bottom 180°, left 270° */
   for(const [wall,th] of [['top',0],['right',90],['bottom',180],['left',270]]){
    const fpW=(th%180===0)?it.w:it.d, fpD=(th%180===0)?it.d:it.w;
