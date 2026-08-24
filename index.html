@@ -288,6 +288,9 @@ body.landing{overflow:auto}
 .lp-result .chips button.fp:hover{border-color:var(--muted)}
 .lp-result .chips button.fp.on{background:var(--accent-soft);border-color:var(--accent);font-weight:600}
 .lp-result .chips .ocr-chip{border-color:var(--accent);color:var(--accent)}
+.lp-diag{margin-top:6px}
+.lp-diag summary{font-size:11px;color:var(--muted);cursor:pointer}
+.lp-diag pre{font-family:var(--mono);font-size:10px;line-height:1.5;color:var(--muted);background:var(--panel-2);border:1px solid var(--line-2);border-radius:8px;padding:8px;margin-top:4px;max-height:150px;overflow:auto;white-space:pre-wrap;word-break:break-all}
 /* installed-app home: no brochure, just a greeting, your boards and the paste box */
 html.app-mode .lp-nav nav,html.app-mode #nav-cta,
 html.app-mode .lede,html.app-mode .lp-trust,html.app-mode .lp-section,html.app-mode .lp-foot{display:none}
@@ -2605,6 +2608,16 @@ function liveResultCard(r){
   (hint?'<span class="hint muted">'+esc(hint)+'</span>':'')+
   '<div class="row"><button class="primary" id="lp-open-live">Open the planner</button><button class="ghost" id="lp-again">Try another link</button></div>';}
 function wfNativeReader(){try{return !!(window.Capacitor&&window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.wfListingRead);}catch(e){return false;}}
+/* breadcrumb trail for on-device debugging: survives the handoff reload via
+   localStorage; shown on in-app error cards. The native reader writes into it
+   too (window.wfTrace) — keep that name stable. */
+function wfTrace(m){try{const k='wf:apptrace';const a=JSON.parse(localStorage.getItem(k)||'[]');
+ a.push(new Date().toISOString().slice(11,19)+' '+String(m).slice(0,200));
+ while(a.length>60)a.shift();localStorage.setItem(k,JSON.stringify(a));}catch(e){}}
+window.wfTrace=wfTrace;
+function wfTraceDetails(){try{if(!window.Capacitor)return '';
+ const a=JSON.parse(localStorage.getItem('wf:apptrace')||'[]');if(!a.length)return '';
+ return '<details class="lp-diag"><summary>Diagnostic log</summary><pre>'+esc(a.slice(-14).join('\n'))+'</pre></details>';}catch(e){return '';}}
 function liveErrorCard(err){
  /* portals wall off every remote reader — but the visitor's own device gets in
     fine. In the app: an invisible in-app WebKit read (automatic). In a browser:
@@ -2668,12 +2681,14 @@ async function runLive(url,shared){
  const pipe=$('#lp-pipe'),result=$('#lp-result'),canvas=$('#lp-canvas');
  pipeTimers.forEach(clearTimeout);pipeTimers=[];result.classList.remove('show');
  const p=detectPortal(url)||{portal:'Other',id:null};
+ wfTrace('runLive '+p.portal+(shared?' +shared':'')+' '+String(url).slice(0,60));
  $('#lp-devtitle').textContent=(p.portal!=='Other'?p.portal+(p.id?' · '+p.id:''):'Listing')+' · reading the floor plan';
  pipeShow(LIVE_PIPE);pipeSet(0);
  try{
   const r=await resolveListingLive(url,(i,extra)=>{pipeSet(i);
    if(extra&&extra.dataURL)canvas.innerHTML='<div class="lp-scan"><img src="'+extra.dataURL+'" alt=""><i></i></div>';},shared);
   pipeSet(LIVE_PIPE.length);
+  wfTrace('live ok traced='+(!!r.traced)+(r.traceStats?' rooms='+r.traceStats.roomGroups:''));
   r.basePlanId=r.planId;r.floorIx=0;wfLastLive=r;
   wfExtrasSave(r.planId,{floors:(r.listing.floorplans||[]).slice(0,8),photos:(r.listing.photos||[]).slice(0,14),title:r.listing.title||'',areaSqm:r.listing.areaSqm||0,price:r.listing.price||'',beds:r.listing.beds!=null?r.listing.beds:null});
   wfPlanCache[r.planId+':0']={plan:r.plan,traced:r.traced,traceStats:r.traceStats,traceMask:r.traceMask,traceRender:r.traceRender,named:true};
@@ -2690,16 +2705,19 @@ async function runLive(url,shared){
   $('#lp-devtitle').textContent='Floor plan · Maple House, Chineham';
   const e2=err&&err.code?err:{code:'fetch',portal:p.portal};
   if(!e2.portal)e2.portal=p.portal;
-  result.innerHTML=liveErrorCard(e2);
+  wfTrace('live fail '+e2.code+' '+e2.portal+(err&&err.message?' — '+String(err.message).slice(0,70):''));
+  result.innerHTML=liveErrorCard(e2)+wfTraceDetails();
   result.classList.add('show');
   wireResultButtons(null);
   /* in the app: hand the URL to the native in-app reader — it loads the page
      as a real visitor, harvests the plan and re-enters via #shopadd= */
   if(e2.code==='fetch'&&wfNativeReader()){
+   wfTrace('native reader asked');
    try{window.webkit.messageHandlers.wfListingRead.postMessage(String(url));}catch(e3){}
    setTimeout(()=>{const k=$('#lp-result .k');
     if(k&&/Reading the listing inside the app/i.test(k.textContent)){
-     result.innerHTML=liveErrorCard(Object.assign({},e2,{appFallback:true}));
+     wfTrace('reader gave up (40s)');
+     result.innerHTML=liveErrorCard(Object.assign({},e2,{appFallback:true}))+wfTraceDetails();
      wireResultButtons(null);}},40000);}
   if(window.console&&err)console.warn('resolve failed',err);
  }finally{liveBusy=false;go.disabled=false;}}
@@ -3113,7 +3131,7 @@ function shopFromHash(){const m=/[#&]shopadd=([^&]+)/.exec(location.hash||'');if
   const name=(p.s&&d&&d.name)?String(d.name).slice(0,70):nameT;
   if(d&&d.w)return {ok:true,name:name||(d&&d.name)||'Item from a shop',w:d.w,d:d.d,h:d.h,price:d.price,link:p.u,photo:(typeof p.i==='string'&&/^https?:/.test(p.i))?p.i:undefined};
   return {ok:false,name:name||'that page',link:p.u,text:p.x||''};
- }catch(e){return null;}}
+ }catch(e){try{window.wfTrace&&window.wfTrace('shopadd parse FAILED '+String(e&&e.message).slice(0,60));}catch(_e){}return null;}}
 function recentDrafts(){const out=[];
  try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);
   if(k&&k.indexOf(KEY+':')===0){const d=JSON.parse(localStorage.getItem(k)||'null');
@@ -3141,7 +3159,9 @@ async function start(){
  if(location.hostname==='cookej123.github.io'&&'serviceWorker' in navigator){
   try{navigator.serviceWorker.register('sw.js');}catch(e){}}
  const shopIt=shopFromHash();
+ wfTrace('boot cap='+(!!window.Capacitor)+' shopadd='+(shopIt?(shopIt.listing?'listing':(shopIt.ok?'item':'text')):'none'));
  if(shopIt&&shopIt.listing){
+  wfTrace('shopadd listing fp='+((shopIt.p.fp&&shopIt.p.fp.length)||0)+' ph='+((shopIt.p.ph&&shopIt.p.ph.length)||0));
   showLanding();initLanding();
   if(shopIt.p.u){
    const meta=window.wfMetaFromShared(shopIt.p);
@@ -3152,7 +3172,7 @@ async function start(){
     tries the community cache and then the in-app reader */
  if(shopIt&&shopIt.ok===false&&shopIt.link&&!shopIt.text){
   const dp=detectPortal(shopIt.link);
-  if(dp&&dp.portal!=='Other'){showLanding();initLanding();runLive(shopIt.link);return;}}
+  if(dp&&dp.portal!=='Other'){wfTrace('shopadd bare '+dp.portal);showLanding();initLanding();runLive(shopIt.link);return;}}
  if(shopIt){
   if(shopIt.ok)shopDraft=shopIt;
   else{shopText=(shopIt.link?shopIt.link+'\n':'')+shopIt.text;shopMsg='Check the paste and press Read it.';}

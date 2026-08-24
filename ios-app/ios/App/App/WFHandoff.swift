@@ -39,6 +39,7 @@ enum WFHandoff {
             defaults?.removeObject(forKey: pendingKey); return
         }
         let js = "(function(){if(!window.willitfit)return 'wait';"
+               + "window.wfTrace&&window.wfTrace('handoff inject');"
                + "location.hash='shopadd=\(enc)';location.reload();return 'ok';})()"
         webView.evaluateJavaScript(js) { result, _ in
             if (result as? String) == "ok" {

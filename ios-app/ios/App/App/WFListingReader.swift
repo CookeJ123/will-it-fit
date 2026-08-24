@@ -43,6 +43,14 @@ final class WFListingReader: NSObject, WKNavigationDelegate, WKScriptMessageHand
         DispatchQueue.main.async { self.start(url) }
     }
 
+    /// Drop a breadcrumb into the web app's wf:apptrace log (fixed strings only).
+    private func note(_ m: String, then: (() -> Void)? = nil) {
+        DispatchQueue.main.async {
+            guard let mainWV = (self.window?.rootViewController as? CAPBridgeViewController)?.webView else { then?(); return }
+            mainWV.evaluateJavaScript("window.wfTrace&&window.wfTrace('native: \(m)')") { _, _ in then?() }
+        }
+    }
+
     private func start(_ url: URL) {
         reading = true
         challengeSince = nil
@@ -57,6 +65,7 @@ final class WFListingReader: NSObject, WKNavigationDelegate, WKScriptMessageHand
         window?.addSubview(wv)
         webView = wv
         deadline = Date().addingTimeInterval(45)
+        note("reader start")
         wv.load(URLRequest(url: url))
         timer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in self?.poll() }
     }
@@ -76,7 +85,7 @@ final class WFListingReader: NSObject, WKNavigationDelegate, WKScriptMessageHand
     /// CF managed checks usually auto-resolve in real WebKit within seconds;
     /// only present the page if one lingers and needs a human tap.
     private func challengeShowing() {
-        if challengeSince == nil { challengeSince = Date() }
+        if challengeSince == nil { challengeSince = Date(); note("challenge detected") }
         guard !presented, let since = challengeSince, Date().timeIntervalSince(since) > 6,
               let wv = webView, let root = window?.rootViewController else { return }
         let vc = UIViewController()
@@ -89,6 +98,7 @@ final class WFListingReader: NSObject, WKNavigationDelegate, WKScriptMessageHand
         root.present(vc, animated: true)
         host = vc
         presented = true
+        note("challenge presented for a tap")
         deadline = Date().addingTimeInterval(90) // give the human time
     }
 
@@ -105,8 +115,14 @@ final class WFListingReader: NSObject, WKNavigationDelegate, WKScriptMessageHand
         webView?.removeFromSuperview(); webView = nil
         reading = false
         if let b64, !b64.isEmpty {
-            WFHandoff.stash(b64: b64)
-            WFHandoff.drainAndInject(window: window)
+            // note() then hand over inside its completion — the handoff reloads the
+            // page, so the breadcrumb must land in localStorage first
+            note("harvest ok, handing over") {
+                WFHandoff.stash(b64: b64)
+                WFHandoff.drainAndInject(window: self.window)
+            }
+        } else {
+            note("reader gave up (deadline or dismissed)")
         }
     }
 
