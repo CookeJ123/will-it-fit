@@ -23,6 +23,8 @@ final class WFListingReader: NSObject, WKNavigationDelegate, WKScriptMessageHand
     private var reading = false
     private var presented = false
 
+    private static var safeAreaInstalled = false
+
     /// Idempotent; call on every scene activation.
     func attach(to window: UIWindow?) {
         self.window = window
@@ -30,6 +32,20 @@ final class WFListingReader: NSObject, WKNavigationDelegate, WKScriptMessageHand
               let ucc = bridgeVC.webView?.configuration.userContentController else { return }
         ucc.removeScriptMessageHandler(forName: "wfListingRead")
         ucc.add(self, name: "wfListingRead")
+        // env(safe-area-inset-*) proved unreliable in the Capacitor webview on a real
+        // phone (returned 0 -> top bar under the clock), so expose the authoritative
+        // UIKit insets as --wf-sat/--wf-sab: a user script covers every future page
+        // load (handoff reloads included), the immediate eval covers the current one.
+        if let w = window {
+            let t = Int(w.safeAreaInsets.top.rounded()), b = Int(w.safeAreaInsets.bottom.rounded())
+            let src = "document.documentElement.style.setProperty('--wf-sat','\(t)px');"
+                    + "document.documentElement.style.setProperty('--wf-sab','\(b)px')"
+            if !Self.safeAreaInstalled {
+                ucc.addUserScript(WKUserScript(source: src, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+                Self.safeAreaInstalled = true
+            }
+            bridgeVC.webView?.evaluateJavaScript(src, completionHandler: nil)
+        }
     }
 
     // web -> native: window.webkit.messageHandlers.wfListingRead.postMessage(url)

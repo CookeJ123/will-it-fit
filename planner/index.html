@@ -222,12 +222,15 @@ svg .ghost polygon{animation:wf-ghost 1.6s ease-in-out infinite}
   .top .tools{display:flex;order:10;flex-basis:100%;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap}
   .top .tools .sp{display:none}
 }
-/* native app / installed PWA (viewport-fit=cover draws under the iPhone status bar and home indicator) */
-html.app-mode .top{padding-top:calc(8px + env(safe-area-inset-top,0px))}
+/* native app / installed PWA (viewport-fit=cover draws under the iPhone status bar and home
+   indicator). --wf-sat/--wf-sab are injected by the native shell (WFListingReader.attach) because
+   env(safe-area-inset-*) returns 0 inside the Capacitor webview on real phones; env() stays as
+   the fallback for the installed-PWA case. */
+html.app-mode .top{padding-top:calc(8px + var(--wf-sat,env(safe-area-inset-top,0px)))}
 @media (max-width:920px){
-  html.app-mode .top{padding-top:calc(6px + env(safe-area-inset-top,0px))}
-  html.app-mode .side,html.app-mode .insp{padding-bottom:env(safe-area-inset-bottom,0px)}
-  html.app-mode .mpill:not([hidden]){bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+  html.app-mode .top{padding-top:calc(6px + var(--wf-sat,env(safe-area-inset-top,0px)))}
+  html.app-mode .side,html.app-mode .insp{padding-bottom:var(--wf-sab,env(safe-area-inset-bottom,0px))}
+  html.app-mode .mpill:not([hidden]){bottom:calc(14px + var(--wf-sab,env(safe-area-inset-bottom,0px)))}
 }
 @media (prefers-reduced-motion: reduce){ *{transition:none !important;animation:none !important} }
 </style>
