@@ -49,6 +49,9 @@ final class WFListingReader: NSObject, WKNavigationDelegate, WKScriptMessageHand
         let cfg = WKWebViewConfiguration()
         cfg.websiteDataStore = .default()
         let wv = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 760), configuration: cfg)
+        // The default WKWebView UA carries no Safari token, which Cloudflare flags as a bot
+        // on its own — identify as real mobile Safari so the wall treats us like a visitor.
+        wv.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
         wv.navigationDelegate = self
         wv.isHidden = true
         window?.addSubview(wv)
