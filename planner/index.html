@@ -206,8 +206,9 @@ svg .ghost polygon{animation:wf-ghost 1.6s ease-in-out infinite}
   .main{grid-template-columns:1fr}
   /* iOS zooms the app when focusing inputs under 16px, and installed PWAs never zoom back */
   input[type=text],input[type=number],input[type=url],select,textarea,.search{font-size:16px}
-  /* compact top bar: per-board toggles move into the Plan pane on small screens */
-  #units,#snap,#halos,#zoomout,#zoomin{display:none}
+  /* compact top bar: per-board toggles move into the Plan pane on small screens;
+     #fit (zoom-to-plan) goes too — alone it read as "Fit report" and pinch covers it */
+  #units,#snap,#halos,#zoomout,#zoomin,#fit{display:none}
   .top button{min-height:40px}
   .top .brand h1,.top .brand .brandbtn{font-size:15px;letter-spacing:.1em}
   /* panels become bottom sheets on small screens */
@@ -886,6 +887,7 @@ function shell(){root.innerHTML=
   '<div class="sp"></div>'+
   '<div class="seg"><button id="zoomout" title="Zoom out (-)">−</button><button id="fit" title="Fit plan (F)">Fit</button><button id="zoomin" title="Zoom in (+)">+</button></div>'+
   '<button id="report" class="wide-only" title="Does everything fit? The verdict, in writing">✓ Fit report</button>'+
+  '<button id="report-m" class="narrow-only" title="Does everything fit? The verdict, in writing">✓ Fit</button>'+
   '<button class="primary" id="share">Share</button>'+
   '<button class="icon narrow-only" id="btn-insp" title="Details" aria-label="Open details">ⓘ</button>'+
  '</div>'+
@@ -911,6 +913,7 @@ function shell(){root.innerHTML=
  $('#zoomin').addEventListener('click',()=>zoomAt(1.25));$('#zoomout').addEventListener('click',()=>zoomAt(0.8));$('#fit').addEventListener('click',fitView);
  $('#share').addEventListener('click',openShare);
  $('#report').addEventListener('click',openFitReport);
+ $('#report-m').addEventListener('click',openFitReport);
  $('#btn-lib').addEventListener('click',()=>{$('#insp').classList.remove('open');$('#side').classList.toggle('open');});
  $('#btn-insp').addEventListener('click',()=>{$('#side').classList.remove('open');$('#insp').classList.toggle('open');});
  $$('#tabs button').forEach(b=>b.addEventListener('click',()=>{libTab=b.dataset.tab;renderPanels();}));
