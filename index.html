@@ -2437,6 +2437,41 @@ window.wfProductFetch=async function(url){
  if(out.dims)window.wfDimsShare(url,out);
  return out;};
 
+/* ---------- area rescue: read the area printed ON the plan image ----------
+   Agents' plans usually print their own area ("Approximate Area = 352 sq ft /
+   32.7 sq m"). When the listing page yielded no area and the trace can't stand
+   on door widths alone, OCR the plan for that label and retrace with a real
+   scale. Reuses the product build's tesseract loader; quietly skipped where it
+   isn't available (planner-only page, CSP sandboxes). */
+async function wfOcrPlanArea(imgPack){
+ if(typeof wfLoadTess!=='function')return null;
+ try{
+  await wfLoadTess();
+  /* plan text needs ~2x upscaling for the OCR engine (same trick as room naming) */
+  let cv=imgPack.canvas;
+  const f=Math.min(2,2600/Math.max(cv.width,cv.height));
+  if(f>1.05){const c2=document.createElement('canvas');
+   c2.width=Math.round(cv.width*f);c2.height=Math.round(cv.height*f);
+   const cx=c2.getContext('2d');cx.drawImage(cv,0,0,c2.width,c2.height);cv=c2;}
+  const worker=await Tesseract.createWorker('eng');
+  try{
+   const res=await worker.recognize(cv);
+   const a=wfAreaFromText((res&&res.data&&res.data.text)||'');
+   if(a&&window.wfTrace)window.wfTrace('area rescue: '+a+' sqm read off the plan');
+   return a||null;
+  }finally{try{worker.terminate();}catch(e){}}
+ }catch(e){return null;}}
+async function wfTraceAreaRescue(imgPack,im,trace,haveArea){
+ if(haveArea)return trace;
+ const weak=!trace||!trace.ok||trace.scaleSource==='door'||trace.scaleSource==='assumed';
+ if(!weak)return trace;
+ const a=await wfOcrPlanArea(imgPack);
+ if(!a)return trace;
+ let t2=null;
+ try{t2=autotraceFloorplan(im,{areaCm2:a*10000});}catch(e){t2=null;}
+ if(t2&&t2.ok){t2.ocrAreaSqm=a;return t2;}
+ return trace;}
+
 /* ---------- retrace one specific floor plan image (multi-plan listings) ----------
    ix 0 keeps the quoted-area scale; other floors use door widths — the listing's
    quoted area covers every floor, so it can't scale a single-floor image. */
@@ -2447,6 +2482,7 @@ async function wfTraceFloorUrl(meta,url,ix){
  try{
   const im=imgPack.ctx.getImageData(0,0,imgPack.canvas.width,imgPack.canvas.height);
   trace=autotraceFloorplan(im,{areaCm2:(ix===0&&meta.areaSqm)?meta.areaSqm*10000:undefined});
+  trace=await wfTraceAreaRescue(imgPack,im,trace,!!(ix===0&&meta.areaSqm));
  }catch(e){trace={ok:false,reason:'trace error: '+e.message};}
  const plan=wfBuildPlan(meta,imgPack,trace);
  return {plan,traced:!!(trace&&trace.ok),traceStats:trace&&trace.ok?trace.stats:null,
@@ -2498,6 +2534,8 @@ async function resolveListingLive(url,onStage,sharedMeta){
  try{
   const im=imgPack.ctx.getImageData(0,0,imgPack.canvas.width,imgPack.canvas.height);
   trace=autotraceFloorplan(im,{areaCm2:meta.areaSqm?meta.areaSqm*10000:undefined});
+  trace=await wfTraceAreaRescue(imgPack,im,trace,!!meta.areaSqm);
+  if(trace&&trace.ocrAreaSqm&&!meta.areaSqm)meta.areaSqm=trace.ocrAreaSqm;
  }catch(e){trace={ok:false,reason:'trace error: '+e.message};}
  onStage(4);
  const plan=wfBuildPlan(meta,imgPack,trace);
