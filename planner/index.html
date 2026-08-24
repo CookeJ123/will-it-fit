@@ -655,8 +655,10 @@ function itemOverlay(it,k){const px=v=>v/k;let o='';const polys=worldPolys(it);c
  o+='<line class="guide" style="stroke-dasharray:none" x1="'+(it.x+tx)+'" y1="'+(it.y+ty)+'" x2="'+(it.x+hx)+'" y2="'+(it.y+hy)+'"/>';
  o+='<circle class="hit" data-kind="handle" data-h="rot" cx="'+(it.x+hx)+'" cy="'+(it.y+hy)+'" r="'+px(17)+'"/>';
  o+='<circle class="handle rot" data-kind="handle" data-h="rot" cx="'+(it.x+hx)+'" cy="'+(it.y+hy)+'" r="'+px(7)+'"/>';
- // corner handles for resize (with generous invisible touch targets)
- if(!it.locked){[['nw',-1,-1],['ne',1,-1],['sw',-1,1],['se',1,1]].forEach(([h,sx,sy])=>{const m=it.mirror?-1:1;const [cxr,cyr]=rot(sx*m*it.w/2,sy*it.d/2,it.rot);
+ // corner resize handles: zones only — real furniture has real dimensions, and on
+ // touch the corners were too easy to hit when the intent was move/rotate; sizes
+ // are edited deliberately in the inspector (Width/Depth fields) instead
+ if(!it.locked&&it.zone){[['nw',-1,-1],['ne',1,-1],['sw',-1,1],['se',1,1]].forEach(([h,sx,sy])=>{const m=it.mirror?-1:1;const [cxr,cyr]=rot(sx*m*it.w/2,sy*it.d/2,it.rot);
   o+='<rect class="hit" data-kind="handle" data-h="'+h+'" x="'+(it.x+cxr-px(12))+'" y="'+(it.y+cyr-px(12))+'" width="'+px(24)+'" height="'+px(24)+'"/>';
   o+='<rect class="handle" data-kind="handle" data-h="'+h+'" x="'+(it.x+cxr-px(4.5))+'" y="'+(it.y+cyr-px(4.5))+'" width="'+px(9)+'" height="'+px(9)+'" transform="rotate('+it.rot+' '+(it.x+cxr)+' '+(it.y+cyr)+')"/>';});}
  return o;}
@@ -757,7 +759,7 @@ function onMove(e){if(pointers.has(e.pointerId))pointers.set(e.pointerId,{x:e.cl
   if(drag.h==='rot'){let a=Math.atan2(w.y-s.y,w.x-s.x)*180/Math.PI+90;if(!e.altKey)a=Math.round(a/15)*15;s.rot=norm(a);}
   else if(sel.kind==='room'){let x0=o.x,y0=o.y,x1=o.x+o.w,y1=o.y+o.d;const gx=state.snap&&!e.altKey?snapGrid(w.x):w.x,gy=state.snap&&!e.altKey?snapGrid(w.y):w.y;
    if(drag.h.includes('w'))x0=Math.min(gx,x1-20);if(drag.h.includes('e'))x1=Math.max(gx,x0+20);if(drag.h.includes('n'))y0=Math.min(gy,y1-20);if(drag.h.includes('s'))y1=Math.max(gy,y0+20);s.x=x0;s.y=y0;s.w=x1-x0;s.d=y1-y0;}
-  else if(sel.kind==='item'){const m=o.mirror?-1:1;const [ldx,ldy]=rot(w.x-drag.start.x,w.y-drag.start.y,-o.rot);const lx=ldx*m;const sx=drag.h.includes('e')?1:-1,sy=drag.h.includes('s')?1:-1;
+  else if(sel.kind==='item'&&s.zone){const m=o.mirror?-1:1;const [ldx,ldy]=rot(w.x-drag.start.x,w.y-drag.start.y,-o.rot);const lx=ldx*m;const sx=drag.h.includes('e')?1:-1,sy=drag.h.includes('s')?1:-1;
    let nw=Math.max(5,o.w+sx*lx),nd=Math.max(5,o.d+sy*ldy);if(state.snap&&!e.altKey){nw=Math.max(5,Math.round(nw/5)*5);nd=Math.max(5,Math.round(nd/5)*5);}
    const dw=nw-o.w,dd=nd-o.d;const [cx,cy]=rot(sx*m*dw/2,sy*dd/2,o.rot);s.w=nw;s.d=nd;s.x=o.x+cx;s.y=o.y+cy;}
   computeIssues();render();liveInspector();}}
