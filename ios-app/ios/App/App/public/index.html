@@ -190,6 +190,10 @@ svg .ghost polygon{animation:wf-ghost 1.6s ease-in-out infinite}
 .dlg h3{font-size:17px}
 .dlg section{display:flex;flex-direction:column;gap:8px}
 .dlg section h2{font-size:11px}
+.dlg{position:relative}
+.confetti{position:absolute;inset:0;overflow:hidden;pointer-events:none;border-radius:12px}
+.confetti i{position:absolute;top:-12px;width:7px;height:11px;border-radius:2px;opacity:0;animation:wf-conf linear forwards}
+@keyframes wf-conf{0%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:0;transform:translateY(360px) rotate(540deg)}}
 .banner{background:var(--accent-soft);border-bottom:1px solid var(--line);padding:6px 12px;font-size:12.5px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .banner .sp{flex:1}
 /* onboarding coach mark */
@@ -663,17 +667,64 @@ function applyAutoFitSpot(ix){
  if(!autofit)return;
  const it=byId('item',autofit.id);const sp=autofit.spots[ix];
  if(!it||!sp)return;
- pushHistory();it.x=sp.x;it.y=sp.y;it.rot=sp.rot;autofit=null;changed();
+ pushHistory();it.x=sp.x;it.y=sp.y;it.rot=sp.rot;autofit=null;hapt('medium');changed();
  toast('Placed against the '+sp.wall+' wall of '+sp.room);}
+
+/* ---------- through-the-door delivery check ----------
+   The other half of "will it fit": can each piece physically get from the
+   front door to its room? Doors on the plan form a graph between rooms (and
+   the outside); a room's score is the widest-bottleneck path in from outside.
+   An item needs its smallest carry dimension (min of w/d, or its height if
+   smaller — sofas travel on end) to pass the tightest door en route. */
+function deliveryEdges(){
+ const out=[];const pr=(state.wall||10)+8;
+ for(const op of state.openings){
+  if(op.kind!=='door')continue;
+  const horiz=(op.rot%180===0);const back=(op.rot===180||op.rot===270);
+  const mx=horiz?op.x+(back?-op.w/2:op.w/2):op.x;
+  const my=horiz?op.y:op.y+(back?-op.w/2:op.w/2);
+  const a=horiz?roomAt(mx,my-pr):roomAt(mx-pr,my);
+  const b=horiz?roomAt(mx,my+pr):roomAt(mx+pr,my);
+  if(!a&&!b)continue;
+  if(a&&b&&a.id===b.id)continue;
+  out.push({a:a?a.id:'OUT',b:b?b.id:'OUT',w:op.w});}
+ return out;}
+function deliveryWidths(){
+ const edges=deliveryEdges();
+ const best={OUT:Infinity};let more=true,guard=0;
+ while(more&&guard++<60){more=false;
+  for(const e of edges){
+   const via=(n,w)=>best[n]===undefined?-1:Math.min(best[n],w);
+   const vA=via(e.a,e.w),vB=via(e.b,e.w);
+   if(vA>(best[e.b]===undefined?-1:best[e.b])){best[e.b]=vA;more=true;}
+   if(vB>(best[e.a]===undefined?-1:best[e.a])){best[e.a]=vB;more=true;}}}
+ const doorMin=edges.length?Math.min.apply(null,edges.map(e=>e.w)):null;
+ return {best,doorMin,doors:edges.length};}
+function itemCarryNeed(it){let n=Math.min(it.w,it.d);if(it.h&&it.h<n)n=it.h;return n;}
+/* beds bend (mattress) or dismantle (frame), wardrobes/tables/desks arrive
+   flat-packed or come apart — only genuinely rigid pieces get the door check */
+const WF_DISMANTLES=/\b(bed|mattress|wardrobe|table|desk|drawer|chest|bookcase|shelv|bench|cot)\b/i;
+function deliveryCheck(dw,it,room){
+ if(!dw||!dw.doors||!room)return null;
+ if(WF_DISMANTLES.test(it.name||''))return null;
+ const need=itemCarryNeed(it);
+ let bw=dw.best[room.id],via='the doorways on the way in';
+ if(bw===undefined){if(dw.doorMin==null)return null;bw=dw.doorMin;via='the narrowest door on the plan';}
+ const gap=bw-need;
+ if(gap<0)return {s:'no',note:Math.round(-gap)+' cm too wide for '+via+' ('+Math.round(bw)+' cm)'};
+ if(gap<4)return {s:'tight',note:'squeezes through '+via+' — '+Math.round(gap)+' cm to spare'};
+ return {s:'ok'};}
 
 /* ---------- the fit report: the app's namesake, in writing ---------- */
 function buildFitReport(){
  computeIssues();
- const rep={fit:[],warn:[],fail:[],out:[]};
+ const dw=deliveryWidths();
+ const rep={fit:[],warn:[],fail:[],out:[],doors:dw.doors};
  for(const it of state.items){
   if(it.locked||it.zone||it.under)continue;
   const r=roomAt(it.x,it.y);
   const iss=issues[it.id]||[];
+  const dv=deliveryCheck(dw,it,r);
   if(!r){rep.out.push({it});continue;}
   if(iss.length){
    const spots=autoFitSpots(it);
@@ -682,10 +733,10 @@ function buildFitReport(){
    let alt='no clear spot anywhere on this floor';
    if(here)alt='fits '+here+' other way'+(here===1?'':'s')+' in '+r.name;
    else if(elsewhere.length)alt='would fit in '+elsewhere.slice(0,2).join(' or ');
-   rep.fail.push({it,r,iss,alt});continue;}
+   rep.fail.push({it,r,iss,alt,dv});continue;}
   const blockers=haloBlockers(it);
-  if(blockers.length){rep.warn.push({it,r,blockers});continue;}
-  rep.fit.push({it,r});}
+  if(blockers.length){rep.warn.push({it,r,blockers,dv});continue;}
+  rep.fit.push({it,r,dv});}
  return rep;}
 function fitReportText(rep){
  const n=rep.fit.length+rep.warn.length+rep.fail.length+rep.out.length;
@@ -696,26 +747,52 @@ function fitReportText(rep){
  rep.warn.forEach(e=>{t+='[TIGHT] '+e.it.name+' — '+e.r.name+': needs clear space, blocked by '+e.blockers.join(', ')+'\n';});
  rep.fail.forEach(e=>{t+='[NO] '+e.it.name+' — '+e.iss[0]+'; '+e.alt+'\n';});
  rep.out.forEach(e=>{t+='[--] '+e.it.name+' — not placed in a room yet\n';});
+ const dvAll=[...rep.fit,...rep.warn,...rep.fail].filter(e=>e.dv&&e.dv.s!=='ok');
+ if(dvAll.length){t+='\nGetting it in:\n';
+  dvAll.forEach(e=>{t+=(e.dv.s==='no'?'[NO DOOR] ':'[TIGHT DOOR] ')+e.it.name+' — '+e.dv.note+'\n';});}
  return t+'\ncookej123.github.io/will-it-fit';}
 function openFitReport(){
  const rep=buildFitReport();
  const n=rep.fit.length+rep.warn.length+rep.fail.length+rep.out.length;
  const good=rep.fit.length+rep.warn.length;
  let h='<div class="row" style="justify-content:space-between"><h3>Fit report</h3><button class="ghost" id="dlg-x" aria-label="Close">✕</button></div>';
+ const doorNo=[...rep.fit,...rep.warn,...rep.fail].filter(e=>e.dv&&e.dv.s==='no').length;
+ const doorTight=[...rep.fit,...rep.warn,...rep.fail].filter(e=>e.dv&&e.dv.s==='tight').length;
  if(!n)h+='<div class="hint">Nothing movable on the board yet — add some furniture first.</div>';
  else{
-  h+='<div class="fr-sum '+(rep.fail.length?'bad':rep.warn.length?'mid':'good')+'">'
-   +(rep.fail.length===0&&rep.out.length===0?(rep.warn.length?good+' of '+n+' fit — '+rep.warn.length+' tight':(n===1?'It fits.':'Everything fits — all '+n+' pieces'))
-   :good+' of '+n+' piece'+(n===1?'':'s')+' fit')+'</div>';
+  const allClear=rep.fail.length===0&&rep.out.length===0&&rep.warn.length===0&&doorNo===0;
+  let sum=(rep.fail.length===0&&rep.out.length===0?(rep.warn.length?good+' of '+n+' fit — '+rep.warn.length+' tight':(n===1?'It fits.':'Everything fits — all '+n+' pieces'))
+   :good+' of '+n+' piece'+(n===1?'':'s')+' fit');
+  if(doorNo)sum+=' · '+doorNo+' may not get through the doors';
+  else if(allClear&&rep.doors&&n>0)sum+=(n===1?' — and':' —')+' through every doorway';
+  h+='<div class="fr-sum '+(rep.fail.length||doorNo?'bad':rep.warn.length||doorTight?'mid':'good')+'">'+sum+'</div>';
   const row=(icon,cls,name,room,note)=>'<div class="fr-row '+cls+'"><span class="fr-i">'+icon+'</span><div><b>'+esc(name)+'</b>'+(room?' <span class="muted">· '+esc(room)+'</span>':'')+(note?'<div class="hint">'+esc(note)+'</div>':'')+'</div></div>';
-  rep.fail.forEach(e=>{h+=row('✗','bad',e.it.name,e.r.name,e.iss[0]+' — '+e.alt);});
-  rep.warn.forEach(e=>{h+=row('⚠','mid',e.it.name,e.r.name,'needs clear space in front — blocked by '+e.blockers.join(', '));});
+  const dvNote=e=>e.dv&&e.dv.s!=='ok'?(e.dv.s==='no'?'won’t get in: ':'')+e.dv.note:'';
+  const join=(a,b)=>a&&b?a+' · '+b:(a||b);
+  rep.fail.forEach(e=>{h+=row('✗','bad',e.it.name,e.r.name,join(e.iss[0]+' — '+e.alt,dvNote(e)));});
+  rep.warn.forEach(e=>{h+=row(e.dv&&e.dv.s==='no'?'✗':'⚠',e.dv&&e.dv.s==='no'?'bad':'mid',e.it.name,e.r.name,join('needs clear space in front — blocked by '+e.blockers.join(', '),dvNote(e)));});
   rep.out.forEach(e=>{h+=row('·','out',e.it.name,'','not placed in a room yet');});
-  rep.fit.forEach(e=>{h+=row('✓','good',e.it.name,e.r.name,'');});
+  rep.fit.forEach(e=>{h+=row(e.dv&&e.dv.s==='no'?'✗':'✓',e.dv&&e.dv.s==='no'?'bad':'good',e.it.name,e.r.name,dvNote(e));});
   h+='<div class="row" style="margin-top:6px"><button class="primary" id="fr-copy">Copy as text</button><span class="hint">Paste it straight into WhatsApp.</span></div>';}
  openDlg(h);
+ const _allClear=n>0&&rep.fail.length===0&&rep.out.length===0&&rep.warn.length===0&&doorNo===0&&doorTight===0;
+ if(_allClear){hapt('success');wfConfetti($('#dlg'));}
  $('#dlg-x').addEventListener('click',closeDlg);
  const fc=$('#fr-copy');if(fc)fc.addEventListener('click',async()=>{const ok=await copyText(fitReportText(rep));toast(ok?'Report copied':'Couldn’t copy here');});}
+/* a brief, brand-coloured celebration when the report is an unqualified yes */
+function wfConfetti(host){
+ if(!host)return;
+ try{if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)return;}catch(e){}
+ const cols=['#8FD9C9','#CDEFE5','#16544E','#E8B84B'];
+ const box=document.createElement('div');box.className='confetti';
+ for(let i=0;i<36;i++){const s=document.createElement('i');
+  s.style.left=(4+Math.random()*92)+'%';
+  s.style.background=cols[i%cols.length];
+  s.style.animationDelay=(Math.random()*0.35)+'s';
+  s.style.animationDuration=(0.9+Math.random()*0.8)+'s';
+  box.appendChild(s);}
+ host.appendChild(box);
+ setTimeout(()=>{try{box.remove();}catch(e){}},2600);}
 /* ---------- history / persistence ---------- */
 function pushHistory(){hist.push(JSON.stringify(state));if(hist.length>120)hist.shift();future=[];}
 function undo(){if(!hist.length)return;future.push(JSON.stringify(state));state=JSON.parse(hist.pop());sel=null;changed();}
@@ -974,7 +1051,12 @@ function addItem(def,x,y){pushHistory();
  return it;}
 function deleteSel(){if(!sel)return;pushHistory();if(sel.kind==='item')state.items=state.items.filter(i=>i.id!==sel.id);else if(sel.kind==='room')state.rooms=state.rooms.filter(i=>i.id!==sel.id);else if(sel.kind==='opening')state.openings=state.openings.filter(i=>i.id!==sel.id);else if(sel.kind==='underlay')state.underlay=null;sel=null;changed();}
 function duplicateSel(){const s=getSel();if(!s)return;pushHistory();const c=clone(s);c.id=uid();if(sel.kind==='item'){c.x+=30;c.y+=30;state.items.push(c);}else if(sel.kind==='room'){c.x+=c.w+state.wall;state.rooms.push(c);}else if(sel.kind==='opening'){c.x+=20;c.y+=20;state.openings.push(c);}else return;sel={kind:sel.kind,id:c.id};changed();}
-function rotateSel(deg){const s=getSel();if(!s||sel.kind==='room'||sel.kind==='underlay')return;pushHistory();s.rot=norm((s.rot||0)+deg);changed();}
+function rotateSel(deg){const s=getSel();if(!s||sel.kind==='room'||sel.kind==='underlay')return;pushHistory();s.rot=norm((s.rot||0)+deg);hapt('light');changed();}
+/* haptic feedback: real Taptic through the native bridge in the iPhone app,
+   navigator.vibrate elsewhere (Android), silent no-op everywhere else */
+function hapt(kind){
+ try{if(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.wfHaptic){window.webkit.messageHandlers.wfHaptic.postMessage(kind||'light');return;}}catch(e){}
+ try{if(navigator.vibrate)navigator.vibrate(kind==='success'?[12,60,12]:8);}catch(e){}}
 function nudge(dx,dy){const s=getSel();if(!s||sel.kind==='underlay')return;if(s.locked)return;pushHistory();s.x+=dx;s.y+=dy;changed();}
 function addRoom(){pushHistory();const c=viewCentreWorld();const r={id:uid(),name:'Room '+(state.rooms.length+1),x:snapGrid(c.x-150),y:snapGrid(c.y-150),w:300,d:300,color:'plain'};state.rooms.push(r);sel={kind:'room',id:r.id};mode='plan';changed();}
 function addOpening(kind){pushHistory();const c=viewCentreWorld();const o={id:uid(),kind,x:snapGrid(c.x),y:snapGrid(c.y),w:kind==='door'?80:120,rot:0,flip:false};state.openings.push(o);sel={kind:'opening',id:o.id};mode='plan';changed();toast('Drag the '+kind+' onto a wall');}
@@ -1006,7 +1088,7 @@ function onMove(e){if(pointers.has(e.pointerId))pointers.set(e.pointerId,{x:e.cl
  if(drag.type==='move'){let nx=drag.orig.x+(w.x-drag.start.x),ny=drag.orig.y+(w.y-drag.start.y);
   if(sel.kind==='item'){const rx0=nx,ry0=ny;if(!e.altKey)[nx,ny]=snapItemPos(s,nx,ny);
    const eng=Math.abs(nx-rx0)>0.5||Math.abs(ny-ry0)>0.5;
-   if(eng&&!drag.snapOn&&navigator.vibrate)try{navigator.vibrate(8);}catch(err){}
+   if(eng&&!drag.snapOn)hapt('light');
    drag.snapOn=eng;
    s.x=nx;s.y=ny;}
   else if(sel.kind==='room'){if(!e.altKey)[nx,ny]=snapRoomEdges(s,nx,ny);s.x=nx;s.y=ny;}
@@ -1453,7 +1535,9 @@ function renderInspector(){const p=$('#insp');const s=getSel();let h='';
   h+='<label class="f"><span>Colour</span><div class="sw-row">'+Object.keys(COLORS).map(c=>'<button data-c="'+c+'" class="'+(it.color===c?'on':'')+'" style="background:'+COLORS[c]+'" title="'+c+'" aria-label="'+c+'"></button>').join('')+'</div></label>';
   h+='<div class="divider"></div><h2>Fit</h2>';
   if(r&&!it.under&&!it.zone){const L=ab.minX-r.x,R=r.x+r.w-ab.maxX,Tp=ab.minY-r.y,B=r.y+r.d-ab.maxY;const f=v=>'<span style="color:'+(v<-0.5?'var(--warn)':'inherit')+'">'+esc(fmt(Math.max(0,v)))+(v<-0.5?' (over by '+esc(fmt(-v))+')':'')+'</span>';
-   h+='<div class="kv"><b>In</b><span>'+esc(r.name)+'</span><b>Footprint</b><span>'+esc(fmt(ab.maxX-ab.minX)+' × '+fmt(ab.maxY-ab.minY))+'</span><b>Gap left</b>'+f(L)+'<b>Gap right</b>'+f(R)+'<b>Gap top</b>'+f(Tp)+'<b>Gap bottom</b>'+f(B)+'</div>';}
+   h+='<div class="kv"><b>In</b><span>'+esc(r.name)+'</span><b>Footprint</b><span>'+esc(fmt(ab.maxX-ab.minX)+' × '+fmt(ab.maxY-ab.minY))+'</span><b>Gap left</b>'+f(L)+'<b>Gap right</b>'+f(R)+'<b>Gap top</b>'+f(Tp)+'<b>Gap bottom</b>'+f(B)+'</div>';
+   const _dv=deliveryCheck(deliveryWidths(),it,r);
+   if(_dv&&_dv.s!=='ok')h+='<div class="hint" style="color:var(--warn)">🚪 '+(_dv.s==='no'?'Won’t get in: ':'')+esc(_dv.note)+'</div>';}
   else if(it.under)h+='<div class="hint">Rugs and fittings sit under furniture and are not checked for clashes.</div>';
   else if(it.zone)h+='<div class="hint">A zone marks an area (e.g. low headroom). Furniture placed in it gets a warning.</div>';
   else h+='<div class="hint">Not inside a room.</div>';
@@ -2356,7 +2440,8 @@ async function wfListingLookup(url){
 /* a bookmarklet / share-sheet listing payload {k:'l',u,t,fp,ph,a,pr} -> meta */
 window.wfMetaFromShared=function(p){
  const d=detectPortal(p.u||'');
- const clean=u=>String(u||'').replace(/\\\//g,'/').replace(/_max_\d+x\d+(?=\.\w+(\?|$))/,'');
+ /* :p suffix: Zoopla srcset descriptors leak through currentSrc on some pages */
+ const clean=u=>String(u||'').replace(/\\\//g,'/').replace(/_max_\d+x\d+(?=\.\w+(\?|$))/,'').replace(/:p$/,'');
  const fp=(p.fp||[]).map(clean).filter(u=>/^https?:/.test(u)).slice(0,8);
  const meta={portal:(d&&d.portal!=='Other')?d.portal:'Listing',shared:true};
  if(p.t)meta.title=String(p.t).replace(/\s*[-|–—]\s*(Rightmove|Zoopla|OnTheMarket|PrimeLocation).*$/i,'')

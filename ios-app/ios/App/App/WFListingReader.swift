@@ -32,6 +32,8 @@ final class WFListingReader: NSObject, WKNavigationDelegate, WKScriptMessageHand
               let ucc = bridgeVC.webView?.configuration.userContentController else { return }
         ucc.removeScriptMessageHandler(forName: "wfListingRead")
         ucc.add(self, name: "wfListingRead")
+        ucc.removeScriptMessageHandler(forName: "wfHaptic")
+        ucc.add(self, name: "wfHaptic")
         // env(safe-area-inset-*) proved unreliable in the Capacitor webview on a real
         // phone (returned 0 -> top bar under the clock), so expose the authoritative
         // UIKit insets as --wf-sat/--wf-sab: a user script covers every future page
@@ -49,9 +51,25 @@ final class WFListingReader: NSObject, WKNavigationDelegate, WKScriptMessageHand
     }
 
     // web -> native: window.webkit.messageHandlers.wfListingRead.postMessage(url)
+    //                window.webkit.messageHandlers.wfHaptic.postMessage(kind)
     func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "wfHaptic" {
+            haptic(message.body as? String ?? "light")
+            return
+        }
         guard let url = message.body as? String else { return }
         read(urlString: url)
+    }
+
+    /// Real Taptic feedback for planner interactions (snap, rotate, place, all-fits).
+    private func haptic(_ kind: String) {
+        DispatchQueue.main.async {
+            switch kind {
+            case "success": UINotificationFeedbackGenerator().notificationOccurred(.success)
+            case "medium": UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            default: UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
+        }
     }
 
     func read(urlString: String) {
