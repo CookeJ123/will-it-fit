@@ -118,6 +118,9 @@ h3{font-size:15px;font-weight:600}
 .board .hud>*{pointer-events:auto}
 .board .hud .chip:empty{display:none}
 .board .hud .chip{font-family:var(--mono);font-size:11px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 8px;color:var(--muted)}
+.board .hud .chipbtn{cursor:pointer}
+.board .hud .chipbtn:hover{color:var(--ink);border-color:var(--accent)}
+.board .hud .chipbtn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
 .board .modechip{position:absolute;top:10px;left:10px;font-family:var(--disp);font-size:11px;letter-spacing:.06em;text-transform:uppercase;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 8px;color:var(--muted);pointer-events:none}
 .board .modechip.plan{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
 svg text{font-family:var(--sans);fill:var(--ink);pointer-events:none;user-select:none}
@@ -895,7 +898,7 @@ function shell(){root.innerHTML=
   '<aside class="side" id="side"><div class="tabs" id="tabs"><button data-tab="Library">Library</button><button data-tab="Board">Board</button><button data-tab="Plan">Plan</button></div>'+
    '<div class="pane" id="pane-Library"></div><div class="pane" id="pane-Board"></div><div class="pane" id="pane-Plan"></div></aside>'+
   '<div class="board" id="board"><svg id="svg" xmlns="http://www.w3.org/2000/svg"><g id="world"></g></svg>'+
-   '<div class="modechip" id="modechip"></div><div class="coach" id="coach" hidden></div><div class="mpill" id="mpill" hidden></div><div class="hud"><span class="chip" id="zoomchip">80%</span><span class="chip" id="cursorchip"></span></div><div class="toast" id="toast"></div></div>'+
+   '<div class="modechip" id="modechip"></div><div class="coach" id="coach" hidden></div><div class="mpill" id="mpill" hidden></div><div class="hud"><span class="chip" id="zoomchip">80%</span><button class="chip chipbtn" id="imgchip" hidden title="Show or hide the agent&#39;s floor plan image behind the plan">Plan image</button><span class="chip" id="cursorchip"></span></div><div class="toast" id="toast"></div></div>'+
   '<aside class="insp" id="insp"></aside>'+
  '</div>'+
  '<div class="scrim" id="scrim"><div class="dlg" id="dlg" role="dialog" aria-modal="true"></div></div>';
@@ -904,6 +907,7 @@ function shell(){root.innerHTML=
  svg.addEventListener('wheel',onWheel,{passive:false});svg.addEventListener('contextmenu',e=>e.preventDefault());
  svg.addEventListener('pointermove',e=>{if(drag)return;const w=toWorld(e);const r=roomAt(w.x,w.y);$('#cursorchip').textContent=r?r.name:'';});
  document.addEventListener('keydown',onKey);
+ $('#imgchip').addEventListener('click',toggleUnderlay);
  $('#title').addEventListener('change',e=>{pushHistory();state.title=e.target.value;changed();});
  $$('#modes button').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
  $$('#units button').forEach(b=>b.addEventListener('click',()=>{state.units=b.dataset.u;changed();}));
@@ -963,6 +967,7 @@ function renderPanels(){ $('#title').value=state.title||'';
  $$('#units button').forEach(b=>b.classList.toggle('on',b.dataset.u===state.units));
  $('#snap').classList.toggle('on',!!state.snap);$('#halos').classList.toggle('on',state.halos!==false);$('#undo').disabled=!hist.length;$('#redo').disabled=!future.length;
  const mc=$('#modechip');mc.textContent=mode==='plan'?'Editing the plan':mode==='measure'?'Measure: drag between two points':'';mc.className='modechip'+(mode==='plan'?' plan':'');mc.style.display=mode==='furnish'?'none':'';
+ syncImgChip();
  boardEl.className='board mode-'+mode;
  svg.classList.toggle('halos-on',state.halos!==false);
  $$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===libTab));$$('.pane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+libTab));
@@ -1223,13 +1228,26 @@ function renderBoardList(){const p=$('#pane-Board');let h='';
  const c=$('#clear-items');if(c)c.addEventListener('click',()=>{if(!confirm('Remove all movable furniture? Fixed fittings (locked) stay.'))return;pushHistory();state.items=state.items.filter(i=>i.locked);sel=null;changed();});
  const frb=$('#fit-report-btn');if(frb)frb.addEventListener('click',()=>{closeDrawers();openFitReport();});}
 
+/* ---------- the agent's plan image (underlay) ----------
+   A traced plan opens with the image hidden so it reads as a real drawing; this
+   chip on the board is how it comes back — for comparing, or for tracing the bits
+   the tracer missed. Kept in sync with the Plan tab's Shown/Hidden button. */
+function toggleUnderlay(){const u=state.underlay;if(!u||!u.src)return;
+ u.show=!u.show;changed();
+ toast(u.show?'Showing the agent’s plan image':'Plan image hidden');}
+function syncImgChip(){const el=$('#imgchip');if(!el)return;
+ const u=state.underlay,has=!!(u&&u.src);
+ el.hidden=!has;if(!has)return;
+ el.classList.toggle('on',!!u.show);
+ el.setAttribute('aria-pressed',u.show?'true':'false');}
+
 function renderPlanPane(){const p=$('#pane-Plan');const u=state.underlay;let h='';
  h+='<div class="hint">'+(mode==='plan'?'Drag rooms to move them, pull the corners to resize, drag doors and windows onto walls.':'Switch to <b>Edit plan</b> to move rooms, doors and windows.')+'</div>';
  if(mode!=='plan')h+='<button class="primary" id="goplan">Edit the plan</button>';
  h+='<div class="cat"><h2>Rooms</h2><div class="list">'+state.rooms.map(r=>'<button data-id="'+r.id+'" class="'+(sel&&sel.kind==='room'&&sel.id===r.id?'sel':'')+'"><span class="nm">'+esc(r.name)+'</span><span class="dm">'+esc(fmt(r.w)+' × '+fmt(r.d))+'</span></button>').join('')+'</div><button id="add-room">+ Add room</button></div>';
  h+='<div class="cat"><h2>Doors &amp; windows</h2><div class="grid2"><button id="add-door">+ Door</button><button id="add-window">+ Window</button></div><div class="hint">'+state.openings.filter(o=>o.kind==='door').length+' doors · '+state.openings.filter(o=>o.kind==='window').length+' windows</div></div>';
  h+='<div class="cat"><h2>Floor plan image</h2>';
- if(u&&u.src){h+='<div class="hint">Image loaded ('+u.iw+'×'+u.ih+' px). In Edit plan it shows on top of the rooms so you can trace over it. Calibrate the scale first.</div><label class="f"><span>Opacity</span><input type="range" id="u-op" min="0.1" max="1" step="0.05" value="'+u.opacity+'"></label><div class="grid2"><button id="u-show" class="'+(u.show?'on':'')+'">'+(u.show?'Shown':'Hidden')+'</button><button id="u-lock" class="'+(u.locked?'on':'')+'">'+(u.locked?'Locked':'Unlocked')+'</button><button id="u-cal">Calibrate scale</button><button id="u-sel">Select to move</button><button id="u-rm" style="grid-column:1/-1">Remove image</button></div><div class="hint mono">'+(u.cmPerPx?(1/u.cmPerPx).toFixed(2)+' px per cm':'')+'</div>';}
+ if(u&&u.src){h+='<div class="hint">Image loaded ('+u.iw+'×'+u.ih+' px). '+(u.show?'In Edit plan it shows on top of the rooms so you can trace over it. Calibrate the scale first.':'Hidden, so your traced rooms read as a plan of their own. Show it to compare, or to trace anything the tracer missed.')+'</div><label class="f"><span>Opacity</span><input type="range" id="u-op" min="0.1" max="1" step="0.05" value="'+u.opacity+'"></label><div class="grid2"><button id="u-show" class="'+(u.show?'on':'')+'">'+(u.show?'Shown':'Hidden')+'</button><button id="u-lock" class="'+(u.locked?'on':'')+'">'+(u.locked?'Locked':'Unlocked')+'</button><button id="u-cal">Calibrate scale</button><button id="u-sel">Select to move</button><button id="u-rm" style="grid-column:1/-1">Remove image</button></div><div class="hint mono">'+(u.cmPerPx?(1/u.cmPerPx).toFixed(2)+' px per cm':'')+'</div>';}
  else{h+='<div class="hint">Upload the floor plan (photo or screenshot) to trace rooms over it.</div><input type="file" id="u-file" accept="image/*">';}
  h+='</div>';
  h+='<div class="cat"><h2>Start again</h2><button id="blank-plan">New blank plan</button><div class="hint">Clears rooms, doors, windows and furniture (keeps the image).</div></div>';
