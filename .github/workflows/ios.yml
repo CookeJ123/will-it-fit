@@ -55,6 +55,45 @@ jobs:
         run: |
           printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
 
+
+      # Apple caps Apple Development certificates at 10. Automatic signing makes a
+      # NEW one on every clean runner and bins the private key with the runner, so
+      # CI ate all ten by build 11 and the next archive died on "Choose a
+      # certificate to revoke". None of them is reusable - nothing holds their keys
+      # - so prune the leftovers before archiving. Keeps the two newest, so a build
+      # running concurrently doesn't have its certificate pulled out from under it,
+      # and only acts once there are 6, to avoid churning the account every run.
+      - name: Prune stale development certificates
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/prune.js" <<'JS'
+          const fs = require('fs'), crypto = require('crypto');
+          const b64u = b => Buffer.from(b).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+          const now = Math.floor(Date.now() / 1000);
+          const h = b64u(JSON.stringify({ alg: 'ES256', kid: process.env.ASC_KEY_ID, typ: 'JWT' }));
+          const p = b64u(JSON.stringify({ iss: process.env.ASC_ISSUER_ID, iat: now, exp: now + 900, aud: 'appstoreconnect-v1' }));
+          const sig = crypto.sign('sha256', Buffer.from(h + '.' + p), {
+            key: fs.readFileSync(process.env.RUNNER_TEMP + '/AuthKey.p8', 'utf8'),
+            dsaEncoding: 'ieee-p1363' });
+          const jwt = h + '.' + p + '.' + b64u(sig);
+          const api = (m, path) => fetch('https://api.appstoreconnect.apple.com' + path,
+            { method: m, headers: { Authorization: 'Bearer ' + jwt } });
+          (async () => {
+            const r = await api('GET', '/v1/certificates?limit=200');
+            if (!r.ok) { console.log('::warning::could not list certificates (' + r.status + ') - skipping prune'); return; }
+            const d = (await r.json()).data.filter(c => c.attributes.certificateType === 'DEVELOPMENT');
+            d.sort((a, b) => new Date(b.attributes.expirationDate) - new Date(a.attributes.expirationDate));
+            console.log('development certificates in use: ' + d.length + ' of 10');
+            if (d.length < 6) { console.log('below the watermark - nothing to prune'); return; }
+            for (const c of d.slice(2)) {
+              const x = await api('DELETE', '/v1/certificates/' + c.id);
+              console.log('revoke ' + c.id + ' ' + (x.status === 204 ? 'ok' : 'FAILED ' + x.status));
+            }
+          })();
+          JS
+          node "$RUNNER_TEMP/prune.js"
       - name: Archive (build number = run number)
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
