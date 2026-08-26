@@ -93,3 +93,49 @@ there is no CocoaPods step.
   ever objects (the payload still arrives on next app open).
 - The pbxproj's `FADE…` object ids are the hand-added WFShare/WFHandoff
   wiring — keep them if regenerating anything with `cap add ios`.
+
+## The certificate cap (26 Aug 2026) — read this when Archive suddenly fails
+
+Symptom, from a run that had been green for days:
+
+```
+error: Choose a certificate to revoke. Your account has reached the maximum
+       number of certificates.
+error: No profiles for 'com.johncooke.willitfit' were found
+```
+
+Cause: with `CODE_SIGN_STYLE = Automatic`, `xcodebuild archive` signs for
+DEVELOPMENT on purpose and `-exportArchive` re-signs `app-store-connect`. Each CI
+run starts on a clean macOS runner with an empty keychain, so
+`-allowProvisioningUpdates` mints a BRAND-NEW Apple Development certificate every
+time and throws the private key away with the runner. Apple caps development
+certificates at 10; builds 7-11 used them up and the 12th had nowhere to go. The
+API listed exactly 10, every one "Created via API" dated 24 Aug, zero distribution
+certificates.
+
+DO NOT "fix" this by pinning `CODE_SIGN_IDENTITY = "Apple Distribution"` on the
+Release config. Tried 26 Aug, reverted the same hour: automatic signing then fails
+earlier with "App has conflicting provisioning settings … automatically signed for
+development, but a conflicting code signing identity Apple Distribution has been
+manually specified". Development signing at archive time is correct for this flow.
+
+Stop-gap: revoke the stale certificates and re-run.
+
+    node asc.js certs                     # list, with ids
+    node asc.js revoke <id> [<id> ...]    # DELETE /v1/certificates/<id>
+
+Revoking is safe: nothing holds those private keys, and already-uploaded TestFlight
+builds are unaffected by revoking the certificate that signed their archive.
+
+Real fix (not yet done): mint ONE development certificate, keep the private key,
+store cert+key as a repo secret, and have the workflow import it into the runner
+keychain before `xcodebuild archive`. Then `-allowProvisioningUpdates` finds an
+existing identity and never creates another. Needs a workflow edit, so the GitHub
+token must carry Workflows: read/write, which a Contents-only token does not.
+
+API keys (App Store Connect -> Users and Access -> Integrations):
+  79XS5NSX9F  "Will It Fit CI"     Admin — used by Actions as ASC_KEY_P8. Its .p8
+                                   exists ONLY as that secret; do not revoke it.
+  RLMDV67SU7  "Will It Fit local"  Admin — created 26 Aug for laptop-side work.
+                                   .p8 in "Will It Fit\Apple keys\", never in this
+                                   repo (the repo is public).
