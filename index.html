@@ -119,6 +119,9 @@ h3{font-size:15px;font-weight:600}
 .board .hud>*{pointer-events:auto}
 .board .hud .chip:empty{display:none}
 .board .hud .chip{font-family:var(--mono);font-size:11px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 8px;color:var(--muted)}
+.board .hud .chipbtn{cursor:pointer}
+.board .hud .chipbtn:hover{color:var(--ink);border-color:var(--accent)}
+.board .hud .chipbtn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
 .board .modechip{position:absolute;top:10px;left:10px;font-family:var(--disp);font-size:11px;letter-spacing:.06em;text-transform:uppercase;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 8px;color:var(--muted);pointer-events:none}
 .board .modechip.plan{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
 svg text{font-family:var(--sans);fill:var(--ink);pointer-events:none;user-select:none}
@@ -1153,7 +1156,7 @@ function shell(){root.innerHTML=
   '<aside class="side" id="side"><div class="tabs" id="tabs"><button data-tab="Library">Library</button><button data-tab="Board">Board</button><button data-tab="Plan">Plan</button></div>'+
    '<div class="pane" id="pane-Library"></div><div class="pane" id="pane-Board"></div><div class="pane" id="pane-Plan"></div></aside>'+
   '<div class="board" id="board"><svg id="svg" xmlns="http://www.w3.org/2000/svg"><g id="world"></g></svg>'+
-   '<div class="modechip" id="modechip"></div><div class="coach" id="coach" hidden></div><div class="mpill" id="mpill" hidden></div><div class="hud"><span class="chip" id="zoomchip">80%</span><span class="chip" id="cursorchip"></span></div><div class="toast" id="toast"></div></div>'+
+   '<div class="modechip" id="modechip"></div><div class="coach" id="coach" hidden></div><div class="mpill" id="mpill" hidden></div><div class="hud"><span class="chip" id="zoomchip">80%</span><button class="chip chipbtn" id="imgchip" hidden title="Show or hide the agent&#39;s floor plan image behind the plan">Plan image</button><span class="chip" id="cursorchip"></span></div><div class="toast" id="toast"></div></div>'+
   '<aside class="insp" id="insp"></aside>'+
  '</div>'+
  '<div class="scrim" id="scrim"><div class="dlg" id="dlg" role="dialog" aria-modal="true"></div></div>';
@@ -1162,6 +1165,7 @@ function shell(){root.innerHTML=
  svg.addEventListener('wheel',onWheel,{passive:false});svg.addEventListener('contextmenu',e=>e.preventDefault());
  svg.addEventListener('pointermove',e=>{if(drag)return;const w=toWorld(e);const r=roomAt(w.x,w.y);$('#cursorchip').textContent=r?r.name:'';});
  document.addEventListener('keydown',onKey);
+ $('#imgchip').addEventListener('click',toggleUnderlay);
  $('#title').addEventListener('change',e=>{pushHistory();state.title=e.target.value;changed();});
  $('#home').addEventListener('click',()=>{showLanding();});
  $$('#modes button').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
@@ -1222,6 +1226,7 @@ function renderPanels(){ $('#title').value=state.title||'';
  $$('#units button').forEach(b=>b.classList.toggle('on',b.dataset.u===state.units));
  $('#snap').classList.toggle('on',!!state.snap);$('#halos').classList.toggle('on',state.halos!==false);$('#undo').disabled=!hist.length;$('#redo').disabled=!future.length;
  const mc=$('#modechip');mc.textContent=mode==='plan'?'Editing the plan':mode==='measure'?'Measure: drag between two points':'';mc.className='modechip'+(mode==='plan'?' plan':'');mc.style.display=mode==='furnish'?'none':'';
+ syncImgChip();
  boardEl.className='board mode-'+mode;
  svg.classList.toggle('halos-on',state.halos!==false);
  $$('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===libTab));$$('.pane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+libTab));
@@ -1482,13 +1487,26 @@ function renderBoardList(){const p=$('#pane-Board');let h='';
  const c=$('#clear-items');if(c)c.addEventListener('click',()=>{if(!confirm('Remove all movable furniture? Fixed fittings (locked) stay.'))return;pushHistory();state.items=state.items.filter(i=>i.locked);sel=null;changed();});
  const frb=$('#fit-report-btn');if(frb)frb.addEventListener('click',()=>{closeDrawers();openFitReport();});}
 
+/* ---------- the agent's plan image (underlay) ----------
+   A traced plan opens with the image hidden so it reads as a real drawing; this
+   chip on the board is how it comes back — for comparing, or for tracing the bits
+   the tracer missed. Kept in sync with the Plan tab's Shown/Hidden button. */
+function toggleUnderlay(){const u=state.underlay;if(!u||!u.src)return;
+ u.show=!u.show;changed();
+ toast(u.show?'Showing the agent’s plan image':'Plan image hidden');}
+function syncImgChip(){const el=$('#imgchip');if(!el)return;
+ const u=state.underlay,has=!!(u&&u.src);
+ el.hidden=!has;if(!has)return;
+ el.classList.toggle('on',!!u.show);
+ el.setAttribute('aria-pressed',u.show?'true':'false');}
+
 function renderPlanPane(){const p=$('#pane-Plan');const u=state.underlay;let h='';
  h+='<div class="hint">'+(mode==='plan'?'Drag rooms to move them, pull the corners to resize, drag doors and windows onto walls.':'Switch to <b>Edit plan</b> to move rooms, doors and windows.')+'</div>';
  if(mode!=='plan')h+='<button class="primary" id="goplan">Edit the plan</button>';
  h+='<div class="cat"><h2>Rooms</h2><div class="list">'+state.rooms.map(r=>'<button data-id="'+r.id+'" class="'+(sel&&sel.kind==='room'&&sel.id===r.id?'sel':'')+'"><span class="nm">'+esc(r.name)+'</span><span class="dm">'+esc(fmt(r.w)+' × '+fmt(r.d))+'</span></button>').join('')+'</div><button id="add-room">+ Add room</button></div>';
  h+='<div class="cat"><h2>Doors &amp; windows</h2><div class="grid2"><button id="add-door">+ Door</button><button id="add-window">+ Window</button></div><div class="hint">'+state.openings.filter(o=>o.kind==='door').length+' doors · '+state.openings.filter(o=>o.kind==='window').length+' windows</div></div>';
  h+='<div class="cat"><h2>Floor plan image</h2>';
- if(u&&u.src){h+='<div class="hint">Image loaded ('+u.iw+'×'+u.ih+' px). In Edit plan it shows on top of the rooms so you can trace over it. Calibrate the scale first.</div><label class="f"><span>Opacity</span><input type="range" id="u-op" min="0.1" max="1" step="0.05" value="'+u.opacity+'"></label><div class="grid2"><button id="u-show" class="'+(u.show?'on':'')+'">'+(u.show?'Shown':'Hidden')+'</button><button id="u-lock" class="'+(u.locked?'on':'')+'">'+(u.locked?'Locked':'Unlocked')+'</button><button id="u-cal">Calibrate scale</button><button id="u-sel">Select to move</button><button id="u-rm" style="grid-column:1/-1">Remove image</button></div><div class="hint mono">'+(u.cmPerPx?(1/u.cmPerPx).toFixed(2)+' px per cm':'')+'</div>';}
+ if(u&&u.src){h+='<div class="hint">Image loaded ('+u.iw+'×'+u.ih+' px). '+(u.show?'In Edit plan it shows on top of the rooms so you can trace over it. Calibrate the scale first.':'Hidden, so your traced rooms read as a plan of their own. Show it to compare, or to trace anything the tracer missed.')+'</div><label class="f"><span>Opacity</span><input type="range" id="u-op" min="0.1" max="1" step="0.05" value="'+u.opacity+'"></label><div class="grid2"><button id="u-show" class="'+(u.show?'on':'')+'">'+(u.show?'Shown':'Hidden')+'</button><button id="u-lock" class="'+(u.locked?'on':'')+'">'+(u.locked?'Locked':'Unlocked')+'</button><button id="u-cal">Calibrate scale</button><button id="u-sel">Select to move</button><button id="u-rm" style="grid-column:1/-1">Remove image</button></div><div class="hint mono">'+(u.cmPerPx?(1/u.cmPerPx).toFixed(2)+' px per cm':'')+'</div>';}
  else{h+='<div class="hint">Upload the floor plan (photo or screenshot) to trace rooms over it.</div><input type="file" id="u-file" accept="image/*">';}
  h+='</div>';
  h+='<div class="cat"><h2>Start again</h2><button id="blank-plan">New blank plan</button><div class="hint">Clears rooms, doors, windows and furniture (keeps the image).</div></div>';
@@ -1770,6 +1788,8 @@ function autotraceFloorplan(img, opts){
  function erode(mask,r){const inv=new Uint8Array(N);for(let i=0;i<N;i++)inv[i]=mask[i]?0:1;const dt=dtToSet(inv);const out=new Uint8Array(N);for(let i=0;i<N;i++)out[i]=dt[i]>r?1:0;return out;}
 
  let free,freeCount=0,freeAreaCount=0;
+ /* per-pixel sheet-block index (see step 5b); null when blocks weren't computed */
+ let blockOf=null,nBlocks=1;
  if(renderMode){
  /* ---- 3R. photoreal renders: floors are textured or tinted, walls are smooth
         bright neutral bands, furniture is smooth-bright too (accepted as obstacle
@@ -1851,6 +1871,38 @@ function autotraceFloorplan(img, opts){
   if(x<W-1&&!barrier[i+1]&&!exterior[i+1]){exterior[i+1]=1;q[qt++]=i+1;}
   if(y>0&&!barrier[i-W]&&!exterior[i-W]){exterior[i-W]=1;q[qt++]=i-W;}
   if(y<H-1&&!barrier[i+W]&&!exterior[i+W]){exterior[i+W]=1;q[qt++]=i+W;}}
+
+ /* ---- 5b. sheet blocks. UK agents routinely print every storey on ONE sheet,
+        each storey an island of ink in a sea of page background, so the islands —
+        connected components of not-page — are the storeys. Rooms carry their block
+        index out as `blk` and the caller splits the sheet into per-floor plans.
+    NB this needs its own flood: `barrier` above was CLOSED at radius rc to seal
+    archways, and on a coarse sheet that same closing bridges the gutters between
+    storeys (measured: 26 px gutters vs rc=15 → six floors fused into one island).
+    Blocks come off ink DILATED but not eroded back, at a smaller radius: enough to
+    bridge doorways and dashed work inside a storey, not enough to jump a gutter. */
+ {const rb=Math.max(3,Math.round(0.006*Math.max(W,H)));
+  const barrierB=dilate(barrier0,rb);
+  const extB=new Uint8Array(N);
+  qh=0;qt=0;
+  for(let x=0;x<W;x++){for(const y of [0,H-1]){const i=idx(x,y);if(!barrierB[i]&&!extB[i]){extB[i]=1;q[qt++]=i;}}}
+  for(let y=0;y<H;y++){for(const x of [0,W-1]){const i=idx(x,y);if(!barrierB[i]&&!extB[i]){extB[i]=1;q[qt++]=i;}}}
+  while(qh<qt){const i=q[qh++];const x=i%W,y=(i/W)|0;
+   if(x>0&&!barrierB[i-1]&&!extB[i-1]){extB[i-1]=1;q[qt++]=i-1;}
+   if(x<W-1&&!barrierB[i+1]&&!extB[i+1]){extB[i+1]=1;q[qt++]=i+1;}
+   if(y>0&&!barrierB[i-W]&&!extB[i-W]){extB[i-W]=1;q[qt++]=i-W;}
+   if(y<H-1&&!barrierB[i+W]&&!extB[i+W]){extB[i+W]=1;q[qt++]=i+W;}}
+  blockOf=new Int32Array(N);blockOf.fill(-1);
+  nBlocks=0;
+  for(let s=0;s<N;s++){
+   if(extB[s]||blockOf[s]>=0)continue;
+   qh=0;qt=0;q[qt++]=s;blockOf[s]=nBlocks;
+   while(qh<qt){const i=q[qh++];const x=i%W,y=(i/W)|0;
+    if(x>0&&!extB[i-1]&&blockOf[i-1]<0){blockOf[i-1]=nBlocks;q[qt++]=i-1;}
+    if(x<W-1&&!extB[i+1]&&blockOf[i+1]<0){blockOf[i+1]=nBlocks;q[qt++]=i+1;}
+    if(y>0&&!extB[i-W]&&blockOf[i-W]<0){blockOf[i-W]=nBlocks;q[qt++]=i-W;}
+    if(y<H-1&&!extB[i+W]&&blockOf[i+W]<0){blockOf[i+W]=nBlocks;q[qt++]=i+W;}}
+   nBlocks++;}}
 
  /* ---- 5. free interior ---- */
  const wallD=dilate(wall,1.1);
@@ -2126,6 +2178,62 @@ function autotraceFloorplan(img, opts){
   for(const r of out){const x0=mx.get(r.x),x1=mx.get(r.x+r.w),y0=my.get(r.y),y1=my.get(r.y+r.d);
    r.x=x0;r.w=x1-x0;r.y=y0;r.d=y1-y0;}}
 
+ /* ---- 14b. which sheet block each room group sits in, renumbered into reading
+        order (rows top-to-bottom, left-to-right within a row) so block 0 is the
+        first storey printed on the sheet. Blocks holding no kept room — legend
+        panels, the north arrow, the scale bar — never get a number. ---- */
+ const giBlk=new Map();
+ if(blockOf&&nBlocks>1){
+  const tally=new Map();
+  for(let i=0;i<N;i++){const g=gmask[i];if(g<0)continue;const b=blockOf[i];if(b<0)continue;
+   let m=tally.get(g);if(!m){m=new Map();tally.set(g,m);}m.set(b,(m.get(b)||0)+1);}
+  tally.forEach((m,g)=>{let best=-1,bc=0;m.forEach((c,b)=>{if(c>bc){bc=c;best=b;}});if(best>=0)giBlk.set(g,best);});}
+ /* every group's own bounding box, for sizing blocks and for placing the groups
+    whose interior the block flood never reached */
+ const giBox=new Map();
+ for(const r of out){const e=giBox.get(r.gi);
+  if(!e)giBox.set(r.gi,{x0:r.x,y0:r.y,x1:r.x+r.w,y1:r.y+r.d,a:r.w*r.d});
+  else{e.x0=Math.min(e.x0,r.x);e.y0=Math.min(e.y0,r.y);e.x1=Math.max(e.x1,r.x+r.w);e.y1=Math.max(e.y1,r.y+r.d);e.a+=r.w*r.d;}}
+ let blkOrder=null;
+ if(giBlk.size>1){
+  /* a block is a storey only if it holds a real amount of room: the leftovers are
+     slivers beside a stairwell or a boxed-out legend, and they belong to whichever
+     storey they sit nearest, not on a floor tab of their own */
+  const box=new Map();
+  giBlk.forEach((b,g)=>{const gb=giBox.get(g);if(!gb)return;
+   const e=box.get(b);
+   if(!e)box.set(b,{x0:gb.x0,y0:gb.y0,x1:gb.x1,y1:gb.y1,a:gb.a});
+   else{e.x0=Math.min(e.x0,gb.x0);e.y0=Math.min(e.y0,gb.y0);e.x1=Math.max(e.x1,gb.x1);e.y1=Math.max(e.y1,gb.y1);e.a+=gb.a;}});
+  let maxA=0;box.forEach(e=>{if(e.a>maxA)maxA=e.a;});
+  const floorMin=Math.max(60000,maxA*0.08); // 6 m^2, or 8% of the biggest storey
+  const items=[];box.forEach((bb,b)=>{if(bb.a>=floorMin)items.push({b,bb});});
+  if(items.length>1){
+   items.sort((a,b)=>a.bb.y0-b.bb.y0);
+   const rows=[];
+   for(const it of items){
+    const h=it.bb.y1-it.bb.y0;
+    let row=null;
+    for(const rw of rows){const ov=Math.min(rw.y1,it.bb.y1)-Math.max(rw.y0,it.bb.y0);
+     if(ov>0.35*Math.min(rw.y1-rw.y0,h)){row=rw;break;}}
+    if(row){row.list.push(it);row.y0=Math.min(row.y0,it.bb.y0);row.y1=Math.max(row.y1,it.bb.y1);}
+    else rows.push({y0:it.bb.y0,y1:it.bb.y1,list:[it]});}
+   blkOrder=new Map();let ix=0;
+   for(const rw of rows){rw.list.sort((a,b)=>a.bb.x0-b.bb.x0);for(const it of rw.list)blkOrder.set(it.b,ix++);}
+   blkOrder.boxes=items.map(it=>({ix:blkOrder.get(it.b),bb:it.bb}));}}
+ /* group -> storey. A group with no block of its own (or one that didn't make the
+    size cut) joins the storey whose box its centre is nearest to. */
+ const blkOf=g=>{
+  if(!blkOrder)return 0;
+  const b=blkOrder.get(giBlk.get(g));
+  if(b!=null)return b;
+  const gb=giBox.get(g);if(!gb)return 0;
+  const cx=(gb.x0+gb.x1)/2,cy=(gb.y0+gb.y1)/2;
+  let best=0,bd=Infinity;
+  for(const e of blkOrder.boxes){
+   const dx=Math.max(e.bb.x0-cx,0,cx-e.bb.x1),dy=Math.max(e.bb.y0-cy,0,cy-e.bb.y1);
+   const d=dx*dx+dy*dy;if(d<bd){bd=d;best=e.ix;}}
+  return best;};
+
  /* ---- 15. names and colours ---- */
  const giMeta=new Map();
  {let n2=2;
@@ -2138,7 +2246,7 @@ function autotraceFloorplan(img, opts){
    else{nm='Room '+(n2);col='plain';}
    if(nm!=='Living space'&&nm!=='Store')n2++;
    giMeta.set(e.g,{name:nm,color:col});});}
- const roomsFinal=out.map(r=>({id:'r'+(ri++),name:giMeta.get(r.gi).name,color:giMeta.get(r.gi).color,gi:r.gi,
+ const roomsFinal=out.map(r=>({id:'r'+(ri++),name:giMeta.get(r.gi).name,color:giMeta.get(r.gi).color,gi:r.gi,blk:blkOf(r.gi),
   x:Math.round(r.x*10)/10,y:Math.round(r.y*10)/10,w:Math.round(r.w*10)/10,d:Math.round(r.d*10)/10}));
 
  /* ---- 16. doors -> planner openings ---- */
@@ -2148,7 +2256,7 @@ function autotraceFloorplan(img, opts){
   const ga=A.groupOf[d.a],gb=A.groupOf[d.b];
   if(!kept.has(ga)&&!kept.has(gb))continue;
   const wcm=Math.max(56,Math.min(115,Math.round(d.gapPx*cmPerPx)));
-  doors.push({id:'ad'+(di++),kind:'door',
+  doors.push({id:'ad'+(di++),kind:'door',blk:blkOf(kept.has(ga)?ga:gb),
    x:Math.round(d.x*cmPerPx*10)/10,y:Math.round(d.y*cmPerPx*10)/10,
    w:wcm,rot:d.horiz?0:90,flip:false});}
 
@@ -2156,6 +2264,7 @@ function autotraceFloorplan(img, opts){
  const coverage=Math.round(rooms2.reduce((s,r)=>s+r.area,0)/freeCount*100)/100;
  const res={ok:true,rooms:roomsFinal,openings:doors,cmPerPx,scaleSource,coverage,render:renderMode,
   mask:{gi:gmask,W,H}, // per-pixel room-group index (image px), for OCR room naming
+  floors:blkOrder?blkOrder.size:1, // storeys printed on this one sheet
   stats:{roomGroups:new Set(roomsFinal.map(r=>r.name)).size,rects:roomsFinal.length,doors:doors.length,areaM2:Math.round(totM2*10)/10}};
  if(opts.debug)res.debug={W,H,gmask,nGroups};
  return res;
@@ -2375,15 +2484,61 @@ function wfLocalImage(file){return new Promise((res,rej)=>{const rd=new FileRead
  rd.onerror=()=>rej(new Error('unreadable file'));rd.readAsDataURL(file);});}
 
 /* ---------- trace + plan assembly ---------- */
+/* The plan image is kept with every plan, but a plan that TRACED opens with the
+   image hidden: rooms, walls and doors are real editable geometry, so leaving the
+   agent's scan showing underneath made every real listing look like tracing paper
+   next to the hand-built example. It is one tap away (the "Plan image" chip on the
+   board, or Plan tab -> Floor plan image), and stays ON when there is nothing to
+   show but the image — an untraced plan needs it to trace over. */
 function wfBuildPlan(meta,imgPack,trace){
  const c=imgPack.canvas;
+ /* "traced" here means traced WELL: coverage is the share of the plan's open space
+    that ended up inside a room, and a thin trace (0.17 on a sheet whose scale we
+    couldn't pin down) is one to keep the image under, not to stand on its own. */
+ const traced=!!(trace&&trace.ok&&trace.rooms&&trace.rooms.length&&
+  (trace.coverage==null||trace.coverage>=0.45));
  const cmPerPx=trace&&trace.ok?trace.cmPerPx:((meta.areaSqm?Math.sqrt(meta.areaSqm*10000/(c.width*c.height*0.45)):900/c.width));
  const plan={v:1,title:meta.title||'My floor plan',units:'m',grid:5,snap:true,wall:14,savedAt:null,
   rooms:trace&&trace.ok?trace.rooms:[],
   openings:trace&&trace.ok?trace.openings:[],
   items:[],
-  underlay:{src:imgPack.dataURL,iw:c.width,ih:c.height,x:0,y:0,cmPerPx:cmPerPx,opacity:0.5,show:true,locked:true}};
+  underlay:{src:imgPack.dataURL,iw:c.width,ih:c.height,x:0,y:0,cmPerPx:cmPerPx,opacity:0.5,show:!traced,locked:true}};
  return plan;}
+
+/* ---------- one sheet, several storeys -> one plan per storey ----------
+   Most UK agents print the whole house on a single image: ground, first and second
+   floor side by side. Traced as one plan that opens as three islands of rooms
+   floating on the board at 15% zoom — nothing like the single clean floor the
+   example shows. autotraceFloorplan tags every room with the sheet block it came
+   from, so here we cut the sheet into one plan per storey; the planner's floor
+   switcher moves between them.
+   Coordinates stay in sheet space (floor 3 really does live 40 m to the right of
+   floor 1), which costs nothing — fitView frames each floor on open — and keeps the
+   shared plan image aligned with every storey without cropping it. */
+function wfSplitSheet(plan,trace){
+ if(!plan||!trace||!trace.ok||!(trace.floors>1))return null;
+ const byBlk=new Map();
+ for(const r of plan.rooms){const b=r.blk||0;let e=byBlk.get(b);if(!e){e={rooms:[],openings:[]};byBlk.set(b,e);}e.rooms.push(r);}
+ if(byBlk.size<2)return null;
+ for(const op of plan.openings){const e=byBlk.get(op.blk||0);if(e)e.openings.push(op);}
+ if(byBlk.size>8)return null; // more islands than any house has storeys: don't guess
+ const keys=[];byBlk.forEach((v,k)=>keys.push(k));keys.sort((a,b)=>a-b);
+ const base=plan.title||'My floor plan';
+ return keys.map((b,i)=>{
+  const e=byBlk.get(b);
+  return {blk:b,ix:i,area:e.rooms.reduce((s,r)=>s+r.w*r.d,0),
+   plan:Object.assign({},plan,{title:base+' · floor '+(i+1),rooms:e.rooms,openings:e.openings,items:[],
+    underlay:Object.assign({},plan.underlay)})};});}
+/* Which storey to open on. Tabs stay in the sheet's own reading order, but landing
+   on tab 1 is wrong when a sheet leads with an outbuilding — the real Bath listing
+   in test/e2e.js prints a 2-room coach house top-left and the house's 18-room main
+   storey next to it. Open the biggest; on an ordinary two-storey sheet that is the
+   ground floor anyway, so nothing changes for the common case. */
+function wfMainFloorIx(parts){
+ if(!parts||!parts.length)return 0;
+ let best=0;
+ for(let i=1;i<parts.length;i++)if(parts[i].area>parts[best].area)best=i;
+ return best;}
 
 function wfHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))>>>0;return h.toString(36);}
 
@@ -2564,21 +2719,27 @@ async function wfTraceAreaRescue(imgPack,im,trace,haveArea){
 
 /* ---------- retrace one specific floor plan image (multi-plan listings) ----------
    ix 0 keeps the quoted-area scale; other floors use door widths — the listing's
-   quoted area covers every floor, so it can't scale a single-floor image. */
-async function wfTraceFloorUrl(meta,url,ix){
+   quoted area covers every floor, so it can't scale a single-floor image.
+   `blk` asks for one storey of a sheet that holds several: the sheet is the whole
+   property, so the quoted area scales it whichever storey was asked for. */
+async function wfTraceFloorUrl(meta,url,ix,blk){
  const imgPack=await wfFetchPlanImage(url);
  await new Promise(r=>setTimeout(r,30));
+ const useArea=!!(meta.areaSqm&&(ix===0||blk!=null));
  let trace=null;
  try{
   const im=imgPack.ctx.getImageData(0,0,imgPack.canvas.width,imgPack.canvas.height);
-  trace=autotraceFloorplan(im,{areaCm2:(ix===0&&meta.areaSqm)?meta.areaSqm*10000:undefined});
-  trace=await wfTraceAreaRescue(imgPack,im,trace,!!(ix===0&&meta.areaSqm));
+  trace=autotraceFloorplan(im,{areaCm2:useArea?meta.areaSqm*10000:undefined});
+  trace=await wfTraceAreaRescue(imgPack,im,trace,useArea);
  }catch(e){trace={ok:false,reason:'trace error: '+e.message};}
  const plan=wfBuildPlan(meta,imgPack,trace);
- return {plan,traced:!!(trace&&trace.ok),traceStats:trace&&trace.ok?trace.stats:null,
+ const parts=blk!=null?wfSplitSheet(plan,trace):null;
+ const mine=parts?(parts.filter(p=>p.blk===blk)[0]||parts[0]):null;
+ return {plan:mine?mine.plan:plan,parts,
+  traced:!!(trace&&trace.ok),traceStats:trace&&trace.ok?trace.stats:null,
   traceMask:trace&&trace.ok?trace.mask:null,
   traceRender:!!(trace&&trace.ok&&trace.render),
-  scaleSource:trace&&trace.ok?trace.scaleSource:((ix===0&&meta.areaSqm)?'listing':'unknown'),
+  scaleSource:trace&&trace.ok?trace.scaleSource:(useArea?'listing':'unknown'),
   traceFail:trace&&!trace.ok?trace.reason:null};}
 
 /* ---------- the whole pipeline ---------- */
@@ -2628,10 +2789,16 @@ async function resolveListingLive(url,onStage,sharedMeta){
   if(trace&&trace.ocrAreaSqm&&!meta.areaSqm)meta.areaSqm=trace.ocrAreaSqm;
  }catch(e){trace={ok:false,reason:'trace error: '+e.message};}
  onStage(4);
- const plan=wfBuildPlan(meta,imgPack,trace);
+ const sheetPlan=wfBuildPlan(meta,imgPack,trace);
+ /* one image, several storeys: open storey 1, keep the rest for the floor switcher.
+    Skipped when the listing published a plan per floor already — those images are
+    the better source, and the floor switcher can only show one list. */
+ const parts=meta.floorplanCount>1?null:wfSplitSheet(sheetPlan,trace);
+ const openIx=parts?wfMainFloorIx(parts):0;
+ const plan=parts?parts[openIx].plan:sheetPlan;
  const planId=(p.portal==='Rightmove'?'rm-':p.portal==='Zoopla'?'zp-':'li-')+(p.id||wfHash(url));
  onStage(5);
- return {listing:meta,plan,planId,portal,id:p.id,url,
+ return {listing:meta,plan,parts,openIx,sheetPlan:parts?sheetPlan:null,planId,portal,id:p.id,url,
   traced:!!(trace&&trace.ok),traceStats:trace&&trace.ok?trace.stats:null,
   traceMask:trace&&trace.ok?trace.mask:null,
   traceRender:!!(trace&&trace.ok&&trace.render),
@@ -2690,7 +2857,16 @@ const LIVE_PIPE=['Fetching the listing','Finding the floor plan','Downloading th
 let liveBusy=false;
 function pipeShow(stages){const pipe=$('#lp-pipe');pipe.hidden=false;pipe.innerHTML=stages.map((p,i)=>'<div class="st" data-i="'+i+'"><i></i><span>'+p+'</span></div>').join('');}
 function pipeSet(i){$$('.st',$('#lp-pipe')).forEach((el,j)=>{el.classList.toggle('done',j<i||i>=LIVE_PIPE.length);el.classList.toggle('run',j===i&&i<LIVE_PIPE.length);});}
-function livePlanSVG(r){const plan=r.plan;const u=plan.underlay;
+/* the floors this result can move between: several plan images on the listing, or
+   several storeys the tracer found on one sheet. Entries are what wfOpenFloor and
+   wfTraceFloorUrl need to rebuild that floor later, from a cold page load. */
+function wfFloorSources(r){
+ if(r&&r.parts&&r.parts.length>1)return r.parts.map(p=>({u:r.listing.floorplan,b:p.blk}));
+ const fps=(r&&r.listing&&r.listing.floorplans)||[];
+ return fps.length>1?fps.slice(0,8):[];}
+/* the landing preview animates the WHOLE sheet even when the planner will open a
+   single storey — watching the whole house get traced is the point of it */
+function livePlanSVG(r){const plan=r.sheetPlan||r.plan;const u=plan.underlay;
  let x0,y0,x1,y1;
  if(plan.rooms.length){x0=y0=Infinity;x1=y1=-Infinity;
   plan.rooms.forEach(rm=>{x0=Math.min(x0,rm.x);y0=Math.min(y0,rm.y);x1=Math.max(x1,rm.x+rm.w);y1=Math.max(y1,rm.y+rm.d);});
@@ -2724,8 +2900,11 @@ function liveResultCard(r){
  else if(r.traceStats)chips.push('~'+r.traceStats.areaM2+' m² traced');
  if(r.traceStats)chips.push(r.traceStats.roomGroups+' room'+(r.traceStats.roomGroups===1?'':'s')+' · '+r.traceStats.doors+' door'+(r.traceStats.doors===1?'':'s'));
  if(r.listing.floorplanCount>1)chips.push('plan '+((r.floorIx||0)+1)+' of '+r.listing.floorplanCount);
- const floors=(r.listing.floorplans&&r.listing.floorplans.length>1)
-  ?'<div class="chips lp-floors"><span style="border:0;background:none;padding-left:0">Floor plans:</span>'+r.listing.floorplans.map((u,i)=>'<button class="fp'+(i===(r.floorIx||0)?' on':'')+'" data-f="'+i+'" title="Trace floor plan '+(i+1)+'">'+(i+1)+'</button>').join('')+'</div>':'';
+ const srcs=wfFloorSources(r);
+ const sheet=!!(r.parts&&r.parts.length>1);
+ if(sheet)chips.push(r.parts.length+' floors on one plan');
+ const floors=srcs.length>1
+  ?'<div class="chips lp-floors"><span style="border:0;background:none;padding-left:0">'+(sheet?'Floors:':'Floor plans:')+'</span>'+srcs.map((u,i)=>'<button class="fp'+(i===(r.floorIx||0)?' on':'')+'" data-f="'+i+'" title="'+(sheet?'Show floor ':'Trace floor plan ')+(i+1)+'">'+(i+1)+'</button>').join('')+'</div>':'';
  if(r.traceRender)chips.push('3D plan · approximate');
  let hint='';
  if(!r.traced)hint='We found the floor plan but couldn’t trace the rooms automatically. It’s loaded as a background image — set the scale and trace over it in Edit plan.';
@@ -2786,10 +2965,19 @@ function wireResultButtons(r){
     interpolated into an HTML string */
  const bm=$('#lp-bmlet');if(bm){bm.setAttribute('href',WF_BOOKMARKLET);bm.addEventListener('click',e=>e.preventDefault());}
  const ex=$('#lp-see-example');if(ex)ex.addEventListener('click',()=>{runPipeline({exact:false,portal:'Rightmove',id:EXAMPLE.id,listing:EXAMPLE,plan:SAMPLE});});
- if(r&&r.listing&&r.listing.floorplans&&r.listing.floorplans.length>1)
+ if(r&&wfFloorSources(r).length>1)
   $$('#lp-result .fp').forEach(b=>b.addEventListener('click',()=>{const ix=+b.dataset.f;if(ix!==(r.floorIx||0))switchFloor(r,ix);}));}
 async function switchFloor(r,ix){
- if(liveBusy)return;liveBusy=true;
+ if(liveBusy)return;
+ /* storeys off one sheet are already traced — swapping is instant, no refetch */
+ if(r.parts&&r.parts.length>1){
+  const p=r.parts[ix];if(!p)return;
+  r.plan=p.plan;r.floorIx=ix;r.planId=r.basePlanId+(ix?'-f'+(ix+1):'');
+  const result=$('#lp-result');
+  result.innerHTML=liveResultCard(r);result.classList.add('show');
+  wireResultButtons(r);
+  return;}
+ liveBusy=true;
  const result=$('#lp-result'),canvas=$('#lp-canvas');
  try{
   pipeShow(['Downloading plan '+(ix+1),'Tracing walls, rooms and doors','Ready']);pipeSet(0);
@@ -2820,9 +3008,14 @@ async function runLive(url,shared){
    if(extra&&extra.dataURL)canvas.innerHTML='<div class="lp-scan"><img src="'+extra.dataURL+'" alt=""><i></i></div>';},shared);
   pipeSet(LIVE_PIPE.length);
   wfTrace('live ok traced='+(!!r.traced)+(r.traceStats?' rooms='+r.traceStats.roomGroups:''));
-  r.basePlanId=r.planId;r.floorIx=0;wfLastLive=r;
-  wfExtrasSave(r.planId,{floors:(r.listing.floorplans||[]).slice(0,8),photos:(r.listing.photos||[]).slice(0,14),title:r.listing.title||'',areaSqm:r.listing.areaSqm||0,price:r.listing.price||'',beds:r.listing.beds!=null?r.listing.beds:null});
-  wfPlanCache[r.planId+':0']={plan:r.plan,traced:r.traced,traceStats:r.traceStats,traceMask:r.traceMask,traceRender:r.traceRender,named:true};
+  /* extras and the plan cache always hang off the BASE id — the storey we happen to
+     open first may not be floor 1 (wfMainFloorIx picks the biggest) */
+  r.basePlanId=r.planId;r.floorIx=r.openIx||0;wfLastLive=r;
+  if(r.floorIx)r.planId=r.basePlanId+'-f'+(r.floorIx+1);
+  const srcs=wfFloorSources(r);
+  wfExtrasSave(r.basePlanId,{floors:srcs.length>1?srcs:(r.listing.floorplans||[]).slice(0,8),photos:(r.listing.photos||[]).slice(0,14),title:r.listing.title||'',areaSqm:r.listing.areaSqm||0,price:r.listing.price||'',beds:r.listing.beds!=null?r.listing.beds:null});
+  if(r.parts&&r.parts.length>1)r.parts.forEach((p,i)=>{wfPlanCache[r.basePlanId+':'+i]={plan:p.plan,traced:r.traced,traceStats:r.traceStats,traceMask:r.traceMask,traceRender:r.traceRender,named:true};});
+  else wfPlanCache[r.basePlanId+':0']={plan:r.plan,traced:r.traced,traceStats:r.traceStats,traceMask:r.traceMask,traceRender:r.traceRender,named:true};
   canvas.innerHTML=livePlanSVG(r);
   setTimeout(()=>{pipe.hidden=true;},600);
   $('#lp-devtitle').textContent='Floor plan · '+(r.listing.title||'your listing');
@@ -2858,11 +3051,20 @@ async function openTracedUpload(f){
  catch(e){await openPlan('upload',BLANK,{fresh:true,file:f});return;}
  let trace=null;
  try{trace=autotraceFloorplan(pack.ctx.getImageData(0,0,pack.canvas.width,pack.canvas.height),{});}catch(e){trace=null;}
- const plan=wfBuildPlan({title:'Uploaded floor plan'},pack,trace);
+ const sheet=wfBuildPlan({title:'Uploaded floor plan'},pack,trace);
  const upId='upload-'+wfHash(f.name+':'+f.size);
- await openPlan(upId,plan,{fresh:true});
- if(trace&&trace.ok)wfNameRooms({plan,planId:upId,traced:true,traceMask:trace.mask});
- if(trace&&trace.ok){toast('Traced '+trace.stats.roomGroups+' rooms and '+trace.stats.doors+' doors — check the scale: Edit plan → Calibrate scale');}
+ /* an uploaded sheet splits into storeys the same way a listing's does. There is no
+    URL to re-fetch, so the floors live in the session cache: extras carry the count
+    (blocks only) and a reload falls back to the storey that was open. */
+ const parts=wfSplitSheet(sheet,trace);
+ const openIx=parts?wfMainFloorIx(parts):0;
+ const plan=parts?parts[openIx].plan:sheet;
+ if(parts){
+  parts.forEach((p,i)=>{wfPlanCache[upId+':'+i]={plan:p.plan,traced:true,traceStats:trace.stats,traceMask:trace.mask,traceRender:!!trace.render,named:true};});
+  wfExtrasSave(upId,{floors:parts.map(p=>({b:p.blk})),photos:[],title:'Uploaded floor plan',areaSqm:0,price:'',beds:null});}
+ await openPlan(upId+(openIx?'-f'+(openIx+1):''),plan,{fresh:true});
+ if(trace&&trace.ok)wfNameRooms({plan,parts,planId:upId+(openIx?'-f'+(openIx+1):''),traced:true,traceMask:trace.mask});
+ if(trace&&trace.ok){toast('Traced '+trace.stats.roomGroups+' rooms and '+trace.stats.doors+' doors'+(parts?' across '+parts.length+' floors':'')+' — check the scale: Edit plan → Calibrate scale');}
  else{mode='plan';libTab='Plan';renderPanels();render();toast('Couldn’t trace this image automatically — set the scale and trace the rooms in Edit plan');}}
 function illSVG(n){const W=320,H=160;let o='<svg viewBox="0 0 320 160" xmlns="http://www.w3.org/2000/svg" style="font-family:var(--mono);font-size:10px">';
  o+='<defs><pattern id="ig" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="var(--grid)" stroke-width="1"/></pattern><pattern id="ih" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="var(--muted)" stroke-width="1.2" opacity=".6"/></pattern></defs><rect width="320" height="160" fill="url(#ig)"/>';
@@ -3091,9 +3293,18 @@ async function wfOpenFloor(base,ex,ix){
  const key=base+':'+ix;
  let t=wfPlanCache[key];
  if(!t){
+  /* a floor source is either a plan image URL, or {u,b} — one storey of a sheet
+     that holds several. On a cold page load the sheet is traced once and every
+     storey cached, so the other tabs open instantly. */
+  const src=ex.floors[ix];
+  const url=(src&&typeof src==='object')?src.u:src;
+  const blk=(src&&typeof src==='object')?src.b:null;
+  if(!url){toast('That floor isn’t available any more');return;}
   toast('Fetching floor plan '+(ix+1)+'…');
-  try{t=await wfTraceFloorUrl({title:ex.title,areaSqm:ex.areaSqm},ex.floors[ix],ix);wfPlanCache[key]=t;}
-  catch(e){toast('Couldn’t load floor plan '+(ix+1)+' — try again in a moment');return;}}
+  try{t=await wfTraceFloorUrl({title:ex.title,areaSqm:ex.areaSqm},url,ix,blk);wfPlanCache[key]=t;}
+  catch(e){toast('Couldn’t load floor plan '+(ix+1)+' — try again in a moment');return;}
+  if(t.parts)t.parts.forEach((p,i)=>{const k2=base+':'+i;
+   if(!wfPlanCache[k2])wfPlanCache[k2]={plan:p.plan,traced:t.traced,traceStats:t.traceStats,traceMask:t.traceMask,traceRender:t.traceRender,named:false};});}
  await openPlan(base+(ix?'-f'+(ix+1):''),t.plan,{fresh:false});
  if(t.traced&&!t.named){t.named=true;wfNameRooms({plan:t.plan,planId:base+(ix?'-f'+(ix+1):''),traced:true,traceMask:t.traceMask});}
  toast('Floor '+(ix+1)+(t.traced?'':' — trace it over the image in Edit plan'));}
@@ -3158,12 +3369,35 @@ const WF_ROOM_RE=[
  [/\beaves\b|\brestricted\b|\blimited use\b/i,'Eaves','dark'],
  [/\bbalcony\b|\bterrace\b/i,'Balcony','plain'],
 ];
-function wfRoomNameFromText(t){
- for(const e of WF_ROOM_RE){const m=e[0].exec(t);if(m){
-  let name=e[1];
-  if(name==='Bedroom'){const n=/\b(?:bed\s*room|bedroom|bed)\s*(\d)\b(?!\.)/i.exec(t);if(n)name='Bedroom '+n[1];}
-  return {name,color:e[2],m:m[0]};}}
- return null;}
+/* EVERY room label on one OCR line, in reading order — not just the first match.
+   Tesseract reads straight across a sheet that prints several storeys side by side,
+   so a real listing gives lines like "= Garage —— Living Room" and
+   ": cs [97 Bathroom ) Bedroom 4". Returning the first rule that matched threw the
+   other rooms away — and since WF_ROOM_RE is ordered by specificity, not by page
+   position, the survivor was arbitrary: the garage lost to "Living room" and came
+   out "Room 4". Each hit keeps its offset so the caller can anchor it on its OWN
+   word box rather than on the whole (floor-spanning) line. */
+function wfRoomNamesFromText(t){
+ const hits=[];
+ for(let ri=0;ri<WF_ROOM_RE.length;ri++){
+  const e=WF_ROOM_RE[ri];
+  const re=new RegExp(e[0].source,e[0].flags.indexOf('g')>=0?e[0].flags:e[0].flags+'g');
+  let m;
+  while((m=re.exec(t))){
+   const at=m.index,end=at+m[0].length;
+   if(re.lastIndex<=at)re.lastIndex=at+1;
+   if(!m[0].trim())continue;
+   /* rules run best-first, so anything overlapping a hit we already have is the
+      weaker reading of the same words ("Dining room" inside "Kitchen/Dining Room") */
+   if(hits.some(h=>at<h.end&&end>h.at))continue;
+   let name=e[1];
+   if(name==='Bedroom'){
+    /* the number must come from THIS label, not from another storey's on the same line */
+    const n=/\b(?:bed\s*room|bedroom|bed)\s*(\d)\b(?!\.)/i.exec(t.slice(at,end+6));
+    if(n)name='Bedroom '+n[1];}
+   hits.push({name,color:e[2],m:m[0],at,end,rank:ri});}}
+ hits.sort((a,b)=>a.at-b.at);
+ return hits;}
 async function wfOcrRoomNames(r){
  if(!r||!r.traceMask||!r.plan||!r.plan.underlay||!r.plan.underlay.src)return null;
  try{await wfLoadTess();}catch(e){return null;}
@@ -3191,30 +3425,41 @@ async function wfOcrRoomNames(r){
  const IGNORE=/denotes|not to scale|identification|produced in accordance|measurement|estate agent|approximate area|limited use|total\s*=|access to|head height|floor plan/i;
  for(const ln of lines){
   const t=(ln.text||'').trim();
-  if(t.length<2||t.length>60)continue;
+  /* the cap is generous because a line can legitimately span three storeys now */
+  if(t.length<2||t.length>160)continue;
   if((ln.confidence||0)<38)continue;
   if(IGNORE.test(t))continue;
-  const hit=wfRoomNameFromText(t);if(!hit)continue;
-  /* anchor on the matched word's own box — OCR merges distant fragments into one
-     line, and a merged line's centre can sit in the wrong room */
-  let b=null;
-  const w0=(String(hit.m||'').match(/[A-Za-z]{3,}/)||[])[0];
-  if(w0&&Array.isArray(ln.words)){
-   const wd=ln.words.find(w2=>w2&&w2.text&&w2.text.toLowerCase().indexOf(w0.toLowerCase())>=0);
-   if(wd&&wd.bbox)b=wd.bbox;}
-  if(!b){b=ln.bbox;if(!b||(b.x1-b.x0)/f>W*0.4)continue;}
-  /* bboxes are in the upscaled OCR image; the mask is at plan resolution */
-  const cx=Math.round((b.x0+b.x1)/(2*f)),cy=Math.round((b.y0+b.y1)/(2*f)),lh=Math.max(8,Math.round((b.y1-b.y0)/f));
-  /* the label sits inside its room: probe the word centre, then around it */
-  let gi=-1;
-  const probes=[[cx,cy],[cx,cy+lh],[cx,cy+2*lh],[cx,cy-lh],[cx-3*lh,cy],[cx+3*lh,cy]];
-  for(const p2 of probes){
-   const px2=p2[0],py2=p2[1];
-   if(px2<0||py2<0||px2>=W||py2>=H)continue;
-   const g=mask.gi[py2*W+px2];
-   if(g>=0){gi=g;break;}}
-  if(gi<0)continue;
-  if(!giName.has(gi))giName.set(gi,hit);}
+  const hits=wfRoomNamesFromText(t);if(!hits.length)continue;
+  const usedWord=new Set();
+  for(const hit of hits){
+   /* anchor on the matched word's own box — a merged line's centre sits in the
+      wrong room, or on another floor entirely. Words are consumed left to right so
+      "Bedroom 2 … Bedroom 3" takes the second "Bedroom" box for the second hit. */
+   let b=null;
+   const w0=(String(hit.m||'').match(/[A-Za-z]{3,}/)||[])[0];
+   if(w0&&Array.isArray(ln.words)){
+    for(let wi=0;wi<ln.words.length;wi++){
+     if(usedWord.has(wi))continue;
+     const w2=ln.words[wi];
+     if(w2&&w2.text&&w2.text.toLowerCase().indexOf(w0.toLowerCase())>=0){usedWord.add(wi);if(w2.bbox)b=w2.bbox;break;}}}
+   /* falling back to the whole line only makes sense when it held one label */
+   if(!b){if(hits.length>1)continue;b=ln.bbox;if(!b||(b.x1-b.x0)/f>W*0.4)continue;}
+   /* bboxes are in the upscaled OCR image; the mask is at plan resolution */
+   const cx=Math.round((b.x0+b.x1)/(2*f)),cy=Math.round((b.y0+b.y1)/(2*f)),lh=Math.max(8,Math.round((b.y1-b.y0)/f));
+   /* the label sits inside its room: probe the word centre, then around it */
+   let gi=-1;
+   const probes=[[cx,cy],[cx,cy+lh],[cx,cy+2*lh],[cx,cy-lh],[cx-3*lh,cy],[cx+3*lh,cy]];
+   for(const p2 of probes){
+    const px2=p2[0],py2=p2[1];
+    if(px2<0||py2<0||px2>=W||py2>=H)continue;
+    const g=mask.gi[py2*W+px2];
+    if(g>=0){gi=g;break;}}
+   if(gi<0)continue;
+   /* two labels in one room means the tracer merged an open-plan pair (a kitchen
+      and the sun room off it). WF_ROOM_RE runs primary rooms first, so the earlier
+      rule is the one worth showing: "Kitchen/diner", not "Conservatory". */
+   const prev=giName.get(gi);
+   if(!prev||hit.rank<prev.rank)giName.set(gi,hit);}}
  if(!giName.size)return null;
  /* second Bedroom -> Bedroom 2, and so on */
  const used={};
@@ -3240,7 +3485,11 @@ function wfNameRooms(r){
  if(!r||!r.traced||!r.traceMask)return;
  wfOcrRoomNames(r).then(giName=>{
   if(!giName){console.warn('wf ocr: no room labels matched');return;}
-  const applied=wfApplyRoomNames(r.plan.rooms,giName);
+  /* labels are keyed by room-group id, which is global to the sheet — so one OCR
+     pass names every storey the sheet was split into, not just the open one */
+  let applied=0;
+  if(r.parts&&r.parts.length)r.parts.forEach(p=>{applied+=wfApplyRoomNames(p.plan.rooms,giName);});
+  else applied=wfApplyRoomNames(r.plan.rooms,giName);
   if(!applied)return;
   wfPatchOpenPlan(r,giName);
   if(wfLastLive===r){
