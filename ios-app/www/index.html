@@ -880,7 +880,13 @@ function render(){ if(!world)return; const k=view.k,t=state.wall,px=v=>v/k; let 
  const groups={};state.rooms.forEach(r=>{const key=r.name.trim().toLowerCase();(groups[key]=groups[key]||[]).push(r);});
  state.rooms.forEach(r=>{if(r.w*k<40||r.d*k<24)return;const grp=groups[r.name.trim().toLowerCase()];if(grp.some(o=>o.w*o.d>r.w*r.d))return;
   const fl=FLOORS[r.color]||FLOORS.plain;const fs=px(12.5),fs2=px(10.5);const gb=groupBounds(grp);
-  const dims=fmt(gb.w)+' × '+fmt(gb.d)+' · '+fmtArea(gb.area);const showDims=r.d*k>44&&r.w*k>120;
+  /* gb.w/gb.d are the room's BOUNDING BOX while gb.area is its true area, so on an
+     L-shaped room the two contradict each other ("4.47 × 11.26 m · 38.3 m²" — that
+     multiplies to 50). Agents' plans label such rooms "max", and so do we: the
+     numbers stay the maximum extent, which is what you measure a sofa against, but
+     they no longer read as the sides of a rectangle. */
+  const boxy=gb.area>=gb.w*gb.d*0.95;
+  const dims=fmt(gb.w)+' × '+fmt(gb.d)+(boxy?'':' max')+' · '+fmtArea(gb.area);const showDims=r.d*k>44&&r.w*k>120;
   const bw=Math.max(r.name.length*fs*0.58,showDims?dims.length*fs2*0.62:0),bh=showDims?fs*2.3:fs*1.2,pad=px(8);
   const cands=[[r.x+r.w/2-bw/2,r.y+r.d/2-bh/2],[r.x+pad,r.y+pad],[r.x+pad,r.y+r.d-pad-bh],[r.x+r.w-pad-bw,r.y+pad],[r.x+r.w-pad-bw,r.y+r.d-pad-bh]];
   let best=null,bs=Infinity;cands.forEach(([bx,by])=>{let sc=0;boxes.forEach(b=>{const ox=Math.min(bx+bw,b.maxX)-Math.max(bx,b.minX),oy=Math.min(by+bh,b.maxY)-Math.max(by,b.minY);if(ox>0&&oy>0)sc+=ox*oy;});if(sc<bs-0.01){bs=sc;best=[bx,by];}});
@@ -2274,7 +2280,7 @@ function autotraceFloorplan(img, opts){
  const windows=[];
  if(!renderMode&&wallMask&&extMask){
   const band=Math.max(3,Math.round(60/cmPerPx));  // how far out to look for the page
-  const MINW=40,MAXW=400;                          // sane window widths, cm
+  const MINW=40,MAXW=400;   // sane window widths, cm
   const seen=[];
   /* one column of the wall, looking outward from a room edge */
   const probe=(x,y,dx,dy)=>{
@@ -2308,18 +2314,29 @@ function autotraceFloorplan(img, opts){
        the whole depth of the probe buries it (measured 0.10 on real windows). What
        separates a window from a doorway is whether the column crosses ANY ink. */
     const inkFrac=run.inkCols/Math.max(1,cells);
+    const isWin=wcm>=MINW&&wcm<=MAXW&&inkFrac>=0.6;
+    /* EXTERIOR DOORS were tried here and removed on 27 Aug — see DEPLOY notes.
+       The idea was sound (a break with nothing drawn across it is a way in, and the
+       saddle sweep can never find those because it pairs room with room). The
+       geometry is not: this walks room RECTANGLE edges, not real wall runs, so on
+       the owner's own listing the actual front door measured 39 cm — too narrow to
+       accept — while a thin-walled gap on the SECOND floor passed as a 75 cm
+       entrance. A false entrance is the worst failure this tracer can produce,
+       because the delivery check would then wave an oversized sofa through, whereas
+       a missing one merely leaves it pessimistic. Doing this properly means tracing
+       wall runs rather than rectangle edges. */
     if(opts.debug)console.log('  run',horiz?'H':'V','wcm',Math.round(wcm),'inkFrac',inkFrac.toFixed(2),
-     (wcm>=MINW&&wcm<=MAXW&&inkFrac>=0.6)?'-> WINDOW':'-> reject');
+     isWin?'-> WINDOW':'-> reject');
     /* glazing drawn across the gap = window; nothing drawn = a doorway, and those
        come from the saddle sweep with a proper room-to-room pair behind them */
-    if(wcm>=MINW&&wcm<=MAXW&&inkFrac>=0.6){
-     const s=run.start,e=run.end;
+    if(isWin){
+     const s=run.start;
      const wx=horiz?ax+s:ax, wy=horiz?ay:ay+s;
      windows.push({horiz,blk,px:wx,py:wy,wcm:Math.round(wcm)});}
     run=null;};
    for(let t=0;t<cols.length;t++){
     const c=cols[t];
-    const open=c&&c.n>0&&c.solid===0;   // the thick wall is missing here
+    const open=c&&c.solid===0;   // the thick wall is missing here
     if(open){
      if(!run)run={start:t,end:t,inkCols:0};
      run.end=t;if(c.ink>0)run.inkCols++;}
@@ -2990,8 +3007,9 @@ function liveResultCard(r){
  const sheet=!!(r.parts&&r.parts.length>1);
  if(sheet)chips.push(r.parts.length+' floors on one plan');
  const fnames=r.floorNames||[];
+ const forder=wfFloorOrder(fnames.map(n=>n?n.short:null),srcs.length);
  const floors=srcs.length>1
-  ?'<div class="chips lp-floors"><span style="border:0;background:none;padding-left:0">'+(sheet?'Floors:':'Floor plans:')+'</span>'+srcs.map((u,i)=>'<button class="fp'+(i===(r.floorIx||0)?' on':'')+'" data-f="'+i+'" title="'+esc(fnames[i]?fnames[i].label:((sheet?'Show floor ':'Trace floor plan ')+(i+1)))+'">'+esc(fnames[i]?fnames[i].short:String(i+1))+'</button>').join('')+'</div>':'';
+  ?'<div class="chips lp-floors"><span style="border:0;background:none;padding-left:0">'+(sheet?'Floors:':'Floor plans:')+'</span>'+forder.map(i=>'<button class="fp'+(i===(r.floorIx||0)?' on':'')+'" data-f="'+i+'" title="'+esc(fnames[i]?fnames[i].label:((sheet?'Show floor ':'Trace floor plan ')+(i+1)))+'">'+esc(fnames[i]?fnames[i].short:String(i+1))+'</button>').join('')+'</div>':'';
  if(r.traceRender)chips.push('3D plan · approximate');
  let hint='';
  if(!r.traced)hint='We found the floor plan but couldn’t trace the rooms automatically. It’s loaded as a background image — set the scale and trace over it in Edit plan.';
@@ -3374,7 +3392,7 @@ function wfRenderFloorHud(base,ex){
  if(!el||el.parentElement!==hud){if(el)el.remove();el=document.createElement('span');el.id='floorhud';el.className='chip';hud.insertBefore(el,hud.firstChild);}
  const m=/-f(\d+)$/.exec(planId);const cur=m?+m[1]-1:0;
  const short=ex.floorShort||[],full=ex.floorNames||[];
- el.innerHTML='Floor '+floors.map(function(u,i){
+ el.innerHTML='Floor '+wfFloorOrder(short,floors.length).map(function(i){
   return '<button data-f="'+i+'" title="'+esc(full[i]||('Floor '+(i+1)))+'" style="margin-left:4px;min-width:24px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:var(--mono);border:1px solid '+(i===cur?'var(--accent)':'var(--line)')+';background:'+(i===cur?'var(--accent-soft)':'var(--panel)')+';color:var(--ink)">'+esc(short[i]||String(i+1))+'</button>';}).join('');
  [...el.querySelectorAll('button')].forEach(b=>b.addEventListener('click',()=>{const ix=+b.dataset.f;if(ix!==cur)wfOpenFloor(base,ex,ix);}));}
 async function wfOpenFloor(base,ex,ix){
@@ -3472,6 +3490,21 @@ const WF_FLOOR_RE=[
  [/\bbasement\b/i,'Basement','B'],
  [/\b(?:loft|attic)\b/i,'Loft','L'],
 ];
+/* Reading order across the sheet is not storey order — a sheet can print the coach
+   house first, or the lower ground last. Once the captions are known the tabs can be
+   shown in the order you'd climb them. Indices are preserved, so plan ids, drafts
+   and the cache are untouched: this is presentation only. */
+const WF_FLOOR_RANK={B:-2,LG:-1,G:0,'1':1,'2':2,'3':3,'4':4,L:5};
+function wfFloorOrder(short,n){
+ const ix=[];for(let i=0;i<n;i++)ix.push(i);
+ if(!short||!short.length)return ix;
+ const known=i=>short[i]!=null&&WF_FLOOR_RANK[short[i]]!==undefined;
+ if(!ix.some(known))return ix;
+ return ix.slice().sort((a,b)=>{
+  const ka=known(a),kb=known(b);
+  if(ka&&kb)return WF_FLOOR_RANK[short[a]]-WF_FLOOR_RANK[short[b]];
+  if(ka!==kb)return ka?-1:1;   // captioned storeys first, uncaptioned keep the tail
+  return a-b;});}
 function wfFloorLabelsFromText(t){
  const hits=[];
  for(const e of WF_FLOOR_RE){
@@ -3588,16 +3621,22 @@ async function wfOcrRoomNames(r){
     const g=mask.gi[py2*W+px2];
     if(g>=0){gi=g;break;}}
    if(gi<0)continue;
-   /* two labels in one room means the tracer merged an open-plan pair (a kitchen
-      and the sun room off it). WF_ROOM_RE runs primary rooms first, so the earlier
-      rule is the one worth showing: "Kitchen/diner", not "Conservatory". */
+   /* Two labels in one room means the tracer merged an open-plan pair — a kitchen
+      and the sun room off it. Both names are true, and the merged space really is
+      one space to furnish, so keep both rather than discarding one: the hand-built
+      example calls its own merged room "Kitchen / living" for exactly this reason.
+      WF_ROOM_RE runs primary rooms first, so the earlier rule leads. */
    const prev=giName.get(gi);
-   if(!prev||hit.rank<prev.rank)giName.set(gi,hit);}}
+   if(!prev)giName.set(gi,hit);
+   else if(hit.rank<prev.rank){
+    if(prev.name!==hit.name)hit.also=prev.name;else if(prev.also)hit.also=prev.also;
+    giName.set(gi,hit);}
+   else if(prev.name!==hit.name&&!prev.also)prev.also=hit.name;}}
  if(!giName.size&&!floorHits.length)return null;
  /* second Bedroom -> Bedroom 2, and so on */
  const used={};
  for(const kv of giName){
-  const hit=kv[1];let nm=hit.name;
+  const hit=kv[1];let nm=hit.name+(hit.also?' / '+hit.also:'');
   if(used[nm]){used[nm]++;nm=nm+' '+used[nm];}else used[nm]=1;
   hit.finalName=nm;}
  return {giName,floorHits};}
