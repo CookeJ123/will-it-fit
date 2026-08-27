@@ -1790,6 +1790,8 @@ function autotraceFloorplan(img, opts){
  let free,freeCount=0,freeAreaCount=0;
  /* per-pixel sheet-block index (see step 5b); null when blocks weren't computed */
  let blockOf=null,nBlocks=1;
+ /* thick walls and the page background, kept in scope for window finding (step 16b) */
+ let wallMask=null,extMask=null;
  if(renderMode){
  /* ---- 3R. photoreal renders: floors are textured or tinted, walls are smooth
         bright neutral bands, furniture is smooth-bright too (accepted as obstacle
@@ -1903,6 +1905,8 @@ function autotraceFloorplan(img, opts){
     if(y>0&&!extB[i-W]&&blockOf[i-W]<0){blockOf[i-W]=nBlocks;q[qt++]=i-W;}
     if(y<H-1&&!extB[i+W]&&blockOf[i+W]<0){blockOf[i+W]=nBlocks;q[qt++]=i+W;}}
    nBlocks++;}}
+
+ wallMask=wall;extMask=exterior;
 
  /* ---- 5. free interior ---- */
  const wallD=dilate(wall,1.1);
@@ -2260,12 +2264,93 @@ function autotraceFloorplan(img, opts){
    x:Math.round(d.x*cmPerPx*10)/10,y:Math.round(d.y*cmPerPx*10)/10,
    w:wcm,rot:d.horiz?0:90,flip:false});}
 
+ /* ---- 16b. windows. On an agent's plan a window is a break in an EXTERIOR wall
+        that still has line work in it — the thin double line of the glazing — while
+        a door is a break with nothing drawn across it. The wall mask is the opened
+        one, so it has already dropped those thin lines: at a window wallMask is 0
+        but `dark` is not, and at a doorway both are 0. That difference is the whole
+        classifier. Walking the outward-facing edges of the finished room rectangles
+        keeps this in step with the geometry the planner will actually draw. ---- */
+ const windows=[];
+ if(!renderMode&&wallMask&&extMask){
+  const band=Math.max(3,Math.round(60/cmPerPx));  // how far out to look for the page
+  const MINW=40,MAXW=400;                          // sane window widths, cm
+  const seen=[];
+  /* one column of the wall, looking outward from a room edge */
+  const probe=(x,y,dx,dy)=>{
+   let solid=0,ink=0,ext=false,n=0;
+   for(let k=1;k<=band;k++){
+    const xx=x+dx*k,yy=y+dy*k;
+    if(xx<0||yy<0||xx>=W||yy>=H)break;
+    const i=idx(xx,yy);
+    if(extMask[i]){ext=true;break;}
+    n++;
+    if(wallMask[i])solid++;
+    if(dark[i])ink++;}
+   return {ext,solid,ink,n};};
+  const scanEdge=(ax,ay,bx,by,dx,dy,horiz,blk)=>{
+   const len=horiz?(bx-ax):(by-ay);
+   if(len<Math.round(MINW/cmPerPx))return;
+   const cols=[];
+   for(let t=0;t<=len;t++){
+    const x=horiz?ax+t:ax, y=horiz?ay:ay+t;
+    if(x<0||y<0||x>=W||y>=H){cols.push(null);continue;}
+    const p=probe(x,y,dx,dy);
+    cols.push(p.ext?p:null);}          // only exterior-facing columns can hold a window
+   let run=null;
+   if(opts.debug){let ne=0;for(const c of cols)if(c)ne++;
+    if(ne)console.log('edge',horiz?'H':'V','len',len,'exteriorFacing',ne);}
+   const close=()=>{
+    if(!run)return;
+    const cells=run.end-run.start+1;
+    const wcm=cells*cmPerPx;
+    /* per COLUMN, not per pixel: glazing is two thin lines, so averaging ink over
+       the whole depth of the probe buries it (measured 0.10 on real windows). What
+       separates a window from a doorway is whether the column crosses ANY ink. */
+    const inkFrac=run.inkCols/Math.max(1,cells);
+    if(opts.debug)console.log('  run',horiz?'H':'V','wcm',Math.round(wcm),'inkFrac',inkFrac.toFixed(2),
+     (wcm>=MINW&&wcm<=MAXW&&inkFrac>=0.6)?'-> WINDOW':'-> reject');
+    /* glazing drawn across the gap = window; nothing drawn = a doorway, and those
+       come from the saddle sweep with a proper room-to-room pair behind them */
+    if(wcm>=MINW&&wcm<=MAXW&&inkFrac>=0.6){
+     const s=run.start,e=run.end;
+     const wx=horiz?ax+s:ax, wy=horiz?ay:ay+s;
+     windows.push({horiz,blk,px:wx,py:wy,wcm:Math.round(wcm)});}
+    run=null;};
+   for(let t=0;t<cols.length;t++){
+    const c=cols[t];
+    const open=c&&c.n>0&&c.solid===0;   // the thick wall is missing here
+    if(open){
+     if(!run)run={start:t,end:t,inkCols:0};
+     run.end=t;if(c.ink>0)run.inkCols++;}
+    else close();}
+   close();};
+  for(const r of rooms2){
+   for(const c of r.rects){
+    const blk=blkOf(r.gi);
+    scanEdge(c.x,c.y,           c.x+c.w,c.y,            0,-1,true, blk); // top
+    scanEdge(c.x,c.y+c.h,       c.x+c.w,c.y+c.h,        0, 1,true, blk); // bottom
+    scanEdge(c.x,c.y,           c.x,    c.y+c.h,       -1, 0,false,blk); // left
+    scanEdge(c.x+c.w,c.y,       c.x+c.w,c.y+c.h,        1, 0,false,blk); // right
+   }}
+  /* two rectangles of one room can share an edge and report the same glazing twice */
+  let wi=1;
+  for(const w2 of windows){
+   const x=Math.round(w2.px*cmPerPx*10)/10,y=Math.round(w2.py*cmPerPx*10)/10;
+   const dup=seen.some(s=>s.horiz===w2.horiz&&Math.abs(s.x-x)<60&&Math.abs(s.y-y)<60);
+   if(dup)continue;
+   seen.push({horiz:w2.horiz,x,y});
+   doors.push({id:'aw'+(wi++),kind:'window',blk:w2.blk,x,y,w:w2.wcm,rot:w2.horiz?0:90});}
+ }
+
  const totM2=rooms2.reduce((s,r)=>s+r.area,0)*cmPerPx*cmPerPx/10000;
  const coverage=Math.round(rooms2.reduce((s,r)=>s+r.area,0)/freeCount*100)/100;
  const res={ok:true,rooms:roomsFinal,openings:doors,cmPerPx,scaleSource,coverage,render:renderMode,
   mask:{gi:gmask,W,H}, // per-pixel room-group index (image px), for OCR room naming
   floors:blkOrder?blkOrder.size:1, // storeys printed on this one sheet
-  stats:{roomGroups:new Set(roomsFinal.map(r=>r.name)).size,rects:roomsFinal.length,doors:doors.length,areaM2:Math.round(totM2*10)/10}};
+  stats:{roomGroups:new Set(roomsFinal.map(r=>r.name)).size,rects:roomsFinal.length,
+   doors:doors.filter(o=>o.kind==='door').length,windows:doors.filter(o=>o.kind==='window').length,
+   areaM2:Math.round(totM2*10)/10}};
  if(opts.debug)res.debug={W,H,gmask,nGroups};
  return res;
 }
@@ -2898,13 +2983,15 @@ function liveResultCard(r){
  if(r.listing.community)chips.push('shared by the community');
  if(r.listing.areaSqm)chips.push((Math.round(r.listing.areaSqm*10)/10)+' m²'+(r.listing.areaEstimated?' (est.)':''));
  else if(r.traceStats)chips.push('~'+r.traceStats.areaM2+' m² traced');
- if(r.traceStats)chips.push(r.traceStats.roomGroups+' room'+(r.traceStats.roomGroups===1?'':'s')+' · '+r.traceStats.doors+' door'+(r.traceStats.doors===1?'':'s'));
+ if(r.traceStats)chips.push(r.traceStats.roomGroups+' room'+(r.traceStats.roomGroups===1?'':'s')+' · '+r.traceStats.doors+' door'+(r.traceStats.doors===1?'':'s')
+  +(r.traceStats.windows?' · '+r.traceStats.windows+' window'+(r.traceStats.windows===1?'':'s'):''));
  if(r.listing.floorplanCount>1)chips.push('plan '+((r.floorIx||0)+1)+' of '+r.listing.floorplanCount);
  const srcs=wfFloorSources(r);
  const sheet=!!(r.parts&&r.parts.length>1);
  if(sheet)chips.push(r.parts.length+' floors on one plan');
+ const fnames=r.floorNames||[];
  const floors=srcs.length>1
-  ?'<div class="chips lp-floors"><span style="border:0;background:none;padding-left:0">'+(sheet?'Floors:':'Floor plans:')+'</span>'+srcs.map((u,i)=>'<button class="fp'+(i===(r.floorIx||0)?' on':'')+'" data-f="'+i+'" title="'+(sheet?'Show floor ':'Trace floor plan ')+(i+1)+'">'+(i+1)+'</button>').join('')+'</div>':'';
+  ?'<div class="chips lp-floors"><span style="border:0;background:none;padding-left:0">'+(sheet?'Floors:':'Floor plans:')+'</span>'+srcs.map((u,i)=>'<button class="fp'+(i===(r.floorIx||0)?' on':'')+'" data-f="'+i+'" title="'+esc(fnames[i]?fnames[i].label:((sheet?'Show floor ':'Trace floor plan ')+(i+1)))+'">'+esc(fnames[i]?fnames[i].short:String(i+1))+'</button>').join('')+'</div>':'';
  if(r.traceRender)chips.push('3D plan · approximate');
  let hint='';
  if(!r.traced)hint='We found the floor plan but couldn’t trace the rooms automatically. It’s loaded as a background image — set the scale and trace over it in Edit plan.';
@@ -3286,8 +3373,9 @@ function wfRenderFloorHud(base,ex){
  if(!hud||floors.length<2){if(el)el.remove();return;}
  if(!el||el.parentElement!==hud){if(el)el.remove();el=document.createElement('span');el.id='floorhud';el.className='chip';hud.insertBefore(el,hud.firstChild);}
  const m=/-f(\d+)$/.exec(planId);const cur=m?+m[1]-1:0;
+ const short=ex.floorShort||[],full=ex.floorNames||[];
  el.innerHTML='Floor '+floors.map(function(u,i){
-  return '<button data-f="'+i+'" style="margin-left:4px;min-width:24px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:var(--mono);border:1px solid '+(i===cur?'var(--accent)':'var(--line)')+';background:'+(i===cur?'var(--accent-soft)':'var(--panel)')+';color:var(--ink)">'+(i+1)+'</button>';}).join('');
+  return '<button data-f="'+i+'" title="'+esc(full[i]||('Floor '+(i+1)))+'" style="margin-left:4px;min-width:24px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:var(--mono);border:1px solid '+(i===cur?'var(--accent)':'var(--line)')+';background:'+(i===cur?'var(--accent-soft)':'var(--panel)')+';color:var(--ink)">'+esc(short[i]||String(i+1))+'</button>';}).join('');
  [...el.querySelectorAll('button')].forEach(b=>b.addEventListener('click',()=>{const ix=+b.dataset.f;if(ix!==cur)wfOpenFloor(base,ex,ix);}));}
 async function wfOpenFloor(base,ex,ix){
  const key=base+':'+ix;
@@ -3369,6 +3457,34 @@ const WF_ROOM_RE=[
  [/\beaves\b|\brestricted\b|\blimited use\b/i,'Eaves','dark'],
  [/\bbalcony\b|\bterrace\b/i,'Balcony','plain'],
 ];
+/* Storey captions. A sheet that prints several floors side by side captions each
+   one under its block ("Ground Floor  First Floor  Second Floor") — and tesseract
+   reads those as a single line too, so this needs the same all-matches-with-offsets
+   treatment as the room names. Longest form first: "lower ground" must win over
+   "ground". */
+const WF_FLOOR_RE=[
+ [/\blower\s+ground\s+floor\b/i,'Lower Ground Floor','LG'],
+ [/\bground\s+floor\b/i,'Ground Floor','G'],
+ [/\bfirst\s+floor\b/i,'First Floor','1'],
+ [/\bsecond\s+floor\b/i,'Second Floor','2'],
+ [/\bthird\s+floor\b/i,'Third Floor','3'],
+ [/\bfourth\s+floor\b/i,'Fourth Floor','4'],
+ [/\bbasement\b/i,'Basement','B'],
+ [/\b(?:loft|attic)\b/i,'Loft','L'],
+];
+function wfFloorLabelsFromText(t){
+ const hits=[];
+ for(const e of WF_FLOOR_RE){
+  const re=new RegExp(e[0].source,e[0].flags+'g');
+  let m;
+  while((m=re.exec(t))){
+   const at=m.index,end=at+m[0].length;
+   if(re.lastIndex<=at)re.lastIndex=at+1;
+   if(hits.some(h=>at<h.end&&end>h.at))continue;
+   hits.push({label:e[1],short:e[2],m:m[0],at,end});}}
+ hits.sort((a,b)=>a.at-b.at);
+ return hits;}
+
 /* EVERY room label on one OCR line, in reading order — not just the first match.
    Tesseract reads straight across a sheet that prints several storeys side by side,
    so a real listing gives lines like "= Garage —— Living Room" and
@@ -3422,12 +3538,29 @@ async function wfOcrRoomNames(r){
  finally{if(worker)try{worker.terminate();}catch(e){}}
  const mask=r.traceMask,W=mask.W,H=mask.H;
  const giName=new Map();
+ const floorHits=[];
  const IGNORE=/denotes|not to scale|identification|produced in accordance|measurement|estate agent|approximate area|limited use|total\s*=|access to|head height|floor plan/i;
  for(const ln of lines){
   const t=(ln.text||'').trim();
   /* the cap is generous because a line can legitimately span three storeys now */
   if(t.length<2||t.length>160)continue;
   if((ln.confidence||0)<38)continue;
+  /* storey captions sit OUTSIDE every room, under their block, so they are picked
+     up here rather than by the room rules — and before IGNORE, which is tuned for
+     legend prose and has no reason to see them */
+  {const fh=wfFloorLabelsFromText(t);
+   if(fh.length){
+    const usedF=new Set();
+    for(const h of fh){
+     let b=null;
+     const w0=(String(h.m||'').match(/[A-Za-z]{3,}/)||[])[0];
+     if(w0&&Array.isArray(ln.words)){
+      for(let wi=0;wi<ln.words.length;wi++){
+       if(usedF.has(wi))continue;
+       const w2=ln.words[wi];
+       if(w2&&w2.text&&w2.text.toLowerCase().indexOf(w0.toLowerCase())>=0){usedF.add(wi);if(w2.bbox)b=w2.bbox;break;}}}
+     if(!b&&fh.length===1)b=ln.bbox;
+     if(b)floorHits.push({label:h.label,short:h.short,x:(b.x0+b.x1)/(2*f),y:(b.y0+b.y1)/(2*f)});}}}
   if(IGNORE.test(t))continue;
   const hits=wfRoomNamesFromText(t);if(!hits.length)continue;
   const usedWord=new Set();
@@ -3460,14 +3593,40 @@ async function wfOcrRoomNames(r){
       rule is the one worth showing: "Kitchen/diner", not "Conservatory". */
    const prev=giName.get(gi);
    if(!prev||hit.rank<prev.rank)giName.set(gi,hit);}}
- if(!giName.size)return null;
+ if(!giName.size&&!floorHits.length)return null;
  /* second Bedroom -> Bedroom 2, and so on */
  const used={};
  for(const kv of giName){
   const hit=kv[1];let nm=hit.name;
   if(used[nm]){used[nm]++;nm=nm+' '+used[nm];}else used[nm]=1;
   hit.finalName=nm;}
- return giName;}
+ return {giName,floorHits};}
+/* storey captions -> one name per split floor, matched by which block sits above
+   the caption. Captions are printed under their own block, so horizontal overlap
+   is the signal; nearest-centre is the fallback for odd layouts. */
+function wfNameFloors(r,floorHits){
+ const parts=r.parts;
+ if(!parts||parts.length<2||!floorHits||!floorHits.length)return null;
+ const u=r.plan&&r.plan.underlay;
+ const cm=u&&u.cmPerPx?u.cmPerPx:0;
+ if(!cm)return null;
+ const boxes=parts.map(p=>{
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  p.plan.rooms.forEach(rm=>{x0=Math.min(x0,rm.x);y0=Math.min(y0,rm.y);x1=Math.max(x1,rm.x+rm.w);y1=Math.max(y1,rm.y+rm.d);});
+  return {x0,y0,x1,y1};});
+ const names=parts.map(()=>null);
+ for(const h of floorHits){
+  const hx=h.x*cm,hy=h.y*cm;
+  let best=-1,bestD=Infinity;
+  for(let i=0;i<boxes.length;i++){
+   const b=boxes[i];
+   if(!isFinite(b.x0))continue;
+   const inX=hx>=b.x0-100&&hx<=b.x1+100;
+   const dx=Math.max(b.x0-hx,0,hx-b.x1),dy=Math.max(b.y0-hy,0,hy-b.y1);
+   const d=(inX?0:dx*dx)+dy*dy;
+   if(d<bestD){bestD=d;best=i;}}
+  if(best>=0&&!names[best])names[best]={label:h.label,short:h.short};}
+ return names.some(Boolean)?names:null;}
 function wfApplyRoomNames(rooms,giName){
  const done=new Set();
  for(const rm of rooms){if(rm.gi==null)continue;const hit=giName.get(rm.gi);if(!hit)continue;
@@ -3483,8 +3642,26 @@ function wfPatchOpenPlan(r,giName){
  if(n&&plannerReady&&$('#app')&&!$('#app').hidden){computeIssues();render();renderPanels();}}
 function wfNameRooms(r){
  if(!r||!r.traced||!r.traceMask)return;
- wfOcrRoomNames(r).then(giName=>{
-  if(!giName){console.warn('wf ocr: no room labels matched');return;}
+ wfOcrRoomNames(r).then(res=>{
+  if(!res){console.warn('wf ocr: no room labels matched');return;}
+  const giName=res.giName;
+  /* storey captions: name the floor tabs, the split plans and the open board */
+  const fn=wfNameFloors(r,res.floorHits);
+  if(fn){
+   r.floorNames=fn;
+   const base=wfBaseId(r.planId);
+   const ex=wfExtrasLoad(base)||{};
+   ex.floorNames=fn.map(n=>n?n.label:null);
+   ex.floorShort=fn.map(n=>n?n.short:null);
+   wfExtrasSave(base,ex);
+   r.parts.forEach((p,i)=>{if(fn[i])p.plan.title=String(p.plan.title||'').replace(/ · floor \d+$/,' · '+fn[i].label);});
+   /* the open board keeps its own title unless it is still the generated one */
+   if(typeof state!=='undefined'&&state&&/ · floor \d+$/.test(state.title||'')){
+    const m=/-f(\d+)$/.exec(planId);const ix=m?+m[1]-1:0;
+    if(fn[ix]){state.title=state.title.replace(/ · floor \d+$/,' · '+fn[ix].label);
+     if(plannerReady&&$('#title'))$('#title').value=state.title;}}
+   if(plannerReady&&$('#app')&&!$('#app').hidden)wfPlannerExtras();}
+  if(!giName.size){if(fn&&wfLastLive===r){$('#lp-result').innerHTML=liveResultCard(r);wireResultButtons(r);}return;}
   /* labels are keyed by room-group id, which is global to the sheet — so one OCR
      pass names every storey the sheet was split into, not just the open one */
   let applied=0;
