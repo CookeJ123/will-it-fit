@@ -2270,6 +2270,56 @@ function autotraceFloorplan(img, opts){
    x:Math.round(d.x*cmPerPx*10)/10,y:Math.round(d.y*cmPerPx*10)/10,
    w:wcm,rot:d.horiz?0:90,flip:false});}
 
+ /* ---- 16a. pull touching-room edges in to meet at a real doorway. Rectangle
+    decomposition (step 12) fits the largest rectangle STRICTLY inside each
+    room's watershed-labelled pixels, and near a doorway that boundary is a
+    rounded notch (the door-gap blocking in step 8's saddle sweep), not a
+    straight wall line — so the fitted rectangle can stop well short of the
+    true wall on either side, independently, and the two shortfalls add up to
+    a visible gap with the door symbol floating in it, touching neither room
+    (measured on a real listing: a 75cm doorway rendered with a 48cm gap).
+    For every door that joins two DIFFERENT kept rooms with a gap small
+    enough to still be a doorway rather than a hallway, pull each room's
+    facing edge in to leave just a normal wall's thickness, centred on the
+    door — the two rooms then read as connected by a wall with a door in it,
+    like every doorway whose neighbouring rooms happen to already line up. */
+ {const WALLCM=14,HALFWALL=WALLCM/2,MIN_RECT=60;
+  const nearestFacing=(gi,horiz,doorPos,doorLo,doorHi)=>{
+   let best=null,bestD=Infinity,bestIsMax=null,bestVal=null;
+   for(const r of roomsFinal){
+    if(r.gi!==gi)continue;
+    if(horiz){
+     if(r.x>doorHi||r.x+r.w<doorLo)continue;
+     const top=r.y,bot=r.y+r.d,dTop=Math.abs(top-doorPos),dBot=Math.abs(bot-doorPos);
+     if(dTop<bestD){bestD=dTop;best=r;bestIsMax=false;bestVal=top;}
+     if(dBot<bestD){bestD=dBot;best=r;bestIsMax=true;bestVal=bot;}
+    } else {
+     if(r.y>doorHi||r.y+r.d<doorLo)continue;
+     const left=r.x,right=r.x+r.w,dL=Math.abs(left-doorPos),dR=Math.abs(right-doorPos);
+     if(dL<bestD){bestD=dL;best=r;bestIsMax=false;bestVal=left;}
+     if(dR<bestD){bestD=dR;best=r;bestIsMax=true;bestVal=right;}
+    }}
+   return best?{r:best,isMax:bestIsMax,val:bestVal,dist:bestD}:null;};
+  for(const d of A.doors){
+   const ga=A.groupOf[d.a],gb=A.groupOf[d.b];
+   if(ga===gb||!kept.has(ga)||!kept.has(gb))continue;
+   const dx=Math.round(d.x*cmPerPx*10)/10,dy=Math.round(d.y*cmPerPx*10)/10;
+   const dw=Math.max(56,Math.min(115,Math.round(d.gapPx*cmPerPx)));
+   const lo=(d.horiz?dx:dy)-dw/2,hi=(d.horiz?dx:dy)+dw/2,pos=d.horiz?dy:dx;
+   const fa=nearestFacing(ga,d.horiz,pos,lo,hi),fb=nearestFacing(gb,d.horiz,pos,lo,hi);
+   if(!fa||!fb||fa.dist>90||fb.dist>90)continue;
+   const gap=Math.abs(fb.val-fa.val);
+   if(gap<=WALLCM+2||gap>100)continue; // already tight, or a real hallway — leave it
+   for(const f of [fa,fb]){
+    const newVal=f.val<pos?pos-HALFWALL:pos+HALFWALL;
+    if(d.horiz){
+     if(f.isMax){const nd=newVal-f.r.y;if(nd>=MIN_RECT)f.r.d=Math.round(nd*10)/10;}
+     else{const nd=(f.r.y+f.r.d)-newVal;if(nd>=MIN_RECT){f.r.y=Math.round(newVal*10)/10;f.r.d=Math.round(nd*10)/10;}}
+    } else {
+     if(f.isMax){const nw=newVal-f.r.x;if(nw>=MIN_RECT)f.r.w=Math.round(nw*10)/10;}
+     else{const nw=(f.r.x+f.r.w)-newVal;if(nw>=MIN_RECT){f.r.x=Math.round(newVal*10)/10;f.r.w=Math.round(nw*10)/10;}}
+    }}}}
+
  /* ---- 16b. windows. On an agent's plan a window is a break in an EXTERIOR wall
         that still has line work in it — the thin double line of the glazing — while
         a door is a break with nothing drawn across it. The wall mask is the opened
