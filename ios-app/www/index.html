@@ -1798,6 +1798,10 @@ function autotraceFloorplan(img, opts){
  let blockOf=null,nBlocks=1;
  /* thick walls and the page background, kept in scope for window finding (step 16b) */
  let wallMask=null,extMask=null;
+ /* thin drawn partitions, and the seeding view of free space that respects them
+    (step 4b). Null whenever the plan has none, in which case every downstream
+    step behaves exactly as it did before this existed. */
+ let partLines=null,seedFree=null,seedDt=null;
  if(renderMode){
  /* ---- 3R. photoreal renders: floors are textured or tinted, walls are smooth
         bright neutral bands, furniture is smooth-bright too (accepted as obstacle
@@ -1921,6 +1925,71 @@ function autotraceFloorplan(img, opts){
   if(exterior[i])continue;
   if(!wallD[i]){free[i]=1;freeCount++;}
   if(!dark[i])freeAreaCount++;}
+
+ /* ---- 5b. thin PARTITION walls -> a seeding view of free space.
+    Step 3's opening is sized from the plan's THICKEST walls (p80 of half
+    thickness), so a plan drawn with a heavy exterior and light internal
+    partitions loses every partition. Free space then flows straight THROUGH a
+    drawn wall: measured on a real listing, a family room and the hall behind it
+    met "157 cm wide" across the solid wall between them, the whole storey
+    seeded as ONE region, and because doors are only ever found BETWEEN two
+    regions the ground floor came out as a single room with no doors at all.
+    A partition is thin, LONG and STRAIGHT, and ties into structure at BOTH
+    ends. Those four together are what separate it from its look-alikes, each
+    of which cost a fixture when tried without them:
+      - a door LEAF is long, straight and thin, but hinges at one end and swings
+        free at the other (accepting it sealed doorways shut and, since the
+        scale is read from door widths, inflated one plan's area 3.4x);
+      - a swing ARC is curved, so its straight runs are short;
+      - GLAZING spans between wall ends like a partition does, but sits in the
+        outer envelope, so runs hugging the page background are excluded;
+      - label TEXT and furniture are short, separate blobs.
+    The result is used ONLY to seed rooms and to stop the sweep walking through
+    a wall. Areas, rectangles, door widths, the scale and the window finder all
+    keep the original free space, so a plan with no thin partitions traces
+    exactly as it did before. */
+ {const L=Math.max(10,Math.round(0.025*Math.max(W,H)));
+  const extNear=dilate(exterior,2.5), wallNear=dilate(wall,3.5);
+  const lin=new Uint8Array(N);let add=0;
+  const tryRun=(pts)=>{
+   if(!wallNear[pts[0]]||!wallNear[pts[pts.length-1]])return;   // must tie in at both ends
+   /* A thick wall is itself a long straight dark run, so most matches are walls
+      the mask already has. Only a run that is mostly OUTSIDE the wall mask adds
+      anything -- and being outside it is exactly what "too thin to survive the
+      opening" means. Skipping the rest keeps this rule to the handful of lines
+      it is actually about, instead of restating the whole drawing. */
+   let inWall=0;for(const p of pts)if(wall[p])inWall++;
+   if(inWall>pts.length*0.5)return;
+   let extHits=0;for(const p of pts)if(extNear[p])extHits++;
+   if(extHits>pts.length*0.25)return;                            // glazing / dimension line
+   for(const p of pts)if(!lin[p]){lin[p]=1;add++;}};
+  for(let y=0;y<H;y++){let x=0;
+   while(x<W){
+    if(!dark[idx(x,y)]){x++;continue;}
+    let x2=x;while(x2<W&&dark[idx(x2,y)])x2++;
+    if(x2-x>=L){const pts=[];for(let k=x;k<x2;k++)pts.push(idx(k,y));tryRun(pts);}
+    x=x2;}}
+  for(let x=0;x<W;x++){let y=0;
+   while(y<H){
+    if(!dark[idx(x,y)]){y++;continue;}
+    let y2=y;while(y2<H&&dark[idx(x,y2)])y2++;
+    if(y2-y>=L){const pts=[];for(let k=y;k<y2;k++)pts.push(idx(x,k));tryRun(pts);}
+    y=y2;}}
+  /* Safety valve: partitions are a minority of a plan's ink. If this matched a
+     large share of the free interior the rule has misfired on this drawing --
+     drop it wholesale and trace as before rather than trace badly. */
+  let blockedFree=0;
+  for(let i=0;i<N;i++)if(lin[i]&&free[i])blockedFree++;
+  if(opts.debug)console.log('partition px',add,'of free',freeCount,
+    'frac',(blockedFree/Math.max(1,freeCount)).toFixed(3));
+  if(add&&blockedFree<freeCount*0.08){
+   partLines=lin;
+   const blk=dilate(lin,1.1);
+   seedFree=new Uint8Array(N);
+   for(let i=0;i<N;i++)seedFree[i]=(free[i]&&!blk[i])?1:0;
+   const obs=new Uint8Array(N);
+   for(let i=0;i<N;i++)obs[i]=seedFree[i]?0:1;
+   seedDt=dtToSet(obs);}}
  }
  if(freeCount<N*0.03)return {ok:false,reason:'no enclosed rooms found'};
 
@@ -1952,17 +2021,63 @@ function autotraceFloorplan(img, opts){
   const coreTh=36/cmPP; // half-width for a room to seed itself (72 cm wide after wall slack)
   const minCore=20;     // the dt bar already guarantees a real open pocket; keep tiny lobbies
   /* cores */
+  /* Rooms are seeded, and the sweep walks, on the partition-aware view (5b):
+     a drawn wall must separate two rooms even when it was too thin to survive
+     the thick-wall opening. Both fall back to the plain free space when the
+     plan has no thin partitions, so nothing changes for such plans. Every
+     MEASUREMENT below still uses free/dt, so door widths and the scale read
+     off them are untouched. */
+  const sFree=seedFree||free, sDt=seedDt||dt;
+  /* Seeding is two-tier. A single threshold at coreTh floods through anything
+     wider than 72 cm, so on an open-plan storey -- kitchen to diner to hall,
+     each joined by a metre-wide opening -- the whole floor seeds as ONE region.
+     Doors are only ever found BETWEEN regions, so that storey then reports no
+     doors at all, which is exactly the failure a real listing showed.
+     So: find regions again at a stricter coreThH. Where one loose region holds
+     SEVERAL strict ones, those are rooms joined by an opening -- seed them
+     separately and let the sweep below measure the necks and decide door or
+     archway. Where it holds one (or none -- a WC narrower than the strict bar),
+     seed it whole exactly as the single-tier code always did, so narrow rooms
+     are never lost. The 36-48 cm band stays unseeded either way; the sweep
+     walks it. */
+  const coreThH=52/cmPP;
+  const comps=(th)=>{
+   const lab=new Int32Array(N);lab.fill(-1);let n=0;
+   for(let s=0;s<N;s++){
+    if(lab[s]>=0||!sFree[s]||sDt[s]<th)continue;
+    qh=0;qt=0;q[qt++]=s;lab[s]=n;
+    while(qh<qt){const i=q[qh++];const x=i%W,y=(i/W)|0;
+     if(x>0&&lab[i-1]<0&&sFree[i-1]&&sDt[i-1]>=th){lab[i-1]=n;q[qt++]=i-1;}
+     if(x<W-1&&lab[i+1]<0&&sFree[i+1]&&sDt[i+1]>=th){lab[i+1]=n;q[qt++]=i+1;}
+     if(y>0&&lab[i-W]<0&&sFree[i-W]&&sDt[i-W]>=th){lab[i-W]=n;q[qt++]=i-W;}
+     if(y<H-1&&lab[i+W]<0&&sFree[i+W]&&sDt[i+W]>=th){lab[i+W]=n;q[qt++]=i+W;}}
+    n++;}
+   return {lab,n};};
+  const lo=comps(coreTh),hi=comps(coreThH);
+  const hiOwner=new Int32Array(hi.n).fill(-1);
+  const hiSize=new Int32Array(hi.n);
+  for(let i=0;i<N;i++){const h=hi.lab[i];if(h<0)continue;hiSize[h]++;const l=lo.lab[i];
+   if(l>=0&&hiOwner[h]!==l)hiOwner[h]=l;}
+  /* Split a region only where at least TWO of its strict parts are big enough to
+     be rooms in their own right. Counting every strict part instead let a dense
+     sheet shatter its rooms into slivers -- one 6-storey plan fell from 19 rooms
+     to 6 and lost its scale with them. A part below the same 1.5 m2 floor the
+     rectangle stage uses is a nook, not a room: leave that region whole. */
+  const roomPx=15000/(cmPP*cmPP);
+  const hiPer=new Int32Array(lo.n);
+  for(let h=0;h<hi.n;h++)if(hiOwner[h]>=0&&hiSize[h]>=roomPx)hiPer[hiOwner[h]]++;
   const coreLabel=new Int32Array(N);coreLabel.fill(-1);
   let nCores0=0;const sizes=[];
-  for(let s=0;s<N;s++){
-   if(coreLabel[s]>=0||!free[s]||dt[s]<coreTh)continue;
-   let size=0;qh=0;qt=0;q[qt++]=s;coreLabel[s]=nCores0;
-   while(qh<qt){const i=q[qh++];size++;const x=i%W,y=(i/W)|0;
-    if(x>0&&coreLabel[i-1]<0&&free[i-1]&&dt[i-1]>=coreTh){coreLabel[i-1]=nCores0;q[qt++]=i-1;}
-    if(x<W-1&&coreLabel[i+1]<0&&free[i+1]&&dt[i+1]>=coreTh){coreLabel[i+1]=nCores0;q[qt++]=i+1;}
-    if(y>0&&coreLabel[i-W]<0&&free[i-W]&&dt[i-W]>=coreTh){coreLabel[i-W]=nCores0;q[qt++]=i-W;}
-    if(y<H-1&&coreLabel[i+W]<0&&free[i+W]&&dt[i+W]>=coreTh){coreLabel[i+W]=nCores0;q[qt++]=i+W;}}
-   sizes.push(size);nCores0++;}
+  {const loMap=new Int32Array(lo.n).fill(-1),hiMap=new Int32Array(hi.n).fill(-1);
+   for(let i=0;i<N;i++){
+    const l=lo.lab[i];if(l<0)continue;
+    if(hiPer[l]>=2){
+     const h=hi.lab[i];if(h<0||hiSize[h]<roomPx)continue; // nooks stay for the sweep
+     if(hiMap[h]<0){hiMap[h]=nCores0++;sizes.push(0);}
+     coreLabel[i]=hiMap[h];sizes[hiMap[h]]++;
+    }else{
+     if(loMap[l]<0){loMap[l]=nCores0++;sizes.push(0);}
+     coreLabel[i]=loMap[l];sizes[loMap[l]]++;}}}
   const keep=new Int32Array(nCores0);let nCores=0;
   for(let l=0;l<nCores0;l++)keep[l]=sizes[l]>=minCore?nCores++:-1;
   if(!nCores)return null;
@@ -1996,15 +2111,15 @@ function autotraceFloorplan(img, opts){
   /* bucket free px by descending dt (0.5 px resolution) */
   {const nb2=[];let maxB=0;
    const bOf=new Int32Array(N);
-   for(let i=0;i<N;i++){if(!free[i])continue;const b=Math.min(4000,(dt[i]*2)|0);bOf[i]=b;if(b>maxB)maxB=b;}
+   for(let i=0;i<N;i++){if(!sFree[i])continue;const b=Math.min(4000,(sDt[i]*2)|0);bOf[i]=b;if(b>maxB)maxB=b;}
    const counts=new Int32Array(maxB+2);
    let nFree=0;
-   for(let i=0;i<N;i++)if(free[i]){counts[bOf[i]]++;nFree++;}
+   for(let i=0;i<N;i++)if(sFree[i]){counts[bOf[i]]++;nFree++;}
    const starts=new Int32Array(maxB+2);
    {let acc=0;for(let b=maxB;b>=0;b--){starts[b]=acc;acc+=counts[b];}}
    const order=new Int32Array(nFree);
    {const fill=new Int32Array(maxB+2);
-    for(let i=0;i<N;i++)if(free[i]){const b=bOf[i];order[starts[b]+fill[b]++]=i;}}
+    for(let i=0;i<N;i++)if(sFree[i]){const b=bOf[i];order[starts[b]+fill[b]++]=i;}}
    for(let oi=0;oi<nFree;oi++){
     const i=order[oi];
     parent[i]=i;rootCore[i]=coreLabel[i];
@@ -2060,6 +2175,11 @@ function autotraceFloorplan(img, opts){
     for(let xx=Math.max(0,px0-r);xx<=Math.min(W-1,px0+r);xx++)
      blocked[idx(xx,yy)]=1;};
   for(const d of doors)blockAt(d.px,Math.ceil(d.gapPx/2)+2);
+  /* NB deliberately NOT blocking the watershed on partLines. Tried, reverted:
+     it shrinks every room back off its partition, and since the window finder
+     (16b) walks the finished room RECTANGLES, moving those edges cost the
+     known-answer maple check a false 4th window. Seeding and the sweep already
+     keep the rooms apart; the flood may meet in the middle of a thin wall. */
   for(const p of pinholes)blockAt(p.px,p.r);
   const label=new Int32Array(N);
   for(let i=0;i<N;i++)label[i]=coreLabel[i];
@@ -2166,8 +2286,15 @@ function autotraceFloorplan(img, opts){
    if(r.area<bboxA*0.55)drop.add(r.gi);}}
  /* doorless, mergeless groups are sealed text/legend boxes, not rooms — on LINE
     plans; renders have no legend boxes and their doorways often stay sealed by a
-    drawn door leaf, so a doorless room there is usually real */
- if(!renderMode&&A.nGroups>2)for(const r of roomsOut)if(!A.connected.has(r.gi))drop.add(r.gi);
+    drawn door leaf, so a doorless room there is usually real.
+    Applied only while it leaves something standing: a plan whose rooms are all
+    doorless is a plan whose DOORS were missed, not a sheet made entirely of
+    legend boxes, and deleting every room loses the storey outright (measured:
+    once partitions divided one plan into three genuine rooms with no doorway
+    found between them, this rule dropped all three and the trace failed). */
+ if(!renderMode&&A.nGroups>2){
+  const doorless=roomsOut.filter(r=>!A.connected.has(r.gi));
+  if(doorless.length<roomsOut.length)for(const r of doorless)drop.add(r.gi);}
  const rooms2=roomsOut.filter(r=>!drop.has(r.gi));
  if(!rooms2.length)return {ok:false,reason:'no usable rooms'};
 
