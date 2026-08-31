@@ -1793,7 +1793,7 @@ function autotraceFloorplan(img, opts){
  const q=new Int32Array(N);let qh=0,qt=0; // shared BFS queue
  function erode(mask,r){const inv=new Uint8Array(N);for(let i=0;i<N;i++)inv[i]=mask[i]?0:1;const dt=dtToSet(inv);const out=new Uint8Array(N);for(let i=0;i<N;i++)out[i]=dt[i]>r?1:0;return out;}
 
- let free,freeCount=0,freeAreaCount=0;
+ let free,freeCount=0,freeAreaCount=0,freeAreaNet=0;
  /* per-pixel sheet-block index (see step 5b); null when blocks weren't computed */
  let blockOf=null,nBlocks=1;
  /* thick walls and the page background, kept in scope for window finding (step 16b) */
@@ -1801,7 +1801,9 @@ function autotraceFloorplan(img, opts){
  /* thin drawn partitions, and the seeding view of free space that respects them
     (step 4b). Null whenever the plan has none, in which case every downstream
     step behaves exactly as it did before this existed. */
- let partLines=null,seedFree=null,seedDt=null;
+ let partLines=null,seedFree=null,seedDt=null,printMask=null;
+ /* half-thickness of the plan's own walls, in px (step 3) */
+ let wallHalf=6;
  if(renderMode){
  /* ---- 3R. photoreal renders: floors are textured or tinted, walls are smooth
         bright neutral bands, furniture is smooth-bright too (accepted as obstacle
@@ -1828,8 +1830,14 @@ function autotraceFloorplan(img, opts){
   for(let i=0;i<N;i++){if(!nf[i]){free[i]=1;freeCount++;}}
   freeAreaCount=freeCount;
  } else {
- /* ---- 3. thick walls only: opening removes text/furniture/door-arc thin lines.
-        Radius adapts to the plan's wall thickness (p80 of half-thickness). ---- */
+  /* ---- 3. thick walls only: opening removes text/furniture/door-arc thin lines.
+        Radius adapts to the plan's wall thickness (p80 of half-thickness).
+    NB a second Otsu over the ink alone, to split solid-black walls from the
+    lighter line a fitting is drawn in, was tried here and REVERTED: it works on
+    a plan whose walls are pure black, but plenty are not -- bath1 fell from 33
+    rooms to 6, derwent's area halved, maple lost a room -- because their walls
+    live in the same tone as everything else and the stricter threshold ate them.
+    Tone cannot separate a fitting from a wall in general. Step 4c uses shape. */
  let openR=1.4;
  {const inv=new Uint8Array(N);for(let i=0;i<N;i++)inv[i]=dark[i]?0:1;
   const dIn=dtToSet(inv);
@@ -1837,6 +1845,7 @@ function autotraceFloorplan(img, opts){
   for(let i=0;i<N;i+=7)if(dark[i])halves.push(dIn[i]);
   if(halves.length>50){halves.sort((a,b)=>a-b);
    const p80=halves[(halves.length*0.8)|0];
+   wallHalf=p80;
    openR=Math.max(1.4,Math.min(3.4,p80*0.5));}}
  let wall=dilate(erode(dark,openR),openR+0.5);
  let wallCount=0;for(let i=0;i<N;i++)wallCount+=wall[i];
@@ -1884,6 +1893,49 @@ function autotraceFloorplan(img, opts){
   if(y>0&&!barrier[i-W]&&!exterior[i-W]){exterior[i-W]=1;q[qt++]=i-W;}
   if(y<H-1&&!barrier[i+W]&&!exterior[i+W]){exterior[i+W]=1;q[qt++]=i+W;}}
 
+ /* ---- 4b. PRINT islands. A paragraph of small marks is type, not structure:
+    the agent's disclaimer, the logo, a caption. The closing above (radius rc)
+    welds lines of type into one solid blob, the flood cannot get inside it, and
+    the white BETWEEN the printed lines is then counted as floor. Measured on a
+    studio flat: of the free area the quoted 30 m2 was divided by, 49017 px was
+    the disclaimer paragraph and 1145 px the logo -- 16% too much paper, so every
+    room came out 10% short in each direction and a room drawn 6.20 x 4.90 m was
+    reported as 5.58 x 4.41.
+    Do NOT fix this by dropping type from the barrier: the closing legitimately
+    leans on marks near a doorway to seal the envelope, and erasing them lets the
+    flood INTO the building (tried it -- maple lost a room and a door, zoopla1
+    lost every door). The barrier is left exactly as it was. Instead take the
+    islands the flood has already sealed off and ask what each is made of: a
+    storey island always contains a wall, which is a big ink component; a
+    disclaimer or a logo is nothing but thin strokes. THICKNESS is the test, not
+    size: a line of type merges into one ink component a thousand px wide, so no
+    bounding-box test can catch it, but no part of it survives being eroded. Step
+    3 has already computed exactly that ink -- `wall`, the ink left after opening
+    at the plan's own wall thickness -- so an island counts as structure when it
+    holds a single wall pixel. When step 3 fell back to wall=dark for a thin-wall
+    CAD plan, every island keeps its ink and nothing here fires, which is the
+    conservative answer for the plans that fallback exists to serve. */
+ {const ilab=new Int32Array(N);ilab.fill(-1);const hasStructure=[];const isize=[];
+  let ni=0,sealed=0,printPx=0;
+  for(let s=0;s<N;s++){
+   if(exterior[s]||ilab[s]>=0)continue;
+   let big=false,n=0;
+   qh=0;qt=0;q[qt++]=s;ilab[s]=ni;
+   while(qh<qt){const i=q[qh++];const x=i%W,y=(i/W)|0;n++;
+    if(wall[i])big=true;
+    if(x>0&&!exterior[i-1]&&ilab[i-1]<0){ilab[i-1]=ni;q[qt++]=i-1;}
+    if(x<W-1&&!exterior[i+1]&&ilab[i+1]<0){ilab[i+1]=ni;q[qt++]=i+1;}
+    if(y>0&&!exterior[i-W]&&ilab[i-W]<0){ilab[i-W]=ni;q[qt++]=i-W;}
+    if(y<H-1&&!exterior[i+W]&&ilab[i+W]<0){ilab[i+W]=ni;q[qt++]=i+W;}}
+   hasStructure[ni]=big;isize[ni]=n;sealed+=n;if(!big)printPx+=n;
+   ni++;}
+  /* safety valve: if what looks like type accounts for a large share of what the
+     flood sealed, the reading is not trustworthy (a plan drawn entirely in short
+     dashes would read this way) -- change nothing. */
+  if(printPx>0&&printPx<=0.35*sealed){
+   printMask=new Uint8Array(N);
+   for(let i=0;i<N;i++){const l=ilab[i];if(l>=0&&!hasStructure[l])printMask[i]=1;}}}
+
  /* ---- 5b. sheet blocks. UK agents routinely print every storey on ONE sheet,
         each storey an island of ink in a sea of page background, so the islands —
         connected components of not-page — are the storeys. Rooms carry their block
@@ -1924,7 +1976,7 @@ function autotraceFloorplan(img, opts){
  for(let i=0;i<N;i++){
   if(exterior[i])continue;
   if(!wallD[i]){free[i]=1;freeCount++;}
-  if(!dark[i])freeAreaCount++;}
+  if(!dark[i]){freeAreaCount++;if(!printMask||!printMask[i])freeAreaNet++;}}
 
  /* ---- 5b. thin PARTITION walls -> a seeding view of free space.
     Step 3's opening is sized from the plan's THICKEST walls (p80 of half
@@ -2008,7 +2060,16 @@ function autotraceFloorplan(img, opts){
   return {len:b-a+1,a,b};}
 
  /* ---- 7. provisional scale ---- */
- let cmPerPx=opts.areaCm2?Math.sqrt(opts.areaCm2/freeAreaCount):Math.sqrt(600000/freeAreaCount);
+ /* A quoted floor area is the area of the BUILDING, so divide it by the building
+    only -- freeAreaNet drops the print islands found at step 4b. The no-area
+    fallback keeps the raw count it has always used: it is a guess at a typical
+    house rather than a measurement, the door-width pass below corrects it, and
+    that pass is delicately balanced on the fixtures that depend on it. */
+ /* opts.cmPerPx: the caller has read a real measurement off the plan itself (a
+    printed room dimension) and solved the scale directly. That beats every
+    estimate below, so it is taken as given and step 11 leaves it alone. */
+ let cmPerPx=opts.cmPerPx>0?opts.cmPerPx
+  :(opts.areaCm2?Math.sqrt(opts.areaCm2/(freeAreaNet||freeAreaCount)):Math.sqrt(600000/freeAreaCount));
  cmPerPx=Math.max(0.2,Math.min(20,cmPerPx));
 
  const GAP_FIX=5; // AA + wall dilation slack eaten from each measured gap
@@ -2019,7 +2080,14 @@ function autotraceFloorplan(img, opts){
     its dt is the passage half-width and its position is the passage centre. ---- */
  function analyse(cmPP){
   const coreTh=36/cmPP; // half-width for a room to seed itself (72 cm wide after wall slack)
-  const minCore=20;     // the dt bar already guarantees a real open pocket; keep tiny lobbies
+  /* A core has to be a real pocket of floor, not a speck. 20 PIXELS was both far
+     too small and resolution-dependent: on the studio flat a 47 px speck beside
+     the shower tray seeded a core of its own, the priority flood then handed it
+     the whole tray end of the room as a separate group, and that group -- 1.0 m2
+     -- fell under the 1.5 m2 room floor and was dropped, taking 0.8 m off the
+     width of a 2.35 m shower room. Measured as an area instead, and kept small
+     enough that a WC or a lobby still seeds. */
+  const minCore=20;
   /* cores */
   /* Rooms are seeded, and the sweep walks, on the partition-aware view (5b):
      a drawn wall must separate two rooms even when it was too thin to survive
@@ -2059,11 +2127,18 @@ function autotraceFloorplan(img, opts){
   for(let i=0;i<N;i++){const h=hi.lab[i];if(h<0)continue;hiSize[h]++;const l=lo.lab[i];
    if(l>=0&&hiOwner[h]!==l)hiOwner[h]=l;}
   /* Split a region only where at least TWO of its strict parts are big enough to
-     be rooms in their own right. Counting every strict part instead let a dense
-     sheet shatter its rooms into slivers -- one 6-storey plan fell from 19 rooms
-     to 6 and lost its scale with them. A part below the same 1.5 m2 floor the
-     rectangle stage uses is a nook, not a room: leave that region whole. */
-  const roomPx=15000/(cmPP*cmPP);
+     be rooms in their own right. Counting EVERY strict part let a dense sheet
+     shatter its rooms into slivers -- one 6-storey plan fell from 19 rooms to 6
+     and lost its scale with them -- so there has to be a floor. But the floor
+     applies to the strict PART, which is the room eroded by 52 cm on every side,
+     not to the room: a 2.35 x 1.50 m shower room is 3.5 m2 of floor and leaves
+     0.14 m2 once eroded. Reusing the rectangle stage's 1.5 m2 here therefore
+     demanded rooms of roughly 8 m2 before it would split anything, and small
+     rooms silently welded onto whatever they opened off. 0.12 m2 is measured:
+     the battery is unchanged anywhere between 0.06 and 0.12, and bath1 (the
+     6-storey sheet the old floor exists to protect) GAINS rooms and doors here
+     rather than shattering. Above ~0.14 the studio's shower room is lost again. */
+  const roomPx=1200/(cmPP*cmPP);
   const hiPer=new Int32Array(lo.n);
   for(let h=0;h<hi.n;h++)if(hiOwner[h]>=0&&hiSize[h]>=roomPx)hiPer[hiOwner[h]]++;
   const coreLabel=new Int32Array(N);coreLabel.fill(-1);
@@ -2078,8 +2153,19 @@ function autotraceFloorplan(img, opts){
     }else{
      if(loMap[l]<0){loMap[l]=nCores0++;sizes.push(0);}
      coreLabel[i]=loMap[l];sizes[loMap[l]]++;}}}
+  /* A core has to be a real pocket of floor, not a speck: on the studio flat a
+     47 px speck beside the shower tray seeded a core of its own, the priority
+     flood handed it the whole tray end of the room as a separate group, and that
+     group -- 1.0 m2 -- fell under the room floor and was dropped, taking 0.8 m
+     off the width of a 2.35 m room. The bar CANNOT be an area: at this point the
+     scale is still the provisional guess from step 7, and on a big sheet that
+     guess is small enough to turn any fixed area into thousands of px and wipe
+     the plan out (bath1 fell from 33 rooms to 17). Measure it against the plan's
+     own biggest core instead, which needs no scale at all. */
+  let maxCore=0;for(let l=0;l<nCores0;l++)if(sizes[l]>maxCore)maxCore=sizes[l];
+  const minCoreEff=Math.max(minCore,Math.round(0.0003*maxCore));
   const keep=new Int32Array(nCores0);let nCores=0;
-  for(let l=0;l<nCores0;l++)keep[l]=sizes[l]>=minCore?nCores++:-1;
+  for(let l=0;l<nCores0;l++)keep[l]=sizes[l]>=minCoreEff?nCores++:-1;
   if(!nCores)return null;
   for(let i=0;i<N;i++)coreLabel[i]=coreLabel[i]>=0?keep[coreLabel[i]]:-1;
   if(opts.debug){const cxs=new Float64Array(nCores),cys=new Float64Array(nCores),cns=new Float64Array(nCores);
@@ -2219,11 +2305,12 @@ function autotraceFloorplan(img, opts){
  if(!A)return {ok:false,reason:'no rooms detected'};
 
  /* ---- 11. finalize scale (iterate: better scale -> better thresholds -> better doors) ---- */
- let scaleSource='listing';
+ let scaleSource=opts.cmPerPx>0?'plan':'listing';
  /* render doorways measure narrow (frames and leaf stubs intrude), so door-width
     scaling over-scales 3D plans badly — keep the assumed scale and ask the user
     to calibrate instead */
- if(!opts.areaCm2&&renderMode)scaleSource='assumed';
+ if(opts.cmPerPx>0){/* measured off the plan; nothing to refine */}
+ else if(!opts.areaCm2&&renderMode)scaleSource='assumed';
  else if(!opts.areaCm2){
   scaleSource='assumed';
   for(let it=0;it<3;it++){
@@ -2245,7 +2332,9 @@ function autotraceFloorplan(img, opts){
  const {seg,groupOf,nGroups}=A;
  const gmask=new Int32Array(N);gmask.fill(-1);
  const gArea=new Array(nGroups).fill(0);
- for(let i=0;i<N;i++){const l=seg.label[i];if(l>=0){gmask[i]=groupOf[l];gArea[groupOf[l]]++;}}
+ const gPrint=new Array(nGroups).fill(0);
+ for(let i=0;i<N;i++){const l=seg.label[i];if(l>=0){const g=groupOf[l];gmask[i]=g;gArea[g]++;
+  if(printMask&&printMask[i])gPrint[g]++;}}
  function largestRect(g,taken){
   const hgt=new Int32Array(W);let best=null,bestA=0;
   for(let y=0;y<H;y++){
@@ -2256,18 +2345,148 @@ function autotraceFloorplan(img, opts){
      if(a>bestA){bestA=a;best={x:sxx,y:y-sh+1,w:x-sxx,h:sh};}lx=sxx;}
     stack.push([lx,h]);}}
   return best;}
- const MIN_DIM=46/cmPerPx; // rects thinner than ~46 cm are drawing junk
+ const MIN_DIM=46/cmPerPx; // a room's FIRST rect: thinner than ~46 cm is drawing junk
+ /* Later rects only ever EXTEND a room that already exists, and the 0.4 m2 floor
+    below already rejects junk, so the 46 cm bar does nothing there but lose the
+    shallow end of a stepped room -- and it does not merely skip that rect, it
+    breaks the loop. Measured on a studio flat: the shower room is 2.35 x 1.50 m
+    with the tray end 33 cm shallower, so the second rect came in under the bar,
+    the loop stopped, and the room was reported 1.17 m deep instead of 1.50. */
+ const MIN_DIM2=25/cmPerPx;
+ /* ...but a shallow rect hard against the outside wall is usually not the end of a
+    room, it is a WINDOW REVEAL. The glazing is drawn too thin to survive the wall
+    opening, so the wall has a hole in it there and the free space runs into the
+    thickness of the wall. Measured on a studio flat: a 2.04 x 0.42 m reveal was
+    taken as part of the room and reported it 6.45 m deep against a drawn 6.20.
+    A reveal sits INSIDE the wall band -- within a wall's thickness of the page --
+    and real floor does not, which separates the two without having to decide what
+    the opening is. Only extension rects are tested: a room's first rectangle is
+    the room. */
+ const dtExt=dtToSet(extMask||new Uint8Array(N));
+ const NEAR=Math.max(6,2*wallHalf);
+ /* A group too small to be a room is floor all the same, and dropping it simply
+    loses that floor: on a studio flat a speck of core beside the shower tray took
+    the tray end of the room as a group of its own, it fell under the bar, and a
+    2.35 m room was reported 1.59 m wide. Give it to the neighbour it actually
+    opens onto instead. The shared-boundary test is what keeps a real small room
+    (a WC behind its door) separate: the priority flood blocks door discs, so a
+    room behind a door touches its neighbour only across the doorway, while a
+    piece of the same room touches it along the whole join. */
+ {const order=[];
+  for(let g=0;g<nGroups;g++)if(gArea[g]>0&&gArea[g]*cmPerPx*cmPerPx<15000)order.push(g);
+  order.sort((a,b)=>gArea[a]-gArea[b]);
+  for(const g of order){
+   if(gArea[g]<=0)continue;
+   const share=new Map();let bound=0;
+   for(let i=0;i<N;i++){
+    if(gmask[i]!==g)continue;
+    const x=i%W,y=(i/W)|0;
+    for(const nb of [x>0?i-1:-1,x<W-1?i+1:-1,y>0?i-W:-1,y<H-1?i+W:-1]){
+     if(nb<0)continue;
+     const o=gmask[nb];
+     if(o===g)continue;
+     bound++;
+     if(o>=0)share.set(o,(share.get(o)||0)+1);}}
+   let best=-1,bn=0;
+   share.forEach((v,k)=>{if(v>bn){bn=v;best=k;}});
+   if(best<0||!bound||bn<0.25*bound)continue;   // its own room, or open to nothing
+   for(let i=0;i<N;i++)if(gmask[i]===g)gmask[i]=best;
+   gArea[best]+=gArea[g];gPrint[best]+=gPrint[g];gArea[g]=0;}}
+ /* where the caller's previous pass found fittings (step 16c), as a mask */
+ let fitMask=null;
+ if(opts.fitBoxes&&opts.fitBoxes.length){
+  /* step 16c reports a fitting by its INSIDE -- the enclosed patch -- so the box
+     stops short of the outline drawn round it, and the outline is exactly what
+     stands between the room and its own floor. Pad generously to take the outline
+     in, and keep long straight runs out of the mask no matter how far the padding
+     reaches: a fitting is drawn hard against a wall, and a padded box that took
+     the wall with it would licence growth straight through the building. */
+  const LR=Math.max(24,Math.round(0.05*Math.max(W,H)));
+  const longRun=new Uint8Array(N);
+  for(let y=0;y<H;y++){let st=-1;
+   for(let x=0;x<=W;x++){const on=x<W&&wallMask[idx(x,y)];
+    if(on){if(st<0)st=x;}
+    else{if(st>=0&&x-st>=LR)for(let m=st;m<x;m++)longRun[idx(m,y)]=1;st=-1;}}}
+  for(let x=0;x<W;x++){let st=-1;
+   for(let y=0;y<=H;y++){const on=y<H&&wallMask[idx(x,y)];
+    if(on){if(st<0)st=y;}
+    else{if(st>=0&&y-st>=LR)for(let m=st;m<y;m++)longRun[idx(x,m)]=1;st=-1;}}}
+  fitMask=new Uint8Array(N);
+  const pad=Math.max(4,Math.round(8/cmPerPx));
+  for(const b of opts.fitBoxes){
+   if(!b)continue;
+   const ax=Math.max(0,Math.round(b.x0-pad)),ay=Math.max(0,Math.round(b.y0-pad));
+   const bx=Math.min(W-1,Math.round(b.x1+pad)),by=Math.min(H-1,Math.round(b.y1+pad));
+   for(let y=ay;y<=by;y++)for(let x=ax;x<=bx;x++){
+    const i=idx(x,y);
+    if(!longRun[i]&&!extMask[i])fitMask[i]=1;}}}
  const roomsOut=[];
  for(let g=0;g<nGroups;g++){
   if(gArea[g]*cmPerPx*cmPerPx<15000)continue; // < 1.5 m^2
+  /* the disclaimer paragraph is a wide free band and clears 1.5 m2 easily; it is
+     a room only in the sense that no wall crosses it (step 4b) */
+  if(printMask&&gPrint[g]>0.5*gArea[g])continue;
   const taken=new Uint8Array(N);const rects=[];let covered=0;
-  for(let k=0;k<4;k++){
+  const eat=r=>{for(let y=r.y;y<r.y+r.h;y++)taken.fill(1,idx(r.x,y),idx(r.x+r.w,y));};
+  for(let k=0;k<7&&rects.length<4;k++){
    const r=largestRect(g,taken);if(!r)break;
-   if(Math.min(r.w,r.h)<MIN_DIM){if(!rects.length&&Math.min(r.w,r.h)*cmPerPx>34)rects.push(r);break;}
-   if(rects.length&&r.w*r.h*cmPerPx*cmPerPx<4000)break; // extra rects < 0.4 m^2
-   rects.push(r);covered+=r.w*r.h;
-   for(let y=r.y;y<r.y+r.h;y++)taken.fill(1,idx(r.x,y),idx(r.x+r.w,y));
+   const md=rects.length?MIN_DIM2:MIN_DIM;
+   if(Math.min(r.w,r.h)<md){if(!rects.length&&Math.min(r.w,r.h)*cmPerPx>34)rects.push(r);break;}
+   /* 0.4 m2 was rejecting the shallow end of stepped rooms, not junk: the studio's
+      shower room is 2.35 x 1.50 m with its tray end 33 cm shallower, and that end
+      is 0.24 m2 -- dropping it reported the room 1.17 m deep. MIN_DIM2 above
+      already keeps a sliver out; this only has to keep out specks. */
+   if(rects.length&&r.w*r.h*cmPerPx*cmPerPx<1500)break; // extra rects < 0.15 m^2
+   if(rects.length){
+    /* A shallow strip lying hard against the edge of the sheet is a WINDOW REVEAL,
+       not the end of a room. The window's glazing is drawn too thin to survive
+       step 3's opening, so the wall has a hole in it and the room's floor runs out
+       into the wall's thickness and off the paper; on a studio flat a 2.04 x 0.42 m
+       strip of reveal reported the room 6.45 m deep against a drawn 6.20. Nothing
+       downstream can see it -- it is unbroken floor at the room's own clearance --
+       and a room on a tightly cropped sheet does legitimately reach the paper's
+       edge, so the DEPTH is what separates them: a room is not 40 cm deep. Sealing
+       the gap in the wall instead would be the real fix, and needs the wall-run
+       tracing that exterior doors are also waiting on. */
+    const atEdge=q2=>(q2.x<=1||q2.y<=1||q2.x+q2.w>=W-1||q2.y+q2.h>=H-1);
+    /* ...but only when the room's own body is NOT at the paper's edge. A plan
+       cropped tight really does put rooms against the edge (bath1 has five, and
+       maple's upload does it at full resolution), and there the strip is the room,
+       not a reveal. Where the body sits clear of the edge and only a shallow
+       offshoot reaches it, that offshoot came through a hole in the wall. */
+    if(atEdge(r)&&!atEdge(rects[0])&&Math.min(r.w,r.h)*cmPerPx<60){eat(r);continue;}
+    let near=0,tot=0;
+    for(let y=r.y;y<r.y+r.h;y++)for(let x=r.x;x<r.x+r.w;x++){
+     const i=idx(x,y);if(gmask[i]!==g)continue;tot++;if(dtExt[i]<NEAR)near++;}
+    if(tot&&near>0.5*tot){eat(r);continue;}
+   }
+   rects.push(r);covered+=r.w*r.h;eat(r);
    if(covered>=gArea[g]*0.9)break;}
+  /* Grow each rectangle over the FITTINGS at its edge. The decomposition stops at
+     the largest clean box, and a bath, WC or worktop is drawn in solid ink, so the
+     box stops at it and the strip left behind is too thin to be a box of its own:
+     on the studio flat the WC and basin are drawn across the bottom of the shower
+     room and a room drawn 1.50 m deep came out 1.42. That floor is floor -- you
+     cannot stand a wardrobe on a WC, which is what the fitting ITEM says, but the
+     ROOM is the size the plan says it is.
+     A line is absorbed only when it is this group's floor plus, at most, known
+     fitting. That is the whole safety argument: a wall is neither, so it scores
+     zero and stops the growth dead. Growing on "mostly this group" instead was
+     tried and is far too loose -- it inflated every fixture's rooms by 5-15%, and
+     an oversized room is the one error this product must never make. */
+  for(const r of rects){
+   const GROW=Math.max(4,Math.round(40/cmPerPx)); // never more than ~40 cm
+   let n=0,grew=true;
+   const line=(fx,fy,len)=>{let ok=0;
+    for(let k=0;k<len;k++){const i=fx(k)+fy(k)*W;
+     if(gmask[i]===g||(fitMask&&fitMask[i]))ok++;}
+    return len?ok/len:0;};
+   while(grew&&n++<GROW){
+    grew=false;
+    if(r.x>0&&line(()=>r.x-1,k=>r.y+k,r.h)>=0.9){r.x--;r.w++;grew=true;}
+    if(r.x+r.w<W&&line(()=>r.x+r.w,k=>r.y+k,r.h)>=0.9){r.w++;grew=true;}
+    if(r.y>0&&line(k=>r.x+k,()=>r.y-1,r.w)>=0.9){r.y--;r.h++;grew=true;}
+    if(r.y+r.h<H&&line(k=>r.x+k,()=>r.y+r.h,r.w)>=0.9){r.h++;grew=true;}}}
   if(rects.length)roomsOut.push({gi:g,rects,area:gArea[g]});}
  if(!roomsOut.length)return {ok:false,reason:'no usable rooms'};
 
@@ -2539,7 +2758,61 @@ function autotraceFloorplan(img, opts){
 
  const totM2=rooms2.reduce((s,r)=>s+r.area,0)*cmPerPx*cmPerPx/10000;
  const coverage=Math.round(rooms2.reduce((s,r)=>s+r.area,0)/freeCount*100)/100;
- const res={ok:true,rooms:roomsFinal,openings:doors,cmPerPx,scaleSource,coverage,render:renderMode,
+ /* ---- 16c. FITTINGS: the bath, WC, basin, shower tray, sink, hob, worktop.
+    None of these can be told from a wall by TONE -- measured on a studio flat the
+    basin's outline is luminance 0, the same as the external wall -- and a shape
+    test on the ink itself finds only wall corners, because a fitting drawn against
+    a wall shares a component with it. What every one of them does have is an
+    INSIDE: each is a closed outline around a patch that is not ink, sitting in a
+    room. So look for the patch, not the outline. A room's own floor is such a
+    patch too and is excluded by size; the page is excluded because it reaches the
+    sheet edge. Reported, not subtracted: the floor under a WC is not floor you can
+    put a wardrobe on, so the room keeps its full extent and the fitting is drawn
+    on top of it, which is also what the plan does. */
+ const fittings=[];
+ /* photoreal renders never ran the ink/flood pass, so there is no page mask to
+    tell a fitting from the world outside; they also draw furniture, which this
+    would happily report as fixed. Skip them. */
+ if(!renderMode&&extMask)
+ {const seen=new Int32Array(N);seen.fill(-1);let nc=0;
+  const MINA=300/(cmPerPx*cmPerPx), MAXA=30000/(cmPerPx*cmPerPx);   // 0.03 - 3 m2
+  const MIND=20/cmPerPx, MAXD=260/cmPerPx;                          // 20 - 260 cm
+  for(let s0=0;s0<N;s0++){
+   if(dark[s0]||seen[s0]>=0)continue;
+   let n=0,x0=W,y0=H,x1=0,y1=0,ext=false,gid=-1,inRoom=0;
+   qh=0;qt=0;q[qt++]=s0;seen[s0]=nc;
+   while(qh<qt){const i=q[qh++];n++;const x=i%W,y=(i/W)|0;
+    if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;
+    if(extMask[i])ext=true;
+    if(gmask[i]>=0){inRoom++;if(gid<0)gid=gmask[i];}
+    if(x>0&&!dark[i-1]&&seen[i-1]<0){seen[i-1]=nc;q[qt++]=i-1;}
+    if(x<W-1&&!dark[i+1]&&seen[i+1]<0){seen[i+1]=nc;q[qt++]=i+1;}
+    if(y>0&&!dark[i-W]&&seen[i-W]<0){seen[i-W]=nc;q[qt++]=i-W;}
+    if(y<H-1&&!dark[i+W]&&seen[i+W]<0){seen[i+W]=nc;q[qt++]=i+W;}}
+   nc++;
+   const bw=x1-x0+1,bh=y1-y0+1;
+   if(ext||gid<0)continue;
+   if(n<MINA||n>MAXA)continue;
+   if(Math.min(bw,bh)<MIND||Math.max(bw,bh)>MAXD)continue;
+   if(n<0.35*bw*bh)continue;              // a ring of floor round something, not a fitting
+   /* it has to be IN the room. A gap in the wall line -- a window reveal, the
+      pocket beside a door -- is also a small enclosed patch, and one that sits in
+      the wall band draws a fitting hanging outside the building. */
+   if(inRoom<0.7*n)continue;
+   fittings.push({gi:gid,blk:blkOf(gid),px:{x0,y0,x1,y1},
+    x:Math.round((x0-1)*cmPerPx*10)/10,y:Math.round((y0-1)*cmPerPx*10)/10,
+    w:Math.round((bw+2)*cmPerPx*10)/10,d:Math.round((bh+2)*cmPerPx*10)/10});}
+  /* Drawn fittings nest: the bowl sits in the sink, the sink in the worktop, and
+     each is its own patch of not-ink. The outermost is the one that says where
+     furniture cannot go, so keep it and drop anything inside it. */
+  fittings.sort((a,b)=>b.w*b.d-a.w*a.d);
+  for(let i=fittings.length-1;i>=0;i--){const f=fittings[i];
+   for(let j=0;j<i;j++){const o=fittings[j];
+    if(f.x>=o.x-1&&f.y>=o.y-1&&f.x+f.w<=o.x+o.w+1&&f.y+f.d<=o.y+o.d+1){fittings.splice(i,1);break;}}}
+  if(opts.debug)console.log('fittings',fittings.length,JSON.stringify(fittings));}
+
+
+ const res={ok:true,rooms:roomsFinal,openings:doors,fittings,cmPerPx,scaleSource,coverage,render:renderMode,
   mask:{gi:gmask,W,H}, // per-pixel room-group index (image px), for OCR room naming
   floors:blkOrder?blkOrder.size:1, // storeys printed on this one sheet
   stats:{roomGroups:new Set(roomsFinal.map(r=>r.name)).size,rects:roomsFinal.length,
@@ -2776,11 +3049,37 @@ function wfBuildPlan(meta,imgPack,trace){
     couldn't pin down) is one to keep the image under, not to stand on its own. */
  const traced=!!(trace&&trace.ok&&trace.rooms&&trace.rooms.length&&
   (trace.coverage==null||trace.coverage>=0.45));
- const cmPerPx=trace&&trace.ok?trace.cmPerPx:((meta.areaSqm?Math.sqrt(meta.areaSqm*10000/(c.width*c.height*0.45)):900/c.width));
+ /* underlay-only fallback (the trace failed): still the plan's own area if OCR
+    managed to read one, never the listing's */
+ const planA=trace&&trace.ocrAreaSqm;
+ const cmPerPx=trace&&trace.ok?trace.cmPerPx:(planA?Math.sqrt(planA*10000/(c.width*c.height*0.45)):900/c.width);
  const plan={v:1,title:meta.title||'My floor plan',units:'m',grid:5,snap:true,wall:14,savedAt:null,
   rooms:trace&&trace.ok?trace.rooms:[],
   openings:trace&&trace.ok?trace.openings:[],
-  items:[],
+  /* fittings the tracer read off the plan (autotrace step 16c) -- worktop, hob,
+     sink, bath, WC, basin, shower tray. They come in locked: they are part of the
+     room, not furniture the user placed, and the whole point of drawing them is
+     that they show where a sofa cannot go. Position is a centre, as items are. */
+  items:(trace&&trace.ok&&Array.isArray(trace.fittings))?(function(){
+   /* Clip each fitting to its own room. The fitting is measured off the drawing so
+      it sits against the true inner face of the wall, while a room is the union of
+      the rectangles that fit inside it and stops a few cm short -- so an unclipped
+      worktop hangs through the wall. */
+   const rb=new Map();
+   (trace.rooms||[]).forEach(r=>{let e=rb.get(r.gi);
+    if(!e){e=[1e9,1e9,-1e9,-1e9];rb.set(r.gi,e);}
+    e[0]=Math.min(e[0],r.x);e[1]=Math.min(e[1],r.y);
+    e[2]=Math.max(e[2],r.x+r.w);e[3]=Math.max(e[3],r.y+r.d);});
+   return trace.fittings.map((f,i)=>{
+    const b=rb.get(f.gi);
+    let x0=f.x,y0=f.y,x1=f.x+f.w,y1=f.y+f.d;
+    if(b){x0=Math.max(x0,b[0]);y0=Math.max(y0,b[1]);x1=Math.min(x1,b[2]);y1=Math.min(y1,b[3]);}
+    const w=x1-x0,d=y1-y0;
+    return {id:'fx'+i,name:'Fitting',w:Math.round(w),d:Math.round(d),
+     x:Math.round((x0+w/2)*10)/10,y:Math.round((y0+d/2)*10)/10,
+     rot:0,color:'white',shape:'rect',deco:'',under:false,locked:true,
+     blk:f.blk||0,gi:f.gi};
+   }).filter(it=>it.w>=15&&it.d>=15);})():[],
   underlay:{src:imgPack.dataURL,iw:c.width,ih:c.height,x:0,y:0,cmPerPx:cmPerPx,opacity:0.5,show:!traced,locked:true}};
  return plan;}
 
@@ -2796,17 +3095,23 @@ function wfBuildPlan(meta,imgPack,trace){
    shared plan image aligned with every storey without cropping it. */
 function wfSplitSheet(plan,trace){
  if(!plan||!trace||!trace.ok||!(trace.floors>1))return null;
+ /* A trace too thin to stand on its own is not a set of storeys, it is noise that
+    happens to land in more than one block -- and the plan already knows, because
+    that is exactly when it keeps the scan showing underneath. Splitting it hands
+    the user floor tabs full of fragments. */
+ if(plan.underlay&&plan.underlay.show)return null;
  const byBlk=new Map();
- for(const r of plan.rooms){const b=r.blk||0;let e=byBlk.get(b);if(!e){e={rooms:[],openings:[]};byBlk.set(b,e);}e.rooms.push(r);}
+ for(const r of plan.rooms){const b=r.blk||0;let e=byBlk.get(b);if(!e){e={rooms:[],openings:[],items:[]};byBlk.set(b,e);}e.rooms.push(r);}
  if(byBlk.size<2)return null;
  for(const op of plan.openings){const e=byBlk.get(op.blk||0);if(e)e.openings.push(op);}
+ for(const it of (plan.items||[])){const e=byBlk.get(it.blk||0);if(e)e.items.push(it);}
  if(byBlk.size>8)return null; // more islands than any house has storeys: don't guess
  const keys=[];byBlk.forEach((v,k)=>keys.push(k));keys.sort((a,b)=>a-b);
  const base=plan.title||'My floor plan';
  return keys.map((b,i)=>{
   const e=byBlk.get(b);
   return {blk:b,ix:i,area:e.rooms.reduce((s,r)=>s+r.w*r.d,0),
-   plan:Object.assign({},plan,{title:base+' · floor '+(i+1),rooms:e.rooms,openings:e.openings,items:[],
+   plan:Object.assign({},plan,{title:base+' · floor '+(i+1),rooms:e.rooms,openings:e.openings,items:e.items,
     underlay:Object.assign({},plan.underlay)})};});}
 /* Which storey to open on. Tabs stay in the sheet's own reading order, but landing
    on tab 1 is wrong when a sheet leads with an outbuilding — the real Bath listing
@@ -2985,15 +3290,132 @@ async function wfOcrPlanArea(imgPack){
    return a||null;
   }finally{try{worker.terminate();}catch(e){}}
  }catch(e){return null;}}
-async function wfTraceAreaRescue(imgPack,im,trace,haveArea){
- if(haveArea)return trace;
- const weak=!trace||!trace.ok||trace.scaleSource==='door'||trace.scaleSource==='assumed';
- if(!weak)return trace;
- const a=await wfOcrPlanArea(imgPack);
- if(!a)return trace;
- let t2=null;
- try{t2=autotraceFloorplan(im,{areaCm2:a*10000});}catch(e){t2=null;}
- if(t2&&t2.ok){t2.ocrAreaSqm=a;return t2;}
+/* ---------- calibrate from the DRAWING, never from the listing ----------
+   Anything the agent typed into the listing is ignored here. A quoted floor area
+   can cover storeys this image does not show, can be measured to a convention of
+   its own, and is often simply absent -- studio 171008759 quotes none at all. The
+   plan carries its own measurements: "6.20m x 4.90m" printed under a room name,
+   and a total floor area printed under the drawing. Those are what a buyer reads
+   and checks against, so those are what the tracer is calibrated to.
+   A printed ROOM dimension is the better of the two: it is a direct measurement of
+   a thing we have also measured in pixels, so the scale falls straight out of it,
+   whereas a total area has to be divided by an area we inferred. Take every
+   printed dimension we can pin to a room, solve the scale from each, and use the
+   MEDIAN -- one room whose extent the tracer got wrong then cannot move it. */
+function wfPlanDimsFromText(t){
+ const out=[];
+ const re=/(\d{1,2}(?:[.,]\d{1,2})?)\s*m?\s*[x×X]\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*m\b/g;
+ let m;
+ while((m=re.exec(t))){
+  const a=parseFloat(String(m[1]).replace(',','.'))*100;
+  const b=parseFloat(String(m[2]).replace(',','.'))*100;
+  /* 0.8-30 m: below that it is a fitting caption, above it a plot boundary */
+  if(a>=80&&a<=3000&&b>=80&&b<=3000)out.push({a,b});}
+ return out;}
+
+async function wfOcrPlanFacts(imgPack){
+ if(typeof wfLoadTess!=='function')return null;
+ try{
+  await wfLoadTess();
+  /* plan text needs ~2x upscaling for the OCR engine (same trick as room naming) */
+  let cv=imgPack.canvas,f=1;
+  const k=Math.min(2,2600/Math.max(cv.width,cv.height));
+  if(k>1.05){const c2=document.createElement('canvas');
+   c2.width=Math.round(cv.width*k);c2.height=Math.round(cv.height*k);
+   const cx=c2.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,c2.width,c2.height);
+   cx.drawImage(cv,0,0,c2.width,c2.height);cv=c2;f=k;}
+  const worker=await Tesseract.createWorker('eng');
+  try{
+   const out=await worker.recognize(cv,{},{blocks:true,text:true});
+   const d=out&&out.data;
+   let lines=[];
+   if(d&&Array.isArray(d.lines))lines=d.lines;
+   else if(d&&Array.isArray(d.blocks))d.blocks.forEach(bl=>(bl.paragraphs||[]).forEach(pg=>(pg.lines||[]).forEach(l=>lines.push(l))));
+   const dims=[];
+   for(const ln of lines){
+    const t=(ln.text||'').trim();
+    if(!t||(ln.confidence||0)<38)continue;
+    const b=ln.bbox;if(!b)continue;
+    for(const h of wfPlanDimsFromText(t))
+     dims.push({a:h.a,b:h.b,x:(b.x0+b.x1)/(2*f),y:(b.y0+b.y1)/(2*f)});}
+   const area=wfAreaFromText((d&&d.text)||'');
+   if(window.wfTrace)window.wfTrace('read off the plan: '+dims.length+' room dimension(s)'+(area?', total '+area+' m2':''));
+   return {areaSqm:area||null,dims};
+  }finally{try{worker.terminate();}catch(e){}}
+ }catch(e){return null;}}
+
+/* solve cm-per-pixel from printed room dimensions the tracer can pin to a room */
+function wfScaleFromPlanDims(trace,dims){
+ if(!trace||!trace.ok||!trace.mask||!dims||!dims.length)return null;
+ const mask=trace.mask,cm=trace.cmPerPx;
+ if(!(cm>0))return null;
+ const ext=new Map();
+ for(const r of (trace.rooms||[])){
+  if(r.gi==null)continue;
+  let e=ext.get(r.gi);
+  if(!e){e=[1e9,1e9,-1e9,-1e9];ext.set(r.gi,e);}
+  e[0]=Math.min(e[0],r.x);e[1]=Math.min(e[1],r.y);
+  e[2]=Math.max(e[2],r.x+r.w);e[3]=Math.max(e[3],r.y+r.d);}
+ const est=[];
+ for(const d of dims){
+  const px=Math.round(d.x),py=Math.round(d.y);
+  if(px<0||py<0||px>=mask.W||py>=mask.H)continue;
+  const gi=mask.gi[py*mask.W+px];
+  if(gi==null||gi<0)continue;
+  const e=ext.get(gi);if(!e)continue;
+  const wPx=(e[2]-e[0])/cm,hPx=(e[3]-e[1])/cm;
+  if(wPx<8||hPx<8)continue;
+  /* the printed pair is a max WxD in the plan's own order, which need not be the
+     drawing's x then y -- pair long with long */
+  est.push(Math.max(d.a,d.b)/Math.max(wPx,hPx));
+  est.push(Math.min(d.a,d.b)/Math.min(wPx,hPx));}
+ if(est.length<2)return null;
+ est.sort((x,y)=>x-y);
+ const n=est.length;
+ const med=n%2?est[(n-1)/2]:(est[n/2-1]+est[n/2])/2;
+ if(!(med>0.05&&med<20))return null;
+ /* a wild correction means the dimensions were pinned to the wrong rooms */
+ if(med/cm>1.8||med/cm<0.55)return null;
+ return {cmPerPx:med,n:n};}
+
+/* exposed for the test rig: these are the two steps that decide the scale */
+window.wfOcrPlanFacts=wfOcrPlanFacts;
+window.wfScaleFromPlanDims=wfScaleFromPlanDims;
+window.wfPlanDimsFromText=wfPlanDimsFromText;
+
+/* trace, then re-trace against whatever the plan itself says */
+async function wfTraceFromPlan(imgPack,im,trace){
+ const facts=await wfOcrPlanFacts(imgPack);
+ if(!facts)return trace;
+ if(trace&&trace.ok&&facts.dims&&facts.dims.length){
+  /* Solving the scale changes the trace, and the changed trace measures its rooms
+     slightly differently -- the rectangles grow out to the group edge at the new
+     thresholds -- so one pass leaves the answer a few per cent stale. Re-solve
+     against each new trace until it stops moving; it converges in two or three. */
+  let best=null,cur=trace,n=0;
+  for(let it=0;it<4;it++){
+   const hit=wfScaleFromPlanDims(cur,facts.dims);
+   if(!hit)break;
+   n=hit.n;
+   /* hand the fittings this pass found back in: the rectangle stage uses them to
+      grow a room over the bath or WC drawn across it, which is floor the room has */
+   const boxes=(cur.fittings||[]).map(f=>f.px).filter(Boolean);
+   let t2=null;
+   try{t2=autotraceFloorplan(im,boxes.length?{cmPerPx:hit.cmPerPx,fitBoxes:boxes}:{cmPerPx:hit.cmPerPx});}
+   catch(e){t2=null;}
+   if(!t2||!t2.ok)break;
+   best=t2;
+   const moved=Math.abs(hit.cmPerPx-cur.cmPerPx)/cur.cmPerPx;
+   cur=t2;
+   if(moved<0.01)break;}
+  if(best){best.planDims=n;best.scaleSource='plandims';
+   if(facts.areaSqm)best.ocrAreaSqm=facts.areaSqm;
+   if(window.wfTrace)window.wfTrace('scale from the plan’s printed room sizes ('+n+' readings)');
+   return best;}}
+ if(facts.areaSqm){
+  let t3=null;
+  try{t3=autotraceFloorplan(im,{areaCm2:facts.areaSqm*10000});}catch(e){t3=null;}
+  if(t3&&t3.ok){t3.ocrAreaSqm=facts.areaSqm;t3.scaleSource='plan';return t3;}}
  return trace;}
 
 /* ---------- retrace one specific floor plan image (multi-plan listings) ----------
@@ -3004,12 +3426,12 @@ async function wfTraceAreaRescue(imgPack,im,trace,haveArea){
 async function wfTraceFloorUrl(meta,url,ix,blk){
  const imgPack=await wfFetchPlanImage(url);
  await new Promise(r=>setTimeout(r,30));
- const useArea=!!(meta.areaSqm&&(ix===0||blk!=null));
+ /* the listing's own floor area is deliberately NOT used: see wfTraceFromPlan */
  let trace=null;
  try{
   const im=imgPack.ctx.getImageData(0,0,imgPack.canvas.width,imgPack.canvas.height);
-  trace=autotraceFloorplan(im,{areaCm2:useArea?meta.areaSqm*10000:undefined});
-  trace=await wfTraceAreaRescue(imgPack,im,trace,useArea);
+  trace=autotraceFloorplan(im,{});
+  trace=await wfTraceFromPlan(imgPack,im,trace);
  }catch(e){trace={ok:false,reason:'trace error: '+e.message};}
  const plan=wfBuildPlan(meta,imgPack,trace);
  const parts=blk!=null?wfSplitSheet(plan,trace):null;
@@ -3018,7 +3440,7 @@ async function wfTraceFloorUrl(meta,url,ix,blk){
   traced:!!(trace&&trace.ok),traceStats:trace&&trace.ok?trace.stats:null,
   traceMask:trace&&trace.ok?trace.mask:null,
   traceRender:!!(trace&&trace.ok&&trace.render),
-  scaleSource:trace&&trace.ok?trace.scaleSource:(useArea?'listing':'unknown'),
+  scaleSource:trace&&trace.ok?trace.scaleSource:'unknown',
   traceFail:trace&&!trace.ok?trace.reason:null};}
 
 /* ---------- the whole pipeline ---------- */
@@ -3063,9 +3485,11 @@ async function resolveListingLive(url,onStage,sharedMeta){
  let trace=null;
  try{
   const im=imgPack.ctx.getImageData(0,0,imgPack.canvas.width,imgPack.canvas.height);
-  trace=autotraceFloorplan(im,{areaCm2:meta.areaSqm?meta.areaSqm*10000:undefined});
-  trace=await wfTraceAreaRescue(imgPack,im,trace,!!meta.areaSqm);
-  if(trace&&trace.ocrAreaSqm&&!meta.areaSqm)meta.areaSqm=trace.ocrAreaSqm;
+  trace=autotraceFloorplan(im,{});
+  trace=await wfTraceFromPlan(imgPack,im,trace);
+  /* the plan's own printed total wins the card too: where the two disagree it is
+     the drawing the user is looking at */
+  if(trace&&trace.ocrAreaSqm)meta.areaSqm=trace.ocrAreaSqm;
  }catch(e){trace={ok:false,reason:'trace error: '+e.message};}
  onStage(4);
  const sheetPlan=wfBuildPlan(meta,imgPack,trace);
@@ -3081,7 +3505,7 @@ async function resolveListingLive(url,onStage,sharedMeta){
   traced:!!(trace&&trace.ok),traceStats:trace&&trace.ok?trace.stats:null,
   traceMask:trace&&trace.ok?trace.mask:null,
   traceRender:!!(trace&&trace.ok&&trace.render),
-  scaleSource:trace&&trace.ok?trace.scaleSource:(meta.areaSqm?'listing':'unknown'),
+  scaleSource:trace&&trace.ok?trace.scaleSource:'unknown',
   traceFail:trace&&!trace.ok?trace.reason:null};}
 
 
@@ -3193,6 +3617,8 @@ function liveResultCard(r){
  else if(r.traceRender)hint='This is a 3D-style plan, traced approximately. Check one known measurement (Edit plan → Calibrate scale) and tidy any odd room shapes in Edit plan.';
  else if(r.scaleSource==='door')hint='Sizes are scaled from standard door widths. Check one known measurement: Edit plan → Calibrate scale.';
  else if(r.scaleSource==='assumed')hint='We couldn’t verify the scale. Check one known measurement: Edit plan → Calibrate scale.';
+ else if(r.scaleSource==='plandims')hint='Scaled from the room sizes printed on the plan itself. Agents’ plans are approximate — for tight fits, measure on the viewing.';
+ else if(r.scaleSource==='plan')hint='Scaled from the total floor area printed on the plan. Agents’ plans are approximate — for tight fits, measure on the viewing.';
  else hint='Scaled from the listing’s quoted floor area. Agents’ plans are approximate — for tight fits, measure on the viewing.';
  return '<span class="k">'+(r.traced?'Traced your listing':'Found your listing')+'</span>'+
   '<span class="t">'+esc(r.listing.title||'Listing')+'</span>'+
@@ -3848,6 +4274,35 @@ function wfApplyRoomNames(rooms,giName){
  for(const rm of rooms){if(rm.gi==null)continue;const hit=giName.get(rm.gi);if(!hit)continue;
   rm.name=hit.finalName||hit.name;if(hit.color)rm.color=hit.color;done.add(rm.gi);}
  return done.size;}
+/* Name a fitting from the room it sits in. The tracer finds fittings by geometry
+   alone and cannot tell a WC from a basin -- both are ~40 cm blobs -- so it calls
+   them all "Fitting". Once OCR has read the room labels there is real evidence to
+   work with, and the rule is: say only what the shape actually supports. A run
+   over a metre long and worktop-deep is a worktop; a 1.7 m tub is a bath; a metre
+   square in a bathroom is a shower. Everything else keeps a name that is true but
+   unspecific -- a wrong label on a fixed object is worse than a vague one, because
+   the whole point of drawing it is to tell the user what they cannot move. */
+function wfFittingName(room,w,d){
+ const lo=Math.min(w,d),hi=Math.max(w,d);
+ const bath=/bath|shower|wc|cloak|en.?suite|toilet|washroom/i.test(room||'');
+ const kit=/kitchen|utility|diner/i.test(room||'');
+ if(kit){
+  if(hi>=120&&lo>=40&&lo<=85)return 'Worktop';
+  if(hi<=75&&lo>=40&&hi/lo<1.5)return 'Hob';
+  return 'Kitchen unit';}
+ if(bath){
+  if(hi>=150&&lo>=55&&lo<=95)return 'Bath';
+  if(hi>=65&&hi<=125&&lo>=55&&hi/lo<1.95)return 'Shower';
+  return 'Bathroom fitting';}
+ return null;}
+function wfNameFittings(items,giName){
+ let n=0;
+ for(const it of items||[]){
+  if(!it||!it.locked||it.name!=='Fitting'||it.gi==null)continue;
+  const hit=giName.get(it.gi);if(!hit)continue;
+  const nm=wfFittingName(String(hit.finalName||hit.name||''),it.w,it.d);
+  if(nm){it.name=nm;n++;}}
+ return n;}
 function wfPatchOpenPlan(r,giName){
  if(!state||typeof planId==='undefined'||planId!==r.planId)return;
  let n=0;
@@ -3855,6 +4310,7 @@ function wfPatchOpenPlan(r,giName){
   if(rm.gi==null)continue;const hit=giName.get(rm.gi);if(!hit)continue;
   if(!/^(Room \d+|Living space|Store)$/.test(rm.name))continue; // never stomp a user's rename
   rm.name=hit.finalName||hit.name;if(hit.color)rm.color=hit.color;n++;}
+ n+=wfNameFittings(state.items,giName);
  if(n&&plannerReady&&$('#app')&&!$('#app').hidden){computeIssues();render();renderPanels();}}
 function wfNameRooms(r){
  if(!r||!r.traced||!r.traceMask)return;
@@ -3881,8 +4337,9 @@ function wfNameRooms(r){
   /* labels are keyed by room-group id, which is global to the sheet — so one OCR
      pass names every storey the sheet was split into, not just the open one */
   let applied=0;
-  if(r.parts&&r.parts.length)r.parts.forEach(p=>{applied+=wfApplyRoomNames(p.plan.rooms,giName);});
-  else applied=wfApplyRoomNames(r.plan.rooms,giName);
+  if(r.parts&&r.parts.length)r.parts.forEach(p=>{applied+=wfApplyRoomNames(p.plan.rooms,giName);
+   wfNameFittings(p.plan.items,giName);});
+  else {applied=wfApplyRoomNames(r.plan.rooms,giName);wfNameFittings(r.plan.items,giName);}
   if(!applied)return;
   wfPatchOpenPlan(r,giName);
   if(wfLastLive===r){
