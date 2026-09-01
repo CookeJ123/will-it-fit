@@ -628,7 +628,17 @@ function render(){ if(!world)return; const k=view.k,t=state.wall,px=v=>v/k; let 
      numbers stay the maximum extent, which is what you measure a sofa against, but
      they no longer read as the sides of a rectangle. */
   const boxy=gb.area>=gb.w*gb.d*0.95;
-  const dims=fmt(gb.w)+' × '+fmt(gb.d)+(boxy?'':' max')+' · '+fmtArea(gb.area);const showDims=r.d*k>44&&r.w*k>120;
+  /* Where the plan states the room's size in writing, say it back in the plan's
+     own ORDER. An agent writes "3.74m x 5.69m" over a room drawn wider than it is
+     deep, and a buyer holding the two side by side reads a transposition as a
+     wrong measurement. The room is still DRAWN the way it is drawn; only the
+     label follows the page. Guarded on the pair still matching the box, so a
+     resized room falls back to its own geometry. */
+  const pdm=(grp.length===1&&Array.isArray(grp[0].pdim)&&grp[0].pdim.length===2
+   &&Math.abs(Math.max(grp[0].pdim[0],grp[0].pdim[1])-Math.max(gb.w,gb.d))<=1
+   &&Math.abs(Math.min(grp[0].pdim[0],grp[0].pdim[1])-Math.min(gb.w,gb.d))<=1)?grp[0].pdim:null;
+  const dims=(pdm?fmt(pdm[0])+' × '+fmt(pdm[1])
+              :fmt(gb.w)+' × '+fmt(gb.d)+(boxy?'':' max'))+' · '+fmtArea(gb.area);const showDims=r.d*k>44&&r.w*k>120;
   const bw=Math.max(r.name.length*fs*0.58,showDims?dims.length*fs2*0.62:0),bh=showDims?fs*2.3:fs*1.2,pad=px(8);
   const cands=[[r.x+r.w/2-bw/2,r.y+r.d/2-bh/2],[r.x+pad,r.y+pad],[r.x+pad,r.y+r.d-pad-bh],[r.x+r.w-pad-bw,r.y+pad],[r.x+r.w-pad-bw,r.y+r.d-pad-bh]];
   let best=null,bs=Infinity;cands.forEach(([bx,by])=>{let sc=0;boxes.forEach(b=>{const ox=Math.min(bx+bw,b.maxX)-Math.max(bx,b.minX),oy=Math.min(by+bh,b.maxY)-Math.max(by,b.minY);if(ox>0&&oy>0)sc+=ox*oy;});if(sc<bs-0.01){bs=sc;best=[bx,by];}});
@@ -727,7 +737,11 @@ function itemSVG(it,k){const fill=it.zone?'url(#hatch)':(COLORS[it.color]||it.co
  const tr='translate('+it.x+' '+it.y+') rotate('+it.rot+')'+(it.mirror?' scale(-1 1)':'');
  let label='';const sw=w*k,sd=d*k;const upside=(it.rot>90&&it.rot<=270);
  if(sw>=42&&sd>=16){const fs=11/k;const ltr='rotate('+(upside?180:0)+')'+(it.mirror?' scale(-1 1)':'');
-  const showDims=sw>=80&&sd>=30;const ly=showDims?-fs*0.15:fs*0.35;
+  /* A fitting carries no measurement. It is part of the property, not something
+    being fitted into it, and the only numbers on the plan should be the rooms'
+    -- a worktop captioned "1.43 m x 1.79 m" reads like a room and competes with
+    the one it stands in. Locked is exactly the right test: it means fixed. */
+ const showDims=sw>=80&&sd>=30&&!it.locked;const ly=showDims?-fs*0.15:fs*0.35;
   label='<g transform="'+ltr+'"><text x="0" y="'+ly+'" text-anchor="middle" font-size="'+fs+'" fill="'+tc+'" font-weight="500">'+esc(it.name)+'</text>'+(showDims?'<text x="0" y="'+(ly+fs*1.15)+'" text-anchor="middle" font-size="'+(fs*0.9)+'" fill="'+tc+'" style="font-family:var(--mono);opacity:.8">'+esc(fmt(w,true)+' × '+fmt(d,true))+'</text>':'')+'</g>';}
  return '<g class="item'+(s?' sel':'')+(dragging?' dragging':'')+(bad?' bad':'')+(it.locked?' locked':'')+(it.zone?' zone':'')+'" data-kind="item" data-id="'+it.id+'" transform="'+tr+'"><g class="lift">'+body+decoSVG(it)+label+'</g></g>';}
 
@@ -850,7 +864,7 @@ function onMove(e){if(pointers.has(e.pointerId))pointers.set(e.pointerId,{x:e.cl
  if(drag.type==='handle'){const o=drag.orig;
   if(drag.h==='rot'){let a=Math.atan2(w.y-s.y,w.x-s.x)*180/Math.PI+90;if(!e.altKey)a=Math.round(a/15)*15;s.rot=norm(a);}
   else if(sel.kind==='room'){let x0=o.x,y0=o.y,x1=o.x+o.w,y1=o.y+o.d;const gx=state.snap&&!e.altKey?snapGrid(w.x):w.x,gy=state.snap&&!e.altKey?snapGrid(w.y):w.y;
-   if(drag.h.includes('w'))x0=Math.min(gx,x1-20);if(drag.h.includes('e'))x1=Math.max(gx,x0+20);if(drag.h.includes('n'))y0=Math.min(gy,y1-20);if(drag.h.includes('s'))y1=Math.max(gy,y0+20);s.x=x0;s.y=y0;s.w=x1-x0;s.d=y1-y0;}
+   if(drag.h.includes('w'))x0=Math.min(gx,x1-20);if(drag.h.includes('e'))x1=Math.max(gx,x0+20);if(drag.h.includes('n'))y0=Math.min(gy,y1-20);if(drag.h.includes('s'))y1=Math.max(gy,y0+20);s.x=x0;s.y=y0;s.w=x1-x0;s.d=y1-y0;delete s.pdim;}
   else if(sel.kind==='item'&&s.zone){const m=o.mirror?-1:1;const [ldx,ldy]=rot(w.x-drag.start.x,w.y-drag.start.y,-o.rot);const lx=ldx*m;const sx=drag.h.includes('e')?1:-1,sy=drag.h.includes('s')?1:-1;
    let nw=Math.max(5,o.w+sx*lx),nd=Math.max(5,o.d+sy*ldy);if(state.snap&&!e.altKey){nw=Math.max(5,Math.round(nw/5)*5);nd=Math.max(5,Math.round(nd/5)*5);}
    const dw=nw-o.w,dd=nd-o.d;const [cx,cy]=rot(sx*m*dw/2,sy*dd/2,o.rot);s.w=nw;s.d=nd;s.x=o.x+cx;s.y=o.y+cy;}
@@ -1339,7 +1353,7 @@ function renderInspector(){const p=$('#insp');const s=getSel();let h='';
   h+='<div class="kv"><b>Area</b><span>'+esc(fmtArea(r.w*r.d))+'</span><b>Interior</b><span>'+esc(fmt(r.w)+' × '+fmt(r.d))+'</span></div></div>';p.innerHTML=h;
   const commit=fn=>{pushHistory();fn();changed();};
   $('#f-name').addEventListener('change',e=>commit(()=>{r.name=e.target.value||'Room';}));
-  $('#f-w').addEventListener('change',e=>commit(()=>{r.w=clamp(fromUnit(+e.target.value)||20,20,5000);}));$('#f-d').addEventListener('change',e=>commit(()=>{r.d=clamp(fromUnit(+e.target.value)||20,20,5000);}));
+  $('#f-w').addEventListener('change',e=>commit(()=>{r.w=clamp(fromUnit(+e.target.value)||20,20,5000);delete r.pdim;}));$('#f-d').addEventListener('change',e=>commit(()=>{r.d=clamp(fromUnit(+e.target.value)||20,20,5000);delete r.pdim;}));
   $('#f-x').addEventListener('change',e=>commit(()=>{r.x=fromUnit(+e.target.value)||0;}));$('#f-y').addEventListener('change',e=>commit(()=>{r.y=fromUnit(+e.target.value)||0;}));
   $$('.row button[data-c]',p).forEach(b=>b.addEventListener('click',()=>commit(()=>{r.color=b.dataset.c;})));
   $('#b-dup').addEventListener('click',duplicateSel);$('#b-del').addEventListener('click',()=>{if(confirm('Delete this room?'))deleteSel();});return;}

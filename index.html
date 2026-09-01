@@ -444,7 +444,7 @@ table.cmp-matrix td.cmp-v.mid,table.cmp-matrix td.cmp-v.bad{color:var(--warn)}
    <h1>Paste a listing. Furnish it before you view it.</h1>
    <p class="lede">Drop in a Rightmove or Zoopla link. We read the floor plan and hand you an interactive board — real room sizes, doors that swing, furniture you can drag — and a straight answer to “will the sofa fit?”</p>
    <form id="lp-form" class="lp-form" novalidate>
-    <div class="lp-input"><span class="lp-portal" id="lp-portal">Listing link</span><input id="lp-url" type="url" placeholder="https://www.rightmove.co.uk/properties/…" autocomplete="off" spellcheck="false" aria-label="Property listing link"><button type="submit" class="primary" id="lp-go">Build my floor plan</button></div>
+    <div class="lp-input"><span class="lp-portal" id="lp-portal">Listing link</span><input id="lp-url" type="url" placeholder="Paste the listing link here" autocomplete="off" spellcheck="false" aria-label="Property listing link"><button type="submit" class="primary" id="lp-go">Build my floor plan</button></div>
     <div class="lp-alt"><button type="button" class="link" id="lp-example">Try the example listing</button><span>·</span><label class="link">Upload a floor plan instead<input id="lp-file" type="file" accept="image/*" hidden></label></div>
    </form>
    <ul class="lp-trust"><li>Rightmove · Zoopla · or upload a plan</li><li>Traced in your browser — nothing stored</li><li>Free while in beta</li></ul>
@@ -886,7 +886,17 @@ function render(){ if(!world)return; const k=view.k,t=state.wall,px=v=>v/k; let 
      numbers stay the maximum extent, which is what you measure a sofa against, but
      they no longer read as the sides of a rectangle. */
   const boxy=gb.area>=gb.w*gb.d*0.95;
-  const dims=fmt(gb.w)+' × '+fmt(gb.d)+(boxy?'':' max')+' · '+fmtArea(gb.area);const showDims=r.d*k>44&&r.w*k>120;
+  /* Where the plan states the room's size in writing, say it back in the plan's
+     own ORDER. An agent writes "3.74m x 5.69m" over a room drawn wider than it is
+     deep, and a buyer holding the two side by side reads a transposition as a
+     wrong measurement. The room is still DRAWN the way it is drawn; only the
+     label follows the page. Guarded on the pair still matching the box, so a
+     resized room falls back to its own geometry. */
+  const pdm=(grp.length===1&&Array.isArray(grp[0].pdim)&&grp[0].pdim.length===2
+   &&Math.abs(Math.max(grp[0].pdim[0],grp[0].pdim[1])-Math.max(gb.w,gb.d))<=1
+   &&Math.abs(Math.min(grp[0].pdim[0],grp[0].pdim[1])-Math.min(gb.w,gb.d))<=1)?grp[0].pdim:null;
+  const dims=(pdm?fmt(pdm[0])+' × '+fmt(pdm[1])
+              :fmt(gb.w)+' × '+fmt(gb.d)+(boxy?'':' max'))+' · '+fmtArea(gb.area);const showDims=r.d*k>44&&r.w*k>120;
   const bw=Math.max(r.name.length*fs*0.58,showDims?dims.length*fs2*0.62:0),bh=showDims?fs*2.3:fs*1.2,pad=px(8);
   const cands=[[r.x+r.w/2-bw/2,r.y+r.d/2-bh/2],[r.x+pad,r.y+pad],[r.x+pad,r.y+r.d-pad-bh],[r.x+r.w-pad-bw,r.y+pad],[r.x+r.w-pad-bw,r.y+r.d-pad-bh]];
   let best=null,bs=Infinity;cands.forEach(([bx,by])=>{let sc=0;boxes.forEach(b=>{const ox=Math.min(bx+bw,b.maxX)-Math.max(bx,b.minX),oy=Math.min(by+bh,b.maxY)-Math.max(by,b.minY);if(ox>0&&oy>0)sc+=ox*oy;});if(sc<bs-0.01){bs=sc;best=[bx,by];}});
@@ -1112,7 +1122,7 @@ function onMove(e){if(pointers.has(e.pointerId))pointers.set(e.pointerId,{x:e.cl
  if(drag.type==='handle'){const o=drag.orig;
   if(drag.h==='rot'){let a=Math.atan2(w.y-s.y,w.x-s.x)*180/Math.PI+90;if(!e.altKey)a=Math.round(a/15)*15;s.rot=norm(a);}
   else if(sel.kind==='room'){let x0=o.x,y0=o.y,x1=o.x+o.w,y1=o.y+o.d;const gx=state.snap&&!e.altKey?snapGrid(w.x):w.x,gy=state.snap&&!e.altKey?snapGrid(w.y):w.y;
-   if(drag.h.includes('w'))x0=Math.min(gx,x1-20);if(drag.h.includes('e'))x1=Math.max(gx,x0+20);if(drag.h.includes('n'))y0=Math.min(gy,y1-20);if(drag.h.includes('s'))y1=Math.max(gy,y0+20);s.x=x0;s.y=y0;s.w=x1-x0;s.d=y1-y0;}
+   if(drag.h.includes('w'))x0=Math.min(gx,x1-20);if(drag.h.includes('e'))x1=Math.max(gx,x0+20);if(drag.h.includes('n'))y0=Math.min(gy,y1-20);if(drag.h.includes('s'))y1=Math.max(gy,y0+20);s.x=x0;s.y=y0;s.w=x1-x0;s.d=y1-y0;delete s.pdim;}
   else if(sel.kind==='item'&&s.zone){const m=o.mirror?-1:1;const [ldx,ldy]=rot(w.x-drag.start.x,w.y-drag.start.y,-o.rot);const lx=ldx*m;const sx=drag.h.includes('e')?1:-1,sy=drag.h.includes('s')?1:-1;
    let nw=Math.max(5,o.w+sx*lx),nd=Math.max(5,o.d+sy*ldy);if(state.snap&&!e.altKey){nw=Math.max(5,Math.round(nw/5)*5);nd=Math.max(5,Math.round(nd/5)*5);}
    const dw=nw-o.w,dd=nd-o.d;const [cx,cy]=rot(sx*m*dw/2,sy*dd/2,o.rot);s.w=nw;s.d=nd;s.x=o.x+cx;s.y=o.y+cy;}
@@ -1602,7 +1612,7 @@ function renderInspector(){const p=$('#insp');const s=getSel();let h='';
   h+='<div class="kv"><b>Area</b><span>'+esc(fmtArea(r.w*r.d))+'</span><b>Interior</b><span>'+esc(fmt(r.w)+' × '+fmt(r.d))+'</span></div></div>';p.innerHTML=h;
   const commit=fn=>{pushHistory();fn();changed();};
   $('#f-name').addEventListener('change',e=>commit(()=>{r.name=e.target.value||'Room';}));
-  $('#f-w').addEventListener('change',e=>commit(()=>{r.w=clamp(fromUnit(+e.target.value)||20,20,5000);}));$('#f-d').addEventListener('change',e=>commit(()=>{r.d=clamp(fromUnit(+e.target.value)||20,20,5000);}));
+  $('#f-w').addEventListener('change',e=>commit(()=>{r.w=clamp(fromUnit(+e.target.value)||20,20,5000);delete r.pdim;}));$('#f-d').addEventListener('change',e=>commit(()=>{r.d=clamp(fromUnit(+e.target.value)||20,20,5000);delete r.pdim;}));
   $('#f-x').addEventListener('change',e=>commit(()=>{r.x=fromUnit(+e.target.value)||0;}));$('#f-y').addEventListener('change',e=>commit(()=>{r.y=fromUnit(+e.target.value)||0;}));
   $$('.row button[data-c]',p).forEach(b=>b.addEventListener('click',()=>commit(()=>{r.color=b.dataset.c;})));
   $('#b-dup').addEventListener('click',duplicateSel);$('#b-del').addEventListener('click',()=>{if(confirm('Delete this room?'))deleteSel();});return;}
@@ -2396,6 +2406,42 @@ function autotraceFloorplan(img, opts){
    if(best<0||!bound||bn<0.25*bound)continue;   // its own room, or open to nothing
    for(let i=0;i<N;i++)if(gmask[i]===g)gmask[i]=best;
    gArea[best]+=gArea[g];gPrint[best]+=gPrint[g];gArea[g]=0;}}
+ /* A ROOM IS INSIDE THE BUILDING, and what says so is what a scan out of it stops
+    on: walls. An agent's callout -- "Hallway 3.14 x 1.87 m" boxed up in the white
+    beside the drawing with a leader line pointing at the room -- is a sealed patch
+    of white that the closing at step 4 welds onto the building, so the flood walks
+    into it and it comes out as part of a room. On the owner's Parkers 1-bed that
+    put a 3.15 x 0.84 m arm of "Hall" outside the building, hanging off the left of
+    the plan, and made the whole thing stop looking like the plan. Out there the
+    scan meets page on three sides or four; a room, even one in the corner of a
+    building, is walled on at least two. Thin printed borders do not count, which
+    is the point of measuring against long RUNS: a caption's box does not survive
+    the wall opening, and a wall does. */
+ function walledSides(r){
+  if(!wallMask)return 4;   // photoreal renders (step 3R) have no wall mask at all
+  const cx=Math.round(r.x+r.w/2),cy=Math.round(r.y+r.h/2);
+  let sides=0;
+  /* Sample the whole SIDE, not a narrow band about the centre: a band that lands
+     on a doorway reports the side as open and the room as unwalled, which cost
+     maple a room and bath1 four of them. A side counts as walled when most of the
+     room's own width or depth meets wall going that way. */
+  const sweep=(dx,dy)=>{let hit=0,tot=0;const n=9;
+   for(let s=0;s<n;s++){const f=(s+0.5)/n;
+    const ax=dx?cx:Math.round(r.x+f*r.w),ay=dx?Math.round(r.y+f*r.h):cy;
+    if(ax<0||ay<0||ax>=W||ay>=H)continue;
+    let x=ax,y=ay;tot++;
+    while(x>=0&&y>=0&&x<W&&y<H){const i=idx(x,y);
+     /* any WALL ink counts, not just a long run: a wall broken by windows leaves
+        pieces shorter than a run, and walking through them reported real rooms as
+        unwalled (bath1 lost four rooms and 57 m2). The opening at step 3 has
+        already erased everything a caption's box is drawn with, which is the only
+        distinction this test needs. */
+     if(wallMask[i]){hit++;break;}
+     if(extMask&&extMask[i])break;
+     x+=dx;y+=dy;}}
+   if(tot&&hit>0.5*tot)sides++;};
+  sweep(-1,0);sweep(1,0);sweep(0,-1);sweep(0,1);
+  return sides;}
  /* where the caller's previous pass found fittings (step 16c), as a mask */
  let fitMask=null;
  if(opts.fitBoxes&&opts.fitBoxes.length){
@@ -2464,6 +2510,14 @@ function autotraceFloorplan(img, opts){
      const i=idx(x,y);if(gmask[i]!==g)continue;tot++;if(dtExt[i]<NEAR)near++;}
     if(tot&&near>0.5*tot){eat(r);continue;}
    }
+   /* Applied to EXTENSION rects only. A group's first rectangle is the room --
+      whatever the tracer made of it, that is its best account of the space, and
+      second-guessing it here cost maple a room and bath1 four (their small rooms
+      are bounded by partitions too thin to survive the wall opening, so a scan
+      walks straight through them and out). It is the later rectangles that reach
+      somewhere the room does not go. */
+   if(rects.length){const ws=walledSides(r);
+    if(ws<2){if(opts.debug)console.log('  unwalled extension g',g,r.x,r.y,r.w,r.h,'sides',ws);eat(r);continue;}}
    rects.push(r);covered+=r.w*r.h;eat(r);
    if(covered>=gArea[g]*0.9)break;}
   /* Grow each rectangle over the FITTINGS at its edge. The decomposition stops at
@@ -2518,6 +2572,14 @@ function autotraceFloorplan(img, opts){
  if(!renderMode&&A.nGroups>2){
   const doorless=roomsOut.filter(r=>!A.connected.has(r.gi));
   if(doorless.length<roomsOut.length)for(const r of doorless)drop.add(r.gi);}
+ /* TRIED AND REVERTED: sparing a doorless group that is room-sized, so that a
+    real room whose only doorway measures under the 46 cm door bar is not deleted
+    outright. It is the right instinct -- a Romans 1-bed loses its whole bedroom
+    this way -- but the cure is worse: maple grew a phantom 8.2 m2 of eaves and
+    shakespeare 12.4 m2, both as doorless storeys, against fixture truths of
+    50.9 and 106.6. The plan-first path recovers such a room by its printed size
+    instead (wfRoomsFromPlan, 'walls' mode); doing it here needs the doorway
+    found, which is wall-run tracing's job. */
  const rooms2=roomsOut.filter(r=>!drop.has(r.gi));
  if(!rooms2.length)return {ok:false,reason:'no usable rooms'};
 
@@ -2537,6 +2599,42 @@ function autotraceFloorplan(img, opts){
   const mx=snapVals(xs,tol),my=snapVals(ys,tol);
   for(const r of out){const x0=mx.get(r.x),x1=mx.get(r.x+r.w),y0=my.get(r.y),y1=my.get(r.y+r.d);
    r.x=x0;r.w=x1-x0;r.y=y0;r.d=y1-y0;}}
+
+ /* ---- 14a. one room, one shape. The decomposition takes its boxes one at a
+    time and the priority flood blocks the door discs, so a room comes back as
+    two or three rectangles standing a few centimetres apart -- and the planner
+    draws a wall round every rectangle it is given, so those few centimetres are
+    drawn as an interior wall the plan does not have. That is what makes a traced
+    home read as a scatter of cells rather than the shape on the page: measured
+    on a Romans 1-bed, the hall came back as four boxes with 12 cm voids between
+    them, one of them a 59 x 35 cm stub floating on its own.
+    Close the gap by growing the near edge. Only ever WITHIN one room -- across
+    groups the gap is a real wall -- only across a gap thinner than the plan's own
+    walls, and only where the two rectangles overlap squarely enough on the other
+    axis to be the same room carrying on rather than two arms of an L that happen
+    to line up. ---- */
+ {const GAPMAX=Math.max(12,Math.min(30,4*wallHalf*cmPerPx));
+  const step=(A,B)=>{
+   const ox=Math.min(A.x+A.w,B.x+B.w)-Math.max(A.x,B.x);
+   const oy=Math.min(A.y+A.d,B.y+B.d)-Math.max(A.y,B.y);
+   if(ox>0&&oy<0&&ox>=0.5*Math.min(A.w,B.w)){          // B under A, or A under B
+    const g=B.y-(A.y+A.d);
+    if(g>0&&g<=GAPMAX){B.y-=g;B.d+=g;return true;}}
+   if(oy>0&&ox<0&&oy>=0.5*Math.min(A.d,B.d)){          // B right of A, or A right of B
+    const g=B.x-(A.x+A.w);
+    if(g>0&&g<=GAPMAX){B.x-=g;B.w+=g;return true;}}
+   return false;};
+  for(let n=0;n<3;n++){let moved=false;
+   for(let a=0;a<out.length;a++)for(let b=0;b<out.length;b++){
+    if(a===b||out[a].gi!==out[b].gi)continue;
+    if(step(out[a],out[b]))moved=true;
+    if(step(out[b],out[a]))moved=true;}
+   if(!moved)break;}
+  /* a rectangle swallowed by another of the same room is no longer telling us
+     anything, and every extra box is another wall drawn */
+  out=out.filter((r,i)=>!out.some((o,j)=>j!==i&&o.gi===r.gi&&
+   o.x<=r.x+0.5&&o.y<=r.y+0.5&&o.x+o.w>=r.x+r.w-0.5&&o.y+o.d>=r.y+r.d-0.5&&
+   (o.w*o.d>r.w*r.d||(o.w*o.d===r.w*r.d&&j<i))));}
 
  /* ---- 14b. which sheet block each room group sits in, renumbered into reading
         order (rows top-to-bottom, left-to-right within a row) so block 0 is the
@@ -3328,6 +3426,26 @@ function wfPlanDimsFromText(t){
   if(a>=80&&a<=3000&&b>=80&&b<=3000)out.push({a,b,m:m[0]});}
  return out;}
 
+/* The same measurement, printed a second time. Every agent's plan states a room
+   in feet and inches as well as metres -- "10'3\" x 6'1\"" above "3.14 x 1.87 m" --
+   and the two readings are independent, so agreement between them is proof the
+   metric line was read correctly. That matters because the metric line is the one
+   Tesseract tends to score badly: on the owner's Parkers 1-bed the hallway's
+   "3.14 x 1.87 m" comes back at confidence 26 while the "10'3\" x 6'1\"" directly
+   above it comes back at 89. A misread digit moves a number by tens of
+   centimetres; the two forms agreeing to within a few is not something that
+   happens by accident. */
+function wfPlanDimsImperialFromText(t){
+ const out=[];
+ const re=/(\d{1,2})\s*['’´]\s*(\d{1,2})?\s*["”]?\s*[xX×]\s*(\d{1,2})\s*['’´]\s*(\d{1,2})?\s*["”]?/g;
+ let m;
+ while((m=re.exec(t))){
+  const ft1=+m[1],in1=m[2]?+m[2]:0,ft2=+m[3],in2=m[4]?+m[4]:0;
+  if(in1>11||in2>11)continue;
+  const a=(ft1*12+in1)*2.54,b=(ft2*12+in2)*2.54;
+  if(a>=80&&a<=3000&&b>=80&&b<=3000)out.push({a,b});}
+ return out;}
+
 async function wfOcrPlanFacts(imgPack){
  if(typeof wfLoadTess!=='function')return null;
  try{
@@ -3349,7 +3467,15 @@ async function wfOcrPlanFacts(imgPack){
    const dims=[];
    for(const ln of lines){
     const t=(ln.text||'').trim();
-    if(!t||(ln.confidence||0)<38)continue;
+    /* 38 was the gate, and it was throwing away good measurements. On the owner's
+       Parkers 1-bed the hallway's "3.14 x 1.87 m" scores 26 and the bathroom's
+       "1.81 x 2.72 m" scores 33 -- both read PERFECTLY; what drags the line score
+       down is the box border and the leader line Tesseract picks up around them.
+       Low-confidence readings are carried through with their score attached and
+       are used only where the drawing itself agrees with them: they never touch
+       the scale (wfScaleFromPlanDims), and wfRoomsFromPlan only seats one on a
+       room whose traced extent already measures the same. */
+    if(!t||(ln.confidence||0)<20)continue;
     const b=ln.bbox;if(!b)continue;
     /* Two rooms printed side by side land on ONE OCR line -- on a Romans plan the
        kitchen's "2.59m x 1.77m" and the bathroom's "1.77m x 1.69m" come back as a
@@ -3382,7 +3508,24 @@ async function wfOcrPlanFacts(imgPack){
         break;}}}
      if(!bb&&hits.length===1)bb=b;
      if(!bb)continue;
-     dims.push({a:h.a,b:h.b,x:(bb.x0+bb.x1)/(2*f),y:(bb.y0+bb.y1)/(2*f)});}}
+     dims.push({a:h.a,b:h.b,conf:Math.round(ln.confidence||0),
+                x:(bb.x0+bb.x1)/(2*f),y:(bb.y0+bb.y1)/(2*f)});}}
+   /* Corroborate the doubtful metric readings against the feet-and-inches the
+      plan prints beside them (see wfPlanDimsImperialFromText). A confirmed
+      reading is as good as a confident one and is promoted to count as such. */
+   {const imps=[];
+    for(const ln of lines){
+     const b2=ln.bbox;if(!b2)continue;
+     for(const h of wfPlanDimsImperialFromText((ln.text||'').trim()))
+      imps.push({a:h.a,b:h.b,x:(b2.x0+b2.x1)/(2*f),y:(b2.y0+b2.y1)/(2*f)});}
+    const NEARX=0.10*cv.width/f,NEARY=0.06*cv.height/f,TOL=8;
+    for(const d of dims){
+     if(!(d.conf<38))continue;
+     for(const q of imps){
+      if(Math.abs(q.x-d.x)>NEARX||Math.abs(q.y-d.y)>NEARY)continue;
+      const ok=(Math.abs(q.a-d.a)<=TOL&&Math.abs(q.b-d.b)<=TOL)||
+               (Math.abs(q.b-d.a)<=TOL&&Math.abs(q.a-d.b)<=TOL);
+      if(ok){d.conf=100;d.confirmed=true;break;}}}}
    /* room NAMES too, anchored the same way. One pass over the sheet gives the
       whole plan in writing: what each room is called and how big it says it is. */
    const names=[];
@@ -3428,6 +3571,7 @@ function wfScaleFromPlanDims(trace,dims){
   e[2]=Math.max(e[2],r.x+r.w);e[3]=Math.max(e[3],r.y+r.d);}
  const est=[];
  for(const d of dims){
+  if(d.conf!=null&&d.conf<38)continue;   // never let a doubtful reading set the scale
   const px=Math.round(d.x),py=Math.round(d.y);
   if(px<0||py<0||px>=mask.W||py>=mask.H)continue;
   const gi=mask.gi[py*mask.W+px];
@@ -3495,15 +3639,43 @@ function wfWallBox(run,W,H,px,py,ext){
  const BAND=12;
  const med=a=>{if(!a.length)return null;a.sort((u,v)=>u-v);
   return a[(a.length-1)>>1];};
- const hitsX=(dir)=>{const o=[];
-  for(let k=-BAND;k<=BAND;k+=3){const y=py+k;if(y<0||y>=H)continue;
-   for(let x=px;dir<0?x>=0:x<W;x+=dir){if(at(x,y)){o.push(x);break;}}}
+ /* `walls` counts the sides that stopped at a WALL rather than at the page, and
+    it is what tells a room from a caption. An agent's callout box -- "Utility
+    1.05 x 1.92 m" floated in the white beside the plan -- is bounded on all four
+    sides by page, because its thin printed border does not survive the wall
+    opening. A room, even one in the corner of the building, is bounded by the
+    building's own walls. Nothing else separates the two reliably: the callout is
+    drawn close enough to share the drawing's sheet block, its border is heavy
+    enough that the print test leaves it alone, and it is drawn about the size of
+    the room it describes. */
+ let walls=0;
+ const scan=(dir,horiz)=>{const o=[];let w=0,n=0;
+  for(let k=-BAND;k<=BAND;k+=3){
+   const c=(horiz?py:px)+k;
+   if(horiz?(c<0||c>=H):(c<0||c>=W))continue;
+   for(let v=horiz?px:py;dir<0?v>=0:(horiz?v<W:v<H);v+=dir){
+    const x=horiz?v:c,y=horiz?c:v;
+    if(at(x,y)){o.push(v);n++;if(run[y*W+x])w++;break;}}}
+  if(n&&w>0.5*n)walls++;
   return med(o);};
- const hitsY=(dir)=>{const o=[];
-  for(let k=-BAND;k<=BAND;k+=3){const x=px+k;if(x<0||x>=W)continue;
-   for(let y=py;dir<0?y>=0:y<H;y+=dir){if(at(x,y)){o.push(y);break;}}}
-  return med(o);};
- return {x0:hitsX(-1),x1:hitsX(1),y0:hitsY(-1),y1:hitsY(1)};}
+ const x0=scan(-1,true),x1=scan(1,true),y0=scan(-1,false),y1=scan(1,false);
+ return {x0,x1,y0,y1,walls};}
+
+/* Does a printed pair agree with what the tracer measured of the room? The long
+   axis is the test that means anything: an agent's pair is a max W x D and the
+   short one is quoted across the narrowest part of a room that is often not a
+   rectangle at all, while the tracer's extent is a bounding box. Area is a second,
+   looser check that the room is not being asked to hold something far bigger than
+   it is. Confident readings get a wide berth -- the printed number is better
+   evidence than our pixels, which is the whole point of reading the plan. A
+   doubtful one has to match, because there its only corroboration is the drawing. */
+function wfDimAgrees(d,tmax,ta){
+ const pmax=Math.max(d.a,d.b),pa=d.a*d.b;
+ if(!(tmax>0&&ta>0))return false;
+ const sure=!(d.conf!=null&&d.conf<38);
+ const lo=sure?0.6:0.85,hi=sure?1.6:1.15;
+ const alo=sure?0.4:0.5,ahi=sure?2:1.25;
+ return pmax>=lo*tmax&&pmax<=hi*tmax&&pa>=alo*ta&&pa<=ahi*ta;}
 
 function wfRoomsFromPlan(trace,facts){
  if(!trace||!trace.ok||!trace.mask||!facts||!facts.dims||!facts.dims.length)return null;
@@ -3518,6 +3690,21 @@ function wfRoomsFromPlan(trace,facts){
   if(!e){e=[1e9,1e9,-1e9,-1e9];ext.set(r.gi,e);meta.set(r.gi,{name:r.name,color:r.color,blk:r.blk});}
   e[0]=Math.min(e[0],r.x/cm);e[1]=Math.min(e[1],r.y/cm);
   e[2]=Math.max(e[2],(r.x+r.w)/cm);e[3]=Math.max(e[3],(r.y+r.d)/cm);}
+ /* Each region's OWN extent, straight off the mask. The rectangle decomposition
+    can only report boxes that fit clear of every fitting and door disc, so on an
+    irregular room its bounding box says little about which way the room runs --
+    on the owner's Parkers 1-bed the hall is a pentagon and its rectangles came
+    out slightly wider than tall while the room is plainly taller than wide, which
+    laid a 3.14 x 1.87 m hallway across the flat sideways. The mask sees the whole
+    region. It is used ONLY to decide which way round the printed pair goes, never
+    to size anything: the mask overruns through doorways and window reveals, which
+    is exactly why sizing from it was tried and reverted. */
+ const mext=new Map();
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const g=mask.gi[y*W+x];if(g<0)continue;
+  const e=mext.get(g);
+  if(!e)mext.set(g,[x,y,x,y]);
+  else{if(x<e[0])e[0]=x;if(y<e[1])e[1]=y;if(x>e[2])e[2]=x;if(y>e[3])e[3]=y;}}
+ const run=wfWallRuns(mask);
  /* which traced room each printed dimension is standing in. The label often sits
     ON its own ink, so look around it before giving up. */
  const lab=[];
@@ -3544,11 +3731,45 @@ function wfRoomsFromPlan(trace,facts){
    const cost=dx+0.5*dy;
    if(cost<nb){nb=cost;nm=n;}}
   if(nm)nm.used=true;
-  lab.push({d,px,py,gi:gi>=0?gi:-1,nm});}
+  /* Is this label standing in a ROOM, or in a CALLOUT? Giraffe360 and EweMove
+     sheets box the smaller rooms' names and sizes up in the white beside the
+     drawing and run a leader line to the room: on the owner's Parkers 1-bed both
+     the Hallway and the Bathroom are labelled that way. Taken at face value the
+     box itself becomes the room -- a 3.14 x 1.87 m "Hall" drawn outside the
+     building, hanging off the left of the plan, which is what stops a traced plan
+     looking like the plan. The test is what the scan STOPS on: a room, even one
+     in the corner of a building, is bounded by the building's own walls, while a
+     callout is bounded on every side by page, its thin printed border having not
+     survived the wall opening. */
+  let callout=false;
+  if(run){const wb=wfWallBox(run,W,H,px,py,mask.ext);if(wb.walls<2)callout=true;}
+  lab.push({d,px,py,gi:callout?-1:(gi>=0?gi:-1),nm,callout});}
+ if(!lab.length)return null;
+ /* A callout is still the plan telling us a room's size -- it just says it from
+    the margin, with a line pointing at the room. Follow the pointing: the box is
+    drawn BESIDE the room it names, so the nearest traced room that is not already
+    spoken for, and whose own measured extent agrees with the printed pair, is the
+    room it belongs to. Both tests are needed. Distance alone would hand a EweMove
+    sheet's "Utility 1.05 x 1.92 m" -- a room that is not on this floor at all --
+    to whichever room happens to sit nearest the box; the size check throws it out,
+    because the nearest traced room there is 3.16 x 3.71 m. A callout that matches
+    nothing is not a room on this plan, and is dropped. */
+ {const claimed=new Set(lab.filter(L=>!L.callout&&L.gi>=0).map(L=>L.gi));
+  for(const L of lab){
+   if(!L.callout)continue;
+   const pmax=Math.max(L.d.a,L.d.b),pa=L.d.a*L.d.b;
+   let best=-1,bd=Infinity;
+   ext.forEach((e,gi)=>{
+    if(claimed.has(gi))return;
+    const tw=(e[2]-e[0])*cm,th=(e[3]-e[1])*cm;
+    if(!wfDimAgrees(L.d,Math.max(tw,th),tw*th))return;
+    const dd=Math.hypot((e[0]+e[2])/2-L.px,(e[1]+e[3])/2-L.py);
+    if(dd<bd){bd=dd;best=gi;}});
+   if(best>=0){L.gi=best;claimed.add(best);}}
+  for(let i=lab.length-1;i>=0;i--)if(lab[i].callout&&lab[i].gi<0)lab.splice(i,1);}
  if(!lab.length)return null;
  const byGi=new Map();
  lab.forEach(L=>{if(!byGi.has(L.gi))byGi.set(L.gi,[]);byGi.get(L.gi).push(L);});
- const run=wfWallRuns(mask);
  const out=[];
  byGi.forEach((list,gi)=>{
   const e=gi>=0?ext.get(gi):null;
@@ -3562,16 +3783,27 @@ function wfRoomsFromPlan(trace,facts){
    if(e){box={x0:e[0],y0:e[1],x1:e[2],y1:e[3]};mode=list.length>1?'share':'traced';}
    else if(run){
     const b2=wfWallBox(run,W,H,L.px,L.py,mask.ext);
-    if(b2.x0!=null&&b2.x1!=null&&b2.y0!=null&&b2.y1!=null){
+    /* fewer than two sides walled means this label is not standing in a room at
+       all -- it is inside a callout box printed on the page (see wfWallBox) */
+    if(b2.x0!=null&&b2.x1!=null&&b2.y0!=null&&b2.y1!=null&&b2.walls>=2){
      box={x0:b2.x0,y0:b2.y0,x1:b2.x1,y1:b2.y1};mode='walls';}}
    if(!box)continue;
    const spanW=(box.x1-box.x0)*cm,spanH=(box.y1-box.y0)*cm;
    if(!(spanW>30&&spanH>30))continue;
+   /* a reading Tesseract was unsure of is used only where the drawing says the
+      same thing; see wfDimAgrees */
+   if(L.d.conf!=null&&L.d.conf<38&&!wfDimAgrees(L.d,Math.max(spanW,spanH),spanW*spanH))continue;
    /* the printed pair is a max W x D in the plan's own order, which need not be
       the drawing's x then y -- take the orientation that fits what is drawn */
    const A=L.d.a,B=L.d.b;
    const e1=Math.abs(spanW-A)+Math.abs(spanH-B),e2=Math.abs(spanW-B)+Math.abs(spanH-A);
-   const w=e1<=e2?A:B,h=e1<=e2?B:A;
+   let w=e1<=e2?A:B,h=e1<=e2?B:A;
+   /* ...and where the region itself clearly runs one way, that wins: see mext.
+      Not in 'share' mode, where the region is two rooms and its shape is neither's. */
+   if(mode!=='share'){const me=mext.get(gi);
+    if(me){const mw=(me[2]-me[0])*cm,mh=(me[3]-me[1])*cm;
+     if(Math.max(mw,mh)>=1.15*Math.max(1,Math.min(mw,mh))&&(mh>mw)!==(h>w)){
+      const t=w;w=h;h=t;}}}
    let x,y;
    if(mode==='share'){
     const cx=(box.x0+box.x1)/2,cy=(box.y0+box.y1)/2;
@@ -3594,10 +3826,16 @@ function wfRoomsFromPlan(trace,facts){
     x=box.x0*cm+(spanW-w)/2;
     y=box.y0*cm+(spanH-h)/2;}
    const m=meta.get(gi)||{};
+   /* w/d above are the drawing's x then y, which is what the room must be DRAWN
+      as. The pair the plan PRINTS is often the other way round -- an agent writes
+      "3.74m x 5.69m" over a room drawn wider than it is deep -- and that printed
+      line is the one a buyer reads and checks. Carry it through untouched so the
+      label can say it back in the plan's own order. */
    out.push({gi,blk:m.blk||0,name:(L.nm&&L.nm.name)||m.name||null,
     color:(L.nm&&L.nm.color)||m.color||null,mode,
     x:Math.round(x*10)/10,y:Math.round(y*10)/10,
     w:Math.round(w*10)/10,d:Math.round(h*10)/10,
+    pw:Math.round(A*10)/10,pd:Math.round(B*10)/10,
     lx:L.d.x,ly:L.d.y});}});
  if(out.length<2)return null;
  /* anything still unnamed takes a label that actually falls inside it -- never
@@ -3690,8 +3928,10 @@ function wfApplyPlanRooms(trace,facts){
  const kept=(trace.rooms||[]).filter(r=>r.gi==null||!claimed.has(r.gi));
  const rooms=[];let i=0;
  for(const b of built){
-  rooms.push({id:'pr'+(++i),name:b.name||'Room '+i,color:b.color||'plain',
-   gi:9000+i,blk:b.blk||0,x:b.x,y:b.y,w:b.w,d:b.d,fromPlan:true});}
+  const r={id:'pr'+(++i),name:b.name||'Room '+i,color:b.color||'plain',
+   gi:9000+i,blk:b.blk||0,x:b.x,y:b.y,w:b.w,d:b.d,fromPlan:true};
+  if(b.pw>0&&b.pd>0)r.pdim=[b.pw,b.pd];   // as PRINTED, for the label
+  rooms.push(r);}
  for(const r of kept)rooms.push(r);
  /* A fitting belongs to whichever room it stands in now, and one that stands in
     no room at all is not a fitting: the rooms have moved to where the plan says
@@ -3710,6 +3950,11 @@ function wfApplyPlanRooms(trace,facts){
  trace.rooms=rooms;
  trace.planRooms=built.length;
  if(window.wfTrace)window.wfTrace('rooms sized from the plan: '+built.length);}
+
+/* exposed for the test rig: the whole plan-first path, end to end */
+window.wfTraceFromPlan=wfTraceFromPlan;
+window.wfApplyPlanRooms=wfApplyPlanRooms;
+window.wfBuildPlan=wfBuildPlan;
 
 /* ---------- retrace one specific floor plan image (multi-plan listings) ----------
    ix 0 keeps the quoted-area scale; other floors use door widths — the listing's
@@ -4051,7 +4296,14 @@ async function openTracedUpload(f){
  try{pack=await wfLocalImage(f);}
  catch(e){await openPlan('upload',BLANK,{fresh:true,file:f});return;}
  let trace=null;
- try{trace=autotraceFloorplan(pack.ctx.getImageData(0,0,pack.canvas.width,pack.canvas.height),{});}catch(e){trace=null;}
+ /* An uploaded plan is the same job as a listing's: read what the drawing itself
+    says before measuring it in pixels. Without this an upload never got the plan's
+    printed room sizes at all -- on a Romans 1-bed it merged the kitchen into the
+    lounge and reported one 26.7 m2 blob, while the same image through a listing
+    came back as four rooms at the sizes printed on the page. */
+ try{const im=pack.ctx.getImageData(0,0,pack.canvas.width,pack.canvas.height);
+  trace=autotraceFloorplan(im,{});
+  trace=await wfTraceFromPlan(pack,im,trace);}catch(e){trace=null;}
  const sheet=wfBuildPlan({title:'Uploaded floor plan'},pack,trace);
  const upId='upload-'+wfHash(f.name+':'+f.size);
  /* an uploaded sheet splits into storeys the same way a listing's does. There is no
@@ -4338,6 +4590,7 @@ function wfPhotoLightbox(photos,ix){
  show(ix);}
 /* ===== OCR room naming — tesseract.js from the CDN (skipped where CSP blocks it) ===== */
 let wfLastLive=null,wfTessLoad=null;
+window.wfLoadTess=wfLoadTess;   /* the test rig loads OCR the same way the app does */
 function wfLoadTess(){if(window.Tesseract)return Promise.resolve();
  if(!wfTessLoad)wfTessLoad=new Promise((res,rej)=>{
   const sc=document.createElement('script');
