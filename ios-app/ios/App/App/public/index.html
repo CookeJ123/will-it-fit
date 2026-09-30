@@ -812,7 +812,8 @@ function redo(){if(!future.length)return;hist.push(JSON.stringify(state));state=
 function changed(opts){autofit=null;computeIssues();render();if(!(opts&&opts.noPanels))renderPanels();scheduleSave();}
 function embeddedState(){try{return JSON.parse($('#state').textContent||'null');}catch(e){return null;}}
 function draftKey(){return KEY+':'+planId;}
-function baseKey(){const e=embeddedState();return (e&&e.planId===planId)?(e.savedAt||'embedded'):'plan:'+PLAN_ID+':'+planId;}
+function wfPlanFp(b){if(!b)return '0';let t='';(b.rooms||[]).forEach(r=>{t+=r.name+'|'+r.x+'|'+r.y+'|'+r.w+'|'+r.d+';';});(b.openings||[]).forEach(o=>{t+=(o.kind||'d')+o.x+'|'+o.y+'|'+o.w+'|'+o.rot+';';});(b.items||[]).forEach(i=>{if(i.locked)t+=i.name+'|'+i.x+'|'+i.y+'|'+i.w+'|'+i.d+';';});if(b.underlay)t+='u'+b.underlay.cmPerPx;let h=0;for(let k=0;k<t.length;k++)h=(h*31+t.charCodeAt(k))>>>0;return h.toString(36);}
+function baseKey(){const e=embeddedState();return (e&&e.planId===planId)?(e.savedAt||'embedded'):'plan:'+PLAN_ID+':'+planId+':'+wfPlanFp(planBase);}
 function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{try{localStorage.setItem(draftKey(),JSON.stringify({base:baseKey(),t:Date.now(),state}));}catch(e){}},400);}
 function b64url(bytes){let s='';for(let i=0;i<bytes.length;i+=0x8000)s+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
 function unb64url(str){str=str.replace(/-/g,'+').replace(/_/g,'/');while(str.length%4)str+='=';const bin=atob(str);const out=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);return out;}
@@ -822,7 +823,14 @@ function validState(s){return s&&Array.isArray(s.rooms)&&Array.isArray(s.items)&
 async function sharedFromHash(){const m=/[#&]s=([^&]+)/.exec(location.hash||'');if(!m)return null;try{const s=await decodeState(decodeURIComponent(m[1]));if(validState(s))return s;}catch(e){console.warn('link state unreadable',e);}return null;}
 function loadFor(base,fresh){planUpdated=false;if(fresh)return clone(base);
  const emb=embeddedState();const embOk=emb&&emb.planId===planId&&validState(emb);const bk=baseKey();
- try{const d=JSON.parse(localStorage.getItem(draftKey())||'null');if(d&&validState(d.state)){if(d.base===bk)return d.state;planUpdated=true;localStorage.removeItem(draftKey());}}catch(e){}
+ try{const d=JSON.parse(localStorage.getItem(draftKey())||'null');if(d&&validState(d.state)){if(d.base===bk)return d.state;
+  /* the plan underneath has changed since this draft was saved: start from the
+     new plan, but keep the furniture the user placed on the old one */
+  planUpdated=true;localStorage.removeItem(draftKey());
+  const m=embOk?clone(emb):clone(base);
+  const mine=(d.state.items||[]).filter(i=>i&&!i.locked);
+  if(mine.length)m.items=(m.items||[]).concat(mine);
+  return m;}}catch(e){}
  return embOk?clone(emb):clone(base);}
 const BLANK={v:1,title:'My floor plan',units:'m',grid:5,snap:true,wall:14,savedAt:null,rooms:[],openings:[],items:[],underlay:null};
 
@@ -1753,11 +1761,12 @@ async function initPlanner(){if(plannerReady)return;plannerReady=true;shell();
  if(window.claude&&typeof window.claude.use==='function'){try{caps.artifact=await window.claude.use('artifact');}catch(e){}try{caps.downloads=await window.claude.use('downloads');}catch(e){}}
  $('#board').addEventListener('pointerdown',()=>{if(window.innerWidth<=920)closeDrawers();},true);}
 async function openPlan(id,base,opts){opts=opts||{};await initPlanner();planId=id;planBase=clone(base);hist=[];future=[];sel=null;mode='furnish';measure=null;calib=null;libTab='Library';
- state=loadFor(base,!!opts.fresh);if(!state.units)state.units='m';if(!state.grid)state.grid=5;if(!state.wall)state.wall=14;if(state.snap==null)state.snap=true;
+ state=loadFor(base,!!opts.fresh);if(planUpdated)scheduleSave();   /* a merged draft is saved at once, or the next open would drop the furniture again */
+ if(!state.units)state.units='m';if(!state.grid)state.grid=5;if(!state.wall)state.wall=14;if(state.snap==null)state.snap=true;
  showPlanner();computeIssues();renderPanels();fitView();
  if(typeof wfPlannerExtras==='function')try{wfPlannerExtras();}catch(e){}
  try{if(sessionStorage.getItem('willitfit:justsaved')){sessionStorage.removeItem('willitfit:justsaved');toast('Saved into the page');}}catch(e){}
- if(opts.fromLink)toast('Loaded the layout from the link');else if(planUpdated)toast('This plan was updated — starting from the new version');
+ if(opts.fromLink)toast('Loaded the layout from the link');else if(planUpdated)toast('The floor plan was re-read — your furniture was kept');
  if(opts.file)loadUnderlay(opts.file);}
 function showPlanner(){document.body.classList.remove('landing');$('#landing').hidden=true;$('#app').hidden=false;window.scrollTo(0,0);render();}
 function showLanding(){document.body.classList.add('landing');$('#app').hidden=true;$('#landing').hidden=false;window.scrollTo(0,0);
@@ -2960,6 +2969,77 @@ function autotraceFloorplan(img, opts){
   for(let i=fittings.length-1;i>=0;i--){const f=fittings[i];
    for(let j=0;j<i;j++){const o=fittings[j];
     if(f.x>=o.x-1&&f.y>=o.y-1&&f.x+f.w<=o.x+o.w+1&&f.y+f.d<=o.y+o.d+1){fittings.splice(i,1);break;}}}
+  /* STAIRS. A flight is drawn as a row of treads, and each tread is a closed
+     patch the size of a small fitting -- so a staircase came out as five
+     "Fitting" boxes stacked up the landing, which is both wrong and, to the
+     owner, made up. Three or more patches of about the same size, lined up
+     along one axis with their other extent overlapping, at a regular spacing,
+     are one flight: replace them with their union, named Stairs. */
+  {const used=new Uint8Array(fittings.length);const flights=[];
+   /* a tread is a narrow strip -- at least 2.2 times longer than it is deep,
+      no more than 40 cm deep -- and a flight stacks at least four of them along
+      that short side. Three kitchen units in a row are none of those things,
+      and the first version of this rule turned them into a staircase. */
+   const tread=(f,horiz)=>{const lo=Math.min(f.w,f.d),hi=Math.max(f.w,f.d);
+    if(lo>40||hi/lo<2.2)return false;
+    return horiz?(f.w<f.d):(f.d<f.w);};   // stacked along x: the short side is w
+   for(let i=0;i<fittings.length;i++){
+    if(used[i])continue;
+    const a=fittings[i];
+    for(const horiz of [true,false]){   // horiz: treads stacked along x (their long side vertical)
+     if(!tread(a,horiz))continue;
+     const run=[i];
+     for(let j=0;j<fittings.length;j++){
+      if(j===i||used[j])continue;const b=fittings[j];
+      if(!tread(b,horiz))continue;
+      const sameSize=Math.abs(a.w-b.w)<=0.35*Math.max(a.w,b.w)&&Math.abs(a.d-b.d)<=0.35*Math.max(a.d,b.d);
+      if(!sameSize)continue;
+      const ov=horiz?Math.min(a.y+a.d,b.y+b.d)-Math.max(a.y,b.y):Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x);
+      const span=horiz?Math.min(a.d,b.d):Math.min(a.w,b.w);
+      if(ov<0.7*span)continue;
+      run.push(j);}
+     if(run.length<3)continue;
+     /* regular spacing along the axis: sort, and every gap between neighbours
+        must be under one tread's own extent */
+     const key=horiz?'x':'y',ext=horiz?'w':'d';
+     run.sort((p,q)=>fittings[p][key]-fittings[q][key]);
+     const chain=[run[0]];
+     for(let k=1;k<run.length;k++){const p=fittings[chain[chain.length-1]],q=fittings[run[k]];
+      const gap=q[key]-(p[key]+p[ext]);
+      if(gap<=1.2*Math.max(p[ext],q[ext])&&gap>-0.5*p[ext])chain.push(run[k]);}
+     if(chain.length<3)continue;
+     let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9,px0=1e9,py0=1e9,px1=-1e9,py1=-1e9;
+     for(const k of chain){const f=fittings[k];used[k]=1;
+      x0=Math.min(x0,f.x);y0=Math.min(y0,f.y);x1=Math.max(x1,f.x+f.w);y1=Math.max(y1,f.y+f.d);
+      px0=Math.min(px0,f.px.x0);py0=Math.min(py0,f.px.y0);px1=Math.max(px1,f.px.x1);py1=Math.max(py1,f.px.y1);}
+     const f0=fittings[chain[0]];
+     flights.push({gi:f0.gi,blk:f0.blk,name:'Stairs',px:{x0:px0,y0:py0,x1:px1,y1:py1},
+      x:Math.round(x0*10)/10,y:Math.round(y0*10)/10,w:Math.round((x1-x0)*10)/10,d:Math.round((y1-y0)*10)/10});
+     break;}}
+   /* The stairwell itself: a narrow traced room -- no more than 1.4 m across,
+      at least 1.8 m long -- holding three or more fittings is a staircase drawn
+      as a symbol (hatched treads, an arrow, a newel), not a store with things in
+      it. The whole room is the obstacle: name it Stairs and drop the fittings. */
+   {const per=new Map();
+    fittings.forEach((f,i)=>{if(used[i])return;if(!per.has(f.gi))per.set(f.gi,[]);per.get(f.gi).push(i);});
+    per.forEach((list,g)=>{
+     if(list.length<3)return;
+     const gb=giBox.get(g);if(!gb)return;
+     const gw=gb.x1-gb.x0,gd=gb.y1-gb.y0;
+     if(Math.min(gw,gd)>140||Math.max(gw,gd)<180)return;   // a landing stub can widen the box past a true 1.2 m
+     for(const i of list)used[i]=1;
+     for(const r of roomsFinal)if(r.gi===g)r.name='Stairs';
+     if(opts.debug)console.log('  stairwell g',g,Math.round(gw)+'x'+Math.round(gd),'fittings dropped',list.length);});}
+   if(flights.length||used.some(u=>u)){
+    for(let i=fittings.length-1;i>=0;i--)if(used[i])fittings.splice(i,1);
+    for(const fl of flights)fittings.push(fl);
+    /* the stairwell itself often traces as a narrow "room" of its own; when a
+       flight covers most of it, that room is the stairs */
+    for(const fl of flights){
+     for(const r of roomsFinal){
+      if(r.gi!==fl.gi)continue;
+      const ox=Math.max(0,Math.min(r.x+r.w,fl.x+fl.w)-Math.max(r.x,fl.x)),oy=Math.max(0,Math.min(r.y+r.d,fl.y+fl.d)-Math.max(r.y,fl.y));
+      if(ox*oy>=0.5*r.w*r.d&&Math.min(r.w,r.d)<=150)r.name='Stairs';}}}}
   if(opts.debug)console.log('fittings',fittings.length,JSON.stringify(fittings));}
 
 
@@ -3237,7 +3317,7 @@ function wfBuildPlan(meta,imgPack,trace){
     let x0=f.x,y0=f.y,x1=f.x+f.w,y1=f.y+f.d;
     if(b){x0=Math.max(x0,b[0]);y0=Math.max(y0,b[1]);x1=Math.min(x1,b[2]);y1=Math.min(y1,b[3]);}
     const w=x1-x0,d=y1-y0;
-    return {id:'fx'+i,name:'Fitting',w:Math.round(w),d:Math.round(d),
+    return {id:'fx'+i,name:f.name||'Fitting',w:Math.round(w),d:Math.round(d),
      x:Math.round((x0+w/2)*10)/10,y:Math.round((y0+d/2)*10)/10,
      rot:0,color:'white',shape:'rect',deco:'',under:false,locked:true,
      blk:f.blk||0,gi:f.gi};
@@ -5060,6 +5140,7 @@ function wfPhotoLightbox(photos,ix){
 /* ===== OCR room naming — tesseract.js from the CDN (skipped where CSP blocks it) ===== */
 let wfLastLive=null,wfTessLoad=null;
 window.wfLoadTess=wfLoadTess;   /* the test rig loads OCR the same way the app does */
+window.wfOpenPlan=openPlan;window.wfAddItem=addItem;   /* the test rig opens plans and adds pieces the way the app does */
 function wfLoadTess(){if(window.Tesseract)return Promise.resolve();
  if(!wfTessLoad)wfTessLoad=new Promise((res,rej)=>{
   const sc=document.createElement('script');

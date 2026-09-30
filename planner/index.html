@@ -1493,7 +1493,7 @@ async function boot(){shell();state=await loadInitial();
  if(!state.units)state.units='m';if(!state.grid)state.grid=5;if(!state.wall)state.wall=12;if(state.snap==null)state.snap=true;
  computeIssues();renderPanels();fitView();
  try{if(sessionStorage.getItem('willitfit:justsaved')){sessionStorage.removeItem('willitfit:justsaved');toast('Saved into the page');}}catch(e){}
- if(fromLink)toast('Loaded the layout from the link');else if(planUpdated)toast('The floor plan was updated — starting from the new plan');
+ if(fromLink)toast('Loaded the layout from the link');else if(planUpdated)toast('The floor plan was re-read — your furniture was kept');
  if(window.claude&&typeof window.claude.use==='function'){try{caps.artifact=await window.claude.use('artifact');}catch(e){}try{caps.downloads=await window.claude.use('downloads');}catch(e){}}
  $('#board').addEventListener('pointerdown',()=>{if(window.innerWidth<=920)closeDrawers();},true);}
 boot();
