@@ -125,7 +125,7 @@ h3{font-size:15px;font-weight:600}
 .board .modechip.plan{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
 svg text{font-family:var(--sans);fill:var(--ink);pointer-events:none;user-select:none}
 svg .roomname{font-family:var(--disp);font-weight:600;letter-spacing:.02em}
-svg .dims{font-family:var(--mono);fill:var(--muted)}
+svg .dims{font-family:var(--mono);fill:var(--ink);fill-opacity:.8}
 svg .wall{fill:var(--wall)}
 svg .room{stroke:none}
 svg .item .body{stroke:rgba(20,24,32,.55);stroke-width:1.2;vector-effect:non-scaling-stroke}
@@ -455,12 +455,12 @@ function deliveryCheck(dw,it,room){
  if(!dw||!dw.doors||!room)return null;
  if(WF_DISMANTLES.test(it.name||''))return null;
  const need=itemCarryNeed(it);
- let bw=dw.best[room.id],via='the doorways on the way in';
- if(bw===undefined){if(dw.doorMin==null)return null;bw=dw.doorMin;via='the narrowest door on the plan';}
+ let bw=dw.best[room.id],via='the doorways on the way in',fb=false;
+ if(bw===undefined){if(dw.doorMin==null)return null;bw=dw.doorMin;via='the narrowest door on the plan';fb=true;}
  const gap=bw-need;
- if(gap<0)return {s:'no',note:Math.round(-gap)+' cm too wide for '+via+' ('+Math.round(bw)+' cm)'};
- if(gap<4)return {s:'tight',note:'squeezes through '+via+' — '+Math.round(gap)+' cm to spare'};
- return {s:'ok'};}
+ if(gap<0)return {s:'no',fb,bw,note:Math.round(-gap)+' cm too wide for '+via+' ('+Math.round(bw)+' cm)'};
+ if(gap<4)return {s:'tight',fb,bw,note:'squeezes through '+via+' — '+Math.round(gap)+' cm to spare'};
+ return {s:'ok',fb,bw};}
 
 /* ---------- the fit report: the app's namesake, in writing ---------- */
 function buildFitReport(){
@@ -505,7 +505,7 @@ function openFitReport(){
  let h='<div class="row" style="justify-content:space-between"><h3>Fit report</h3><button class="ghost" id="dlg-x" aria-label="Close">✕</button></div>';
  const doorNo=[...rep.fit,...rep.warn,...rep.fail].filter(e=>e.dv&&e.dv.s==='no').length;
  const doorTight=[...rep.fit,...rep.warn,...rep.fail].filter(e=>e.dv&&e.dv.s==='tight').length;
- if(!n)h+='<div class="hint">Nothing movable on the board yet — add some furniture first.</div>';
+ if(!n)h+='<div class="hint">Nothing movable on the board yet.</div><div class="row" style="margin-top:8px"><button class="primary" id="fr-sofa">Add a sofa</button><span class="hint">or pick anything from the Library.</span></div>';
  else{
   const allClear=rep.fail.length===0&&rep.out.length===0&&rep.warn.length===0&&doorNo===0;
   let sum=(rep.fail.length===0&&rep.out.length===0?(rep.warn.length?good+' of '+n+' fit — '+rep.warn.length+' tight':(n===1?'It fits.':'Everything fits — all '+n+' pieces'))
@@ -520,11 +520,18 @@ function openFitReport(){
   rep.warn.forEach(e=>{h+=row(e.dv&&e.dv.s==='no'?'✗':'⚠',e.dv&&e.dv.s==='no'?'bad':'mid',e.it.name,e.r.name,join('needs clear space in front — blocked by '+e.blockers.join(', '),dvNote(e)));});
   rep.out.forEach(e=>{h+=row('·','out',e.it.name,'','not placed in a room yet');});
   rep.fit.forEach(e=>{h+=row(e.dv&&e.dv.s==='no'?'✗':'✓',e.dv&&e.dv.s==='no'?'bad':'good',e.it.name,e.r.name,dvNote(e));});
+  /* honest about the one thing the tracer cannot see: no plan has yet yielded
+     its front door, so the delivery check stands on the narrowest door drawn */
+  const fbe=[...rep.fit,...rep.warn,...rep.fail].filter(e=>e.dv&&e.dv.fb)[0];
+  if(fbe)h+='<div class="hint" style="margin-top:6px">The plan does not show which door is the front door, so the delivery check assumes it is at least as wide as the narrowest door drawn ('+Math.round(fbe.dv.bw)+' cm).</div>';
   h+='<div class="row" style="margin-top:6px"><button class="primary" id="fr-copy">Copy as text</button><span class="hint">Paste it straight into WhatsApp.</span></div>';}
  openDlg(h);
  const _allClear=n>0&&rep.fail.length===0&&rep.out.length===0&&rep.warn.length===0&&doorNo===0&&doorTight===0;
  if(_allClear){hapt('success');wfConfetti($('#dlg'));}
  $('#dlg-x').addEventListener('click',closeDlg);
+ const fsb=$('#fr-sofa');if(fsb)fsb.addEventListener('click',()=>{closeDlg();if(mode!=='furnish')setMode('furnish');
+  addItem({name:'3-seat sofa',w:210,d:95,color:'fabric',deco:'sofa'});
+  toast('3-seat sofa added'+(lastAddAutoPlaced?' — placed against a wall with room to spare':''));});
  const fc=$('#fr-copy');if(fc)fc.addEventListener('click',async()=>{const ok=await copyText(fitReportText(rep));toast(ok?'Report copied':'Couldn’t copy here');});}
 /* a brief, brand-coloured celebration when the report is an unqualified yes */
 function wfConfetti(host){
@@ -571,7 +578,7 @@ function pageHTML(s){const json=JSON.stringify(s).replace(/</g,'\\u003c');
 let svg,world,boardEl;
 function toWorld(e){const r=svg.getBoundingClientRect();return {x:(e.clientX-r.left-view.tx)/view.k,y:(e.clientY-r.top-view.ty)/view.k};}
 function applyView(){world.setAttribute('transform','translate('+view.tx+' '+view.ty+') scale('+view.k+')');$('#zoomchip').textContent=Math.round(view.k*100)+'%';}
-function fitView(){const r=svg.getBoundingClientRect();const b=planBounds();const pad=Math.min(60,r.width*0.08);const k=Math.min((r.width-pad*2)/(b.w||1),(r.height-pad*2)/(b.d||1));view.k=clamp(k,0.05,8);view.tx=(r.width-b.w*view.k)/2-b.x*view.k;view.ty=(r.height-b.d*view.k)/2-b.y*view.k;render();}
+function fitView(){const r=svg.getBoundingClientRect();const b=planBounds();const pad=Math.min(60,r.width*(r.width<=600?0.04:0.08));const k=Math.min((r.width-pad*2)/(b.w||1),(r.height-pad*2)/(b.d||1));view.k=clamp(k,0.05,8);view.tx=(r.width-b.w*view.k)/2-b.x*view.k;view.ty=(r.height-b.d*view.k)/2-b.y*view.k;render();}
 function planBounds(){let a={minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity};const add=(x,y)=>{a.minX=Math.min(a.minX,x);a.maxX=Math.max(a.maxX,x);a.minY=Math.min(a.minY,y);a.maxY=Math.max(a.maxY,y);};
  state.rooms.forEach(r=>{add(r.x-state.wall,r.y-state.wall);add(r.x+r.w+state.wall,r.y+r.d+state.wall);});
  if(state.underlay&&state.underlay.show){const u=state.underlay;add(u.x,u.y);add(u.x+u.iw*u.cmPerPx,u.y+u.ih*u.cmPerPx);}
@@ -621,7 +628,7 @@ function render(){ if(!world)return; const k=view.k,t=state.wall,px=v=>v/k; let 
  const boxes=state.items.filter(i=>!i.under&&!i.zone).map(i=>aabbOf(worldPolys(i)));
  const groups={};state.rooms.forEach(r=>{const key=r.name.trim().toLowerCase();(groups[key]=groups[key]||[]).push(r);});
  state.rooms.forEach(r=>{if(r.w*k<40||r.d*k<24)return;const grp=groups[r.name.trim().toLowerCase()];if(grp.some(o=>o.w*o.d>r.w*r.d))return;
-  const fl=FLOORS[r.color]||FLOORS.plain;const fs=px(12.5),fs2=px(10.5);const gb=groupBounds(grp);
+  const fl=FLOORS[r.color]||FLOORS.plain;const fs=px(12.5),fs2=px(window.innerWidth<=920?11.5:10.5);const gb=groupBounds(grp);
   /* gb.w/gb.d are the room's BOUNDING BOX while gb.area is its true area, so on an
      L-shaped room the two contradict each other ("4.47 × 11.26 m · 38.3 m²" — that
      multiplies to 50). Agents' plans label such rooms "max", and so do we: the
@@ -918,7 +925,7 @@ function shell(){root.innerHTML=
   '<aside class="side" id="side"><div class="tabs" id="tabs"><button data-tab="Library">Library</button><button data-tab="Board">Board</button><button data-tab="Plan">Plan</button></div>'+
    '<div class="pane" id="pane-Library"></div><div class="pane" id="pane-Board"></div><div class="pane" id="pane-Plan"></div></aside>'+
   '<div class="board" id="board"><svg id="svg" xmlns="http://www.w3.org/2000/svg"><g id="world"></g></svg>'+
-   '<div class="modechip" id="modechip"></div><div class="coach" id="coach" hidden></div><div class="mpill" id="mpill" hidden></div><div class="hud"><span class="chip" id="zoomchip">80%</span><button class="chip chipbtn" id="imgchip" hidden title="Show or hide the agent&#39;s floor plan image behind the plan">Plan image</button><span class="chip" id="cursorchip"></span></div><div class="toast" id="toast"></div></div>'+
+   '<div class="modechip" id="modechip"></div><div class="coach" id="coach" hidden></div><div class="mpill" id="mpill" hidden></div><div class="hud"><span class="chip" id="zoomchip">80%</span><button class="chip chipbtn" id="imgchip" hidden title="Show or hide the agent&#39;s floor plan image behind the plan">Show scan</button><span class="chip" id="cursorchip"></span></div><div class="toast" id="toast"></div></div>'+
   '<aside class="insp" id="insp"></aside>'+
  '</div>'+
  '<div class="scrim" id="scrim"><div class="dlg" id="dlg" role="dialog" aria-modal="true"></div></div>';
@@ -1259,6 +1266,7 @@ function syncImgChip(){const el=$('#imgchip');if(!el)return;
  const u=state.underlay,has=!!(u&&u.src);
  el.hidden=!has;if(!has)return;
  el.classList.toggle('on',!!u.show);
+ el.textContent=u.show?'Hide scan':'Show scan';
  el.setAttribute('aria-pressed',u.show?'true':'false');}
 
 function renderPlanPane(){const p=$('#pane-Plan');const u=state.underlay;let h='';

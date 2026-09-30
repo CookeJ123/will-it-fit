@@ -126,7 +126,7 @@ h3{font-size:15px;font-weight:600}
 .board .modechip.plan{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
 svg text{font-family:var(--sans);fill:var(--ink);pointer-events:none;user-select:none}
 svg .roomname{font-family:var(--disp);font-weight:600;letter-spacing:.02em}
-svg .dims{font-family:var(--mono);fill:var(--muted)}
+svg .dims{font-family:var(--mono);fill:var(--ink);fill-opacity:.8}
 svg .wall{fill:var(--wall)}
 svg .room{stroke:none}
 svg .item .body{stroke:rgba(20,24,32,.55);stroke-width:1.2;vector-effect:non-scaling-stroke}
@@ -374,6 +374,7 @@ table.cmp-matrix td.cmp-v.mid,table.cmp-matrix td.cmp-v.bad{color:var(--warn)}
 .lp-result .hint{font-size:12px;line-height:1.4}
 .lp-result a.bmlet{display:inline-block;padding:8px 12px;border:1.5px dashed var(--accent);border-radius:9px;color:var(--accent);font-family:var(--disp);font-weight:600;font-size:13px;text-decoration:none;cursor:grab;background:var(--accent-soft)}
 .trace .tr{stroke:var(--accent);stroke-width:4;fill:none;stroke-linejoin:round;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;animation:tr-draw 1s cubic-bezier(.4,0,.2,1) forwards;animation-delay:var(--d,0s)}
+.trace .pre{fill:var(--accent);fill-opacity:.05;stroke:var(--accent);stroke-opacity:.22;stroke-width:1.5}
 .trace .tr.win{stroke:var(--teal,#6FA8A6);stroke-width:6}
 .trace .fx{fill:var(--accent);fill-opacity:.08;stroke:var(--accent);stroke-width:2;opacity:0;animation:tr-fade .5s forwards;animation-delay:var(--d,0s)}
 .trace .zn{fill:url(#lp-hatch);stroke:var(--muted);stroke-width:1.5;stroke-dasharray:6 4;opacity:0;animation:tr-fade .5s forwards;animation-delay:var(--d,0s)}
@@ -712,12 +713,12 @@ function deliveryCheck(dw,it,room){
  if(!dw||!dw.doors||!room)return null;
  if(WF_DISMANTLES.test(it.name||''))return null;
  const need=itemCarryNeed(it);
- let bw=dw.best[room.id],via='the doorways on the way in';
- if(bw===undefined){if(dw.doorMin==null)return null;bw=dw.doorMin;via='the narrowest door on the plan';}
+ let bw=dw.best[room.id],via='the doorways on the way in',fb=false;
+ if(bw===undefined){if(dw.doorMin==null)return null;bw=dw.doorMin;via='the narrowest door on the plan';fb=true;}
  const gap=bw-need;
- if(gap<0)return {s:'no',note:Math.round(-gap)+' cm too wide for '+via+' ('+Math.round(bw)+' cm)'};
- if(gap<4)return {s:'tight',note:'squeezes through '+via+' — '+Math.round(gap)+' cm to spare'};
- return {s:'ok'};}
+ if(gap<0)return {s:'no',fb,bw,note:Math.round(-gap)+' cm too wide for '+via+' ('+Math.round(bw)+' cm)'};
+ if(gap<4)return {s:'tight',fb,bw,note:'squeezes through '+via+' — '+Math.round(gap)+' cm to spare'};
+ return {s:'ok',fb,bw};}
 
 /* ---------- the fit report: the app's namesake, in writing ---------- */
 function buildFitReport(){
@@ -762,7 +763,7 @@ function openFitReport(){
  let h='<div class="row" style="justify-content:space-between"><h3>Fit report</h3><button class="ghost" id="dlg-x" aria-label="Close">✕</button></div>';
  const doorNo=[...rep.fit,...rep.warn,...rep.fail].filter(e=>e.dv&&e.dv.s==='no').length;
  const doorTight=[...rep.fit,...rep.warn,...rep.fail].filter(e=>e.dv&&e.dv.s==='tight').length;
- if(!n)h+='<div class="hint">Nothing movable on the board yet — add some furniture first.</div>';
+ if(!n)h+='<div class="hint">Nothing movable on the board yet.</div><div class="row" style="margin-top:8px"><button class="primary" id="fr-sofa">Add a sofa</button><span class="hint">or pick anything from the Library.</span></div>';
  else{
   const allClear=rep.fail.length===0&&rep.out.length===0&&rep.warn.length===0&&doorNo===0;
   let sum=(rep.fail.length===0&&rep.out.length===0?(rep.warn.length?good+' of '+n+' fit — '+rep.warn.length+' tight':(n===1?'It fits.':'Everything fits — all '+n+' pieces'))
@@ -777,11 +778,18 @@ function openFitReport(){
   rep.warn.forEach(e=>{h+=row(e.dv&&e.dv.s==='no'?'✗':'⚠',e.dv&&e.dv.s==='no'?'bad':'mid',e.it.name,e.r.name,join('needs clear space in front — blocked by '+e.blockers.join(', '),dvNote(e)));});
   rep.out.forEach(e=>{h+=row('·','out',e.it.name,'','not placed in a room yet');});
   rep.fit.forEach(e=>{h+=row(e.dv&&e.dv.s==='no'?'✗':'✓',e.dv&&e.dv.s==='no'?'bad':'good',e.it.name,e.r.name,dvNote(e));});
+  /* honest about the one thing the tracer cannot see: no plan has yet yielded
+     its front door, so the delivery check stands on the narrowest door drawn */
+  const fbe=[...rep.fit,...rep.warn,...rep.fail].filter(e=>e.dv&&e.dv.fb)[0];
+  if(fbe)h+='<div class="hint" style="margin-top:6px">The plan does not show which door is the front door, so the delivery check assumes it is at least as wide as the narrowest door drawn ('+Math.round(fbe.dv.bw)+' cm).</div>';
   h+='<div class="row" style="margin-top:6px"><button class="primary" id="fr-copy">Copy as text</button><span class="hint">Paste it straight into WhatsApp.</span></div>';}
  openDlg(h);
  const _allClear=n>0&&rep.fail.length===0&&rep.out.length===0&&rep.warn.length===0&&doorNo===0&&doorTight===0;
  if(_allClear){hapt('success');wfConfetti($('#dlg'));}
  $('#dlg-x').addEventListener('click',closeDlg);
+ const fsb=$('#fr-sofa');if(fsb)fsb.addEventListener('click',()=>{closeDlg();if(mode!=='furnish')setMode('furnish');
+  addItem({name:'3-seat sofa',w:210,d:95,color:'fabric',deco:'sofa'});
+  toast('3-seat sofa added'+(lastAddAutoPlaced?' — placed against a wall with room to spare':''));});
  const fc=$('#fr-copy');if(fc)fc.addEventListener('click',async()=>{const ok=await copyText(fitReportText(rep));toast(ok?'Report copied':'Couldn’t copy here');});}
 /* a brief, brand-coloured celebration when the report is an unqualified yes */
 function wfConfetti(host){
@@ -829,7 +837,7 @@ function pageHTML(s){const json=JSON.stringify(s).replace(/</g,'\\u003c');
 let svg,world,boardEl;
 function toWorld(e){const r=svg.getBoundingClientRect();return {x:(e.clientX-r.left-view.tx)/view.k,y:(e.clientY-r.top-view.ty)/view.k};}
 function applyView(){world.setAttribute('transform','translate('+view.tx+' '+view.ty+') scale('+view.k+')');$('#zoomchip').textContent=Math.round(view.k*100)+'%';}
-function fitView(){const r=svg.getBoundingClientRect();const b=planBounds();const pad=Math.min(60,r.width*0.08);const k=Math.min((r.width-pad*2)/(b.w||1),(r.height-pad*2)/(b.d||1));view.k=clamp(k,0.05,8);view.tx=(r.width-b.w*view.k)/2-b.x*view.k;view.ty=(r.height-b.d*view.k)/2-b.y*view.k;render();}
+function fitView(){const r=svg.getBoundingClientRect();const b=planBounds();const pad=Math.min(60,r.width*(r.width<=600?0.04:0.08));const k=Math.min((r.width-pad*2)/(b.w||1),(r.height-pad*2)/(b.d||1));view.k=clamp(k,0.05,8);view.tx=(r.width-b.w*view.k)/2-b.x*view.k;view.ty=(r.height-b.d*view.k)/2-b.y*view.k;render();}
 function planBounds(){let a={minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity};const add=(x,y)=>{a.minX=Math.min(a.minX,x);a.maxX=Math.max(a.maxX,x);a.minY=Math.min(a.minY,y);a.maxY=Math.max(a.maxY,y);};
  state.rooms.forEach(r=>{add(r.x-state.wall,r.y-state.wall);add(r.x+r.w+state.wall,r.y+r.d+state.wall);});
  if(state.underlay&&state.underlay.show){const u=state.underlay;add(u.x,u.y);add(u.x+u.iw*u.cmPerPx,u.y+u.ih*u.cmPerPx);}
@@ -879,7 +887,7 @@ function render(){ if(!world)return; const k=view.k,t=state.wall,px=v=>v/k; let 
  const boxes=state.items.filter(i=>!i.under&&!i.zone).map(i=>aabbOf(worldPolys(i)));
  const groups={};state.rooms.forEach(r=>{const key=r.name.trim().toLowerCase();(groups[key]=groups[key]||[]).push(r);});
  state.rooms.forEach(r=>{if(r.w*k<40||r.d*k<24)return;const grp=groups[r.name.trim().toLowerCase()];if(grp.some(o=>o.w*o.d>r.w*r.d))return;
-  const fl=FLOORS[r.color]||FLOORS.plain;const fs=px(12.5),fs2=px(10.5);const gb=groupBounds(grp);
+  const fl=FLOORS[r.color]||FLOORS.plain;const fs=px(12.5),fs2=px(window.innerWidth<=920?11.5:10.5);const gb=groupBounds(grp);
   /* gb.w/gb.d are the room's BOUNDING BOX while gb.area is its true area, so on an
      L-shaped room the two contradict each other ("4.47 × 11.26 m · 38.3 m²" — that
      multiplies to 50). Agents' plans label such rooms "max", and so do we: the
@@ -1176,7 +1184,7 @@ function shell(){root.innerHTML=
   '<aside class="side" id="side"><div class="tabs" id="tabs"><button data-tab="Library">Library</button><button data-tab="Board">Board</button><button data-tab="Plan">Plan</button></div>'+
    '<div class="pane" id="pane-Library"></div><div class="pane" id="pane-Board"></div><div class="pane" id="pane-Plan"></div></aside>'+
   '<div class="board" id="board"><svg id="svg" xmlns="http://www.w3.org/2000/svg"><g id="world"></g></svg>'+
-   '<div class="modechip" id="modechip"></div><div class="coach" id="coach" hidden></div><div class="mpill" id="mpill" hidden></div><div class="hud"><span class="chip" id="zoomchip">80%</span><button class="chip chipbtn" id="imgchip" hidden title="Show or hide the agent&#39;s floor plan image behind the plan">Plan image</button><span class="chip" id="cursorchip"></span></div><div class="toast" id="toast"></div></div>'+
+   '<div class="modechip" id="modechip"></div><div class="coach" id="coach" hidden></div><div class="mpill" id="mpill" hidden></div><div class="hud"><span class="chip" id="zoomchip">80%</span><button class="chip chipbtn" id="imgchip" hidden title="Show or hide the agent&#39;s floor plan image behind the plan">Show scan</button><span class="chip" id="cursorchip"></span></div><div class="toast" id="toast"></div></div>'+
   '<aside class="insp" id="insp"></aside>'+
  '</div>'+
  '<div class="scrim" id="scrim"><div class="dlg" id="dlg" role="dialog" aria-modal="true"></div></div>';
@@ -1518,6 +1526,7 @@ function syncImgChip(){const el=$('#imgchip');if(!el)return;
  const u=state.underlay,has=!!(u&&u.src);
  el.hidden=!has;if(!has)return;
  el.classList.toggle('on',!!u.show);
+ el.textContent=u.show?'Hide scan':'Show scan';
  el.setAttribute('aria-pressed',u.show?'true':'false');}
 
 function renderPlanPane(){const p=$('#pane-Plan');const u=state.underlay;let h='';
@@ -2261,8 +2270,8 @@ function autotraceFloorplan(img, opts){
   /* groups with a door to another group, or built from an open-plan merge of
      several cores, are real rooms; a lone doorless group is a legend box or
      sealed text block — unless the whole plan is a single space */
-  const connected=new Set();
-  for(const d of doors){connected.add(groupOf[d.a]);connected.add(groupOf[d.b]);}
+  const connected=new Set(),hasDoor=new Set();
+  for(const d of doors){connected.add(groupOf[d.a]);connected.add(groupOf[d.b]);hasDoor.add(groupOf[d.a]);hasDoor.add(groupOf[d.b]);}
   {const coreCount=new Int32Array(nGroups);
    for(let l=0;l<nCores;l++)coreCount[groupOf[l]]++;
    for(let g2=0;g2<nGroups;g2++)if(coreCount[g2]>=2)connected.add(g2);}
@@ -2312,7 +2321,7 @@ function autotraceFloorplan(img, opts){
    while(qh<qt){const i=q[qh++];const x=i%W,y=(i/W)|0;
     for(const n of [x>0?i-1:-1,x<W-1?i+1:-1,y>0?i-W:-1,y<H-1?i+W:-1])
      if(n>=0&&free[n]&&blocked[n]&&label[n]<0){label[n]=label[i];q[qt++]=n;}}}
-  return {seg:{label,nLab:nCores},groupOf,nGroups,doors,connected};
+  return {seg:{label,nLab:nCores},groupOf,nGroups,doors,connected,hasDoor};
  }
 
  let A=analyse(cmPerPx);
@@ -2470,6 +2479,15 @@ function autotraceFloorplan(img, opts){
    for(let y=ay;y<=by;y++)for(let x=ax;x<=bx;x++){
     const i=idx(x,y);
     if(!longRun[i]&&!extMask[i])fitMask[i]=1;}}}
+ /* which sheet block each group mostly stands in (step 5b's storeys), so a
+    rectangle can be asked whether it has left its own storey */
+ let gBlk=null;
+ if(blockOf&&nBlocks>1){
+  const tally=new Map();
+  for(let i=0;i<N;i++){const g=gmask[i];if(g<0)continue;const b=blockOf[i];if(b<0)continue;
+   let m=tally.get(g);if(!m){m=new Map();tally.set(g,m);}m.set(b,(m.get(b)||0)+1);}
+  gBlk=new Int32Array(nGroups).fill(-1);
+  tally.forEach((m,g)=>{let best=-1,bc=0;m.forEach((c,b)=>{if(c>bc){bc=c;best=b;}});gBlk[g]=best;});}
  const roomsOut=[];
  for(let g=0;g<nGroups;g++){
   if(gArea[g]*cmPerPx*cmPerPx<15000)continue; // < 1.5 m^2
@@ -2505,9 +2523,21 @@ function autotraceFloorplan(img, opts){
        not a reveal. Where the body sits clear of the edge and only a shallow
        offshoot reaches it, that offshoot came through a hole in the wall. */
     if(atEdge(r)&&!atEdge(rects[0])&&Math.min(r.w,r.h)*cmPerPx<60){eat(r);continue;}
+    /* ...and a strip lying in the GUTTER between two storeys is the same fault
+       in the middle of the sheet: the flood ran out through a window gap in the
+       outer wall and along the outside of the building. Out there a pixel is
+       not in the group's own storey block (5b): it is in the gutter the block
+       flood reached, or in the band round the NEXT storey's wall. Testing for
+       "no block" alone is not enough -- the block flood dilates every wall by
+       rb, and in a 24 px gutter that leaves 7 px of no-block. On a nichecom
+       2-storey it drew a 0.42 x 4.24 m arm of "Bedroom 3" outside the house and
+       stretched the room's extent 17% for the scale to measure. */
     let near=0,tot=0;
+    const myBlk=gBlk?gBlk[g]:-1;
     for(let y=r.y;y<r.y+r.h;y++)for(let x=r.x;x<r.x+r.w;x++){
-     const i=idx(x,y);if(gmask[i]!==g)continue;tot++;if(dtExt[i]<NEAR)near++;}
+     const i=idx(x,y);if(gmask[i]!==g)continue;tot++;
+     if(dtExt[i]<NEAR||(!opts.noGutterRule&&myBlk>=0&&blockOf[i]!==myBlk))near++;}
+    if(opts.debug)console.log('  ext rect g',g,r.x,r.y,r.w,r.h,'near',near,'of',tot);
     if(tot&&near>0.5*tot){eat(r);continue;}
    }
    /* Applied to EXTENSION rects only. A group's first rectangle is the room --
@@ -2571,7 +2601,26 @@ function autotraceFloorplan(img, opts){
     found between them, this rule dropped all three and the trace failed). */
  if(!renderMode&&A.nGroups>2){
   const doorless=roomsOut.filter(r=>!A.connected.has(r.gi));
-  if(doorless.length<roomsOut.length)for(const r of doorless)drop.add(r.gi);}
+  if(doorless.length<roomsOut.length)for(const r of doorless)drop.add(r.gi);
+  /* A group that counts as connected only because it seeded SEVERAL cores -- an
+     open-plan merge, no door found -- is a room when it stands inside the
+     building. A boxed legend does the same trick: "Denotes restricted head
+     height" is a dashed grid, at some scales each cell seeds a core of its own,
+     the merge makes it "connected", and a 1.87 x 2.33 m room appears in the
+     white beside the title. Out there a scan meets page on every side; a real
+     open-plan room, even in a corner, is walled on two. Only merge-only groups
+     are tested: a room with a door is a room (see walledSides for what applying
+     this to every first rectangle cost). */
+  /* ...and a door only counts when it joins two rooms that are both still
+     standing: the legend's "door" was a saddle to the sealed block of title
+     text beside it, which was itself thrown out as print. */
+  const alive=new Set(roomsOut.map(r=>r.gi));
+  const realDoor=new Set();
+  for(const d of A.doors){const ga=A.groupOf[d.a],gb=A.groupOf[d.b];
+   if(alive.has(ga)&&alive.has(gb)){realDoor.add(ga);realDoor.add(gb);}}
+  if(!opts.noLegendRule)for(const r of roomsOut){
+   if(!A.connected.has(r.gi)||realDoor.has(r.gi)||drop.has(r.gi))continue;
+   if(walledSides(r.rects[0])<2){drop.add(r.gi);if(opts.debug)console.log('  unwalled group with no real door g',r.gi,'area m2',(r.area*cmPerPx*cmPerPx/10000).toFixed(1),'rect',JSON.stringify(r.rects[0]));}}}
  /* TRIED AND REVERTED: sparing a doorless group that is room-sized, so that a
     real room whose only doorway measures under the 46 cm door bar is not deleted
     outright. It is the right instinct -- a Romans 1-bed loses its whole bedroom
@@ -2919,7 +2968,7 @@ function autotraceFloorplan(img, opts){
      itself: a caller building rooms from the plan's own printed dimensions needs
      to know where the walls are, so it can seat a room of a known size against
      them rather than guess its position. */
-  mask:{gi:gmask,W,H,wall:wallMask,ext:extMask},
+  mask:{gi:gmask,W,H,wall:wallMask,ext:extMask,dark:renderMode?null:dark,part:partLines,wallHalf},
   floors:blkOrder?blkOrder.size:1, // storeys printed on this one sheet
   stats:{roomGroups:new Set(roomsFinal.map(r=>r.name)).size,rects:roomsFinal.length,
    doors:doors.filter(o=>o.kind==='door').length,windows:doors.filter(o=>o.kind==='window').length,
@@ -3415,15 +3464,23 @@ async function wfOcrPlanArea(imgPack){
    whereas a total area has to be divided by an area we inferred. Take every
    printed dimension we can pin to a room, solve the scale from each, and use the
    MEDIAN -- one room whose extent the tracer got wrong then cannot move it. */
+/* The metric pair as most agents print it: "3.14 x 1.87 m", "5.24m x 1.70m",
+   "3.16x3.71m". A three- or four-digit run with no point in it is a point
+   Tesseract dropped -- "239m x 2.08m" on a Gascoigne-Pees sheet is 2.39 m, and no
+   room is 239 m across -- so it is repaired to d.dd and FLAGGED: a repaired
+   reading counts as doubtful until the feet beside it or the drawing itself
+   backs it up. */
 function wfPlanDimsFromText(t){
  const out=[];
- const re=/(\d{1,2}(?:[.,]\d{1,2})?)\s*m?\s*[x×X]\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*m\b/g;
+ const re=/(\d{1,2}(?:[.,]\d{1,2})?|\d{3,4})\s*m?\s*[x×X]\s*(\d{1,2}(?:[.,]\d{1,2})?|\d{3,4})\s*m\b/g;
+ const num=s=>{s=String(s).replace(',','.');
+  if(/^\d{3,4}$/.test(s))return {v:parseInt(s.slice(0,-2),10)*100+parseInt(s.slice(-2),10),rep:true};
+  return {v:Math.round(parseFloat(s)*100),rep:false};};
  let m;
  while((m=re.exec(t))){
-  const a=parseFloat(String(m[1]).replace(',','.'))*100;
-  const b=parseFloat(String(m[2]).replace(',','.'))*100;
+  const A=num(m[1]),B=num(m[2]);
   /* 0.8-30 m: below that it is a fitting caption, above it a plot boundary */
-  if(a>=80&&a<=3000&&b>=80&&b<=3000)out.push({a,b,m:m[0]});}
+  if(A.v>=80&&A.v<=3000&&B.v>=80&&B.v<=3000)out.push({a:A.v,b:B.v,m:m[0],at:m.index,end:m.index+m[0].length,repaired:A.rep||B.rep});}
  return out;}
 
 /* The same measurement, printed a second time. Every agent's plan states a room
@@ -3434,128 +3491,305 @@ function wfPlanDimsFromText(t){
    "3.14 x 1.87 m" comes back at confidence 26 while the "10'3\" x 6'1\"" directly
    above it comes back at 89. A misread digit moves a number by tens of
    centimetres; the two forms agreeing to within a few is not something that
-   happens by accident. */
+   happens by accident.
+   The marks are optional because Tesseract drops or swaps them freely -- 13'11"
+   comes back as 1311", 17'2" as 17"2" -- but a match with no mark in it at all is
+   just two numbers with an x between and is not trusted. */
 function wfPlanDimsImperialFromText(t){
  const out=[];
- const re=/(\d{1,2})\s*['’´]\s*(\d{1,2})?\s*["”]?\s*[xX×]\s*(\d{1,2})\s*['’´]\s*(\d{1,2})?\s*["”]?/g;
+ const re=/(\d{1,2})\s*['’´"”°]?\s*(\d{1,2})?\s*['’´"”°]*\s*[xX×]\s*(\d{1,2})\s*['’´"”°]?\s*(\d{1,2})?\s*['’´"”°]*/g;
  let m;
  while((m=re.exec(t))){
+  if(!/['’´"”°]/.test(m[0]))continue;
   const ft1=+m[1],in1=m[2]?+m[2]:0,ft2=+m[3],in2=m[4]?+m[4]:0;
   if(in1>11||in2>11)continue;
   const a=(ft1*12+in1)*2.54,b=(ft2*12+in2)*2.54;
   if(a>=80&&a<=3000&&b>=80&&b<=3000)out.push({a,b});}
  return out;}
 
+/* nichecom's format, which half the agents in the country use: the metres in
+   brackets after the feet, one axis to a line --
+        Kitchen
+        10'3 (3.12)
+        x 8'10 (2.69)
+   -- so no single line ever holds a pair, and the old "N.NN x N.NN m" pattern
+   read nothing at all off such a plan. Every bracketed value on a line comes back
+   here with two facts about it: whether the feet printed just before it agree
+   with it (13'5 is 409.6 cm, so "13'5 (4.10)" is a reading confirmed by the plan
+   itself), and whether it follows an "x", which marks it as the SECOND of its
+   pair. wfPairBrackets joins them by position. The feet are matched with or
+   without their marks, because Tesseract drops them: "103" is 10'3, "1211" is
+   12'11, and the only split of the digits that lands within 5 cm of the metres is
+   the one the agent printed. */
+function wfPlanBracketsFromText(t){
+ const out=[];
+ /* no lookbehind: a regex literal that will not parse kills the whole script,
+    and WebKit before iOS 16.4 has none -- the app targets iOS 15 */
+ /* the bracket has to close, or the line end: "(8.39 sq m)" is an area, not a
+    room's side, and an open "(3.00" is only a value at the end of its line */
+ const re=/\(\s*(\d{1,2})[.,](\d{2})(?!\d)\s*(?:\)|$)|(^|[^\d])(\d{1,2})[.,](\d{2})\s*\)/g;
+ let m,lastEnd=0;
+ while((m=re.exec(t))){
+  const cm=parseInt(m[1]||m[4],10)*100+parseInt(m[2]||m[5],10);
+  const at=m.index+(m[3]?m[3].length:0),end=m.index+m[0].length;
+  const pre=t.slice(Math.max(lastEnd,at-20),at);
+  lastEnd=end;
+  if(cm<80||cm>3000)continue;
+  const digs=(pre.match(/[\d'’´"”°\s]+$/)||[''])[0].replace(/\D/g,'').slice(-4);
+  let ft=false;
+  for(let k=1;k<=digs.length&&!ft;k++){
+   const f=parseInt(digs.slice(0,k),10),i=digs.length>k?parseInt(digs.slice(k),10):0;
+   if(f>=1&&f<=45&&i<=11&&Math.abs(f*30.48+i*2.54-cm)<=5)ft=true;}
+  /* an x that is not the tail of "max", and that is followed by the feet */
+  const afterX=/(^|[^A-Za-z])[xX×](?=[\s\d'’´"”°]*[\d(])/.test(pre);
+  out.push({cm,ft,afterX,at,end,m:m[0]});}
+ return out;}
+
+/* Join bracketed singles into pairs. A pair is two values one under the other,
+   the second usually after an "x" -- or, on a wide room, side by side on one line
+   with the x between. Two rooms printed side by side put their first lines on one
+   OCR line and their second lines on the next, so the join is by the position of
+   each value's own word, never by line. Greedy from the top: a value that follows
+   an x never starts a pair, so a first line that Tesseract lost cannot make its
+   orphaned second line steal the next room's width. */
+function wfPairBrackets(S,W,H){
+ S.sort((a,b)=>a.y-b.y||a.x-b.x);
+ const used=new Set(),dims=[];
+ for(let i=0;i<S.length;i++){
+  const s=S[i];if(used.has(i)||s.afterX)continue;
+  let best=-1,bc=1e9;
+  const lh=Math.max(6,s.lh);
+  for(let j=0;j<S.length;j++){
+   if(j===i||used.has(j))continue;
+   const o=S[j],dy=o.y-s.y,dx=o.x-s.x;
+   let cost;
+   if(Math.abs(dy)<0.5*lh){
+    if(!(dx>0&&o.afterX&&dx<0.25*W))continue;
+    cost=dx;}
+   else{
+    if(dy<0.5*lh||dy>2.6*lh||Math.abs(dx)>Math.max(0.05*W,3*lh))continue;
+    cost=Math.abs(dx)+2*Math.abs(dy-1.3*lh);}
+   if(cost<bc){bc=cost;best=j;}}
+  if(best<0)continue;
+  const o=S[best];used.add(i);used.add(best);
+  const both=!!(s.ft&&o.ft);
+  dims.push({a:s.cm,b:o.cm,conf:both?100:Math.min(s.conf,o.conf),confirmed:both,
+   x:(s.x+o.x)/2,y:(s.y+o.y)/2,m:s.m+' x '+o.m,bracket:true});}
+ return {dims,unpaired:S.filter((s,i)=>!used.has(i))};}
+
+/* the OCR engine wants the plan about 2x up; a darkened copy is for the rescue
+   pass only (see wfOcrPlanFacts) */
+function wfOcrCanvas(src,k,dark){
+ const c2=document.createElement('canvas');
+ c2.width=Math.round(src.width*k);c2.height=Math.round(src.height*k);
+ const cx=c2.getContext('2d',{willReadFrequently:true});
+ try{cx.imageSmoothingQuality='high';}catch(e){}
+ cx.fillStyle='#fff';cx.fillRect(0,0,c2.width,c2.height);
+ cx.drawImage(src,0,0,c2.width,c2.height);
+ if(dark){
+  /* the darkest channel, squared: light green or grey type goes near-black,
+     the paper stays white, and a coloured room fill is only slightly greyed */
+  const im=cx.getImageData(0,0,c2.width,c2.height),d=im.data;
+  for(let i=0;i<d.length;i+=4){const m=Math.min(d[i],d[i+1],d[i+2])/255;const v=Math.round(255*m*m);d[i]=d[i+1]=d[i+2]=v;}
+  cx.putImageData(im,0,0);}
+ return c2;}
+
+/* one recognise() call, its lines and words brought back to plan pixels */
+async function wfOcrLines(worker,cv,f,psm){
+ await worker.setParameters({tessedit_pageseg_mode:String(psm)});
+ const out=await worker.recognize(cv,{},{blocks:true,text:true});
+ const d=out&&out.data;let ls=[];
+ if(d&&Array.isArray(d.lines))ls=d.lines;
+ else if(d&&Array.isArray(d.blocks))d.blocks.forEach(bl=>(bl.paragraphs||[]).forEach(pg=>(pg.lines||[]).forEach(l=>ls.push(l))));
+ const nb=b=>b?{x0:b.x0/f,y0:b.y0/f,x1:b.x1/f,y1:b.y1/f}:null;
+ const lines=[];
+ for(const ln of ls){
+  const t=(ln.text||'').trim();
+  if(!t||!ln.bbox)continue;
+  lines.push({text:t,confidence:ln.confidence||0,bbox:nb(ln.bbox),
+   words:(Array.isArray(ln.words)?ln.words:[]).map(w=>({text:w.text||'',confidence:w.confidence||0,bbox:nb(w.bbox)}))});}
+ return {lines,text:(d&&d.text)||'',psm:String(psm)};}
+
+/* Everything the plan says in writing, from every OCR pass so far: printed room
+   sizes with their positions and how sure we are of each, the room names, the
+   feet-and-inches for corroboration, and the printed total. Readings that two
+   passes both made are one reading at the better confidence; two passes
+   disagreeing about the same spot keep the one the plan's own feet confirm. */
+function wfPlanReadings(passes,W,H){
+ const dims=[],names=[],imps=[],singles=[];
+ let text='';
+ const IGN=/denotes|not to scale|illustrative|guarantee|approximate area|total floor|liability|inspection|produced for|powered by/i;
+ const wordBox=(words,used,key,span,extra)=>{
+  /* the word this reading is made of, widened over exactly its own words and no
+     further: on a line carrying two rooms' dimensions, one word too many eats the
+     next room's first number and that room loses its position entirely */
+  let bb=null;
+  for(let wi=0;wi<words.length;wi++){
+   if(used.has(wi))continue;
+   const wt=(words[wi].text||'').replace(/[^0-9.,]/g,'');
+   if(key&&wt&&wt.indexOf(key)>=0&&(!extra||extra(words[wi].text||''))){
+    used.add(wi);bb=words[wi].bbox||null;
+    for(let wj=wi+1;wj<words.length&&wj<wi+span&&bb;wj++){
+     const w2=words[wj];if(!w2||!w2.bbox)break;
+     if(!/^[0-9xX×.,m'\"]+$/.test((w2.text||'').trim()))break;
+     used.add(wj);
+     bb={x0:Math.min(bb.x0,w2.bbox.x0),x1:Math.max(bb.x1,w2.bbox.x1),y0:Math.min(bb.y0,w2.bbox.y0),y1:Math.max(bb.y1,w2.bbox.y1)};}
+    break;}}
+  return bb;};
+ passes.forEach((p,pi)=>{
+  text+='\n'+p.text;
+  for(const ln of p.lines){
+   const t=ln.text,conf=Math.round(ln.confidence||0),b=ln.bbox,words=ln.words||[];
+   if(!b)continue;
+   const lh=Math.max(1,b.y1-b.y0);
+   /* metric pairs on one line */
+   const hits=wfPlanDimsFromText(t);
+   if(hits.length){
+    const used=new Set();
+    for(const h of hits){
+     const key=String(h.m).split(/[xX×]/)[0].replace(/[^0-9.,]/g,'');
+     let bb=words.length?wordBox(words,used,key,String(h.m).trim().split(/\s+/).length):null;
+     if(!bb&&hits.length===1)bb=b;
+     if(!bb)continue;
+     dims.push({a:h.a,b:h.b,conf:h.repaired?Math.min(conf,37):conf,repaired:!!h.repaired,
+      x:(bb.x0+bb.x1)/2,y:(bb.y0+bb.y1)/2,lh,m:h.m,pass:pi});}}
+   /* bracketed singles, one axis each */
+   const br=wfPlanBracketsFromText(t);
+   if(br.length){
+    const used=new Set();
+    for(const h of br){
+     const key=String(Math.floor(h.cm/100))+'.'+String(h.cm%100).padStart(2,'0');
+     let bb=words.length?wordBox(words,used,key.replace(/[^0-9.,]/g,''),1,wt=>/[.,()]/.test(wt)):null;
+     if(!bb&&words.length)bb=wordBox(words,used,key.replace('.',','),1,wt=>/[.,()]/.test(wt));
+     if(!bb&&br.length===1)bb=b;
+     if(!bb)continue;
+     singles.push({cm:h.cm,ft:h.ft,afterX:h.afterX,conf,x:(bb.x0+bb.x1)/2,y:(bb.y0+bb.y1)/2,lh,m:h.m,pass:pi});}}
+   /* feet and inches, for corroboration */
+   for(const h of wfPlanDimsImperialFromText(t))imps.push({a:h.a,b:h.b,x:(b.x0+b.x1)/2,y:(b.y0+b.y1)/2});
+   /* room names, anchored on their own word */
+   if(conf>=38&&!IGN.test(t)&&typeof wfRoomNamesFromText==='function'){
+    let nh=[];try{nh=wfRoomNamesFromText(t)||[];}catch(e){nh=[];}
+    const usedN=new Set();
+    for(const h of nh){
+     let bb=null;
+     const w0=(String(h.m).match(/[A-Za-z]{3,}/)||[])[0];
+     if(w0&&words.length){
+      for(let wi=0;wi<words.length;wi++){
+       if(usedN.has(wi))continue;
+       const w2=words[wi];
+       if(w2&&w2.text&&w2.text.toLowerCase().indexOf(w0.toLowerCase())>=0){usedN.add(wi);bb=w2.bbox||null;break;}}}
+     if(!bb&&nh.length===1)bb=b;
+     if(!bb)continue;
+     names.push({name:h.name,color:h.color,rank:h.rank,x:(bb.x0+bb.x1)/2,y:(bb.y0+bb.y1)/2,pass:pi});}}}});
+ /* pairs from the bracket format */
+ const pb=wfPairBrackets(singles,W,H);
+ for(const d of pb.dims)dims.push(d);
+ /* corroborate the doubtful metric pairs against the feet printed beside them.
+    A confirmed reading is as good as a confident one and is promoted to count as
+    such; a reading Tesseract scored near zero is kept ONLY when confirmed. */
+ {const NEARX=0.10*W,NEARY=0.06*H,TOL=8;
+  for(const d of dims){
+   if(d.bracket||!(d.conf<38))continue;
+   for(const q of imps){
+    if(Math.abs(q.x-d.x)>NEARX||Math.abs(q.y-d.y)>NEARY)continue;
+    const ok=(Math.abs(q.a-d.a)<=TOL&&Math.abs(q.b-d.b)<=TOL)||(Math.abs(q.b-d.a)<=TOL&&Math.abs(q.a-d.b)<=TOL);
+    if(ok){d.conf=100;d.confirmed=true;d.repaired=false;break;}}}}
+ /* one reading per spot */
+ const score=q=>(q.confirmed?1000:0)+q.conf;
+ const keep=[];
+ for(const d of dims){
+  if(d.conf<20&&!d.confirmed)continue;
+  let dup=null;
+  for(const k of keep){
+   const same=(Math.abs(k.a-d.a)<=3&&Math.abs(k.b-d.b)<=3)||(Math.abs(k.a-d.b)<=3&&Math.abs(k.b-d.a)<=3);
+   if(same&&Math.abs(k.x-d.x)<0.03*W&&Math.abs(k.y-d.y)<0.03*H){dup=k;break;}
+   if(!same&&Math.abs(k.x-d.x)<0.012*W&&Math.abs(k.y-d.y)<0.012*H){dup=k;break;}}
+  if(!dup){keep.push(d);continue;}
+  if(score(d)>score(dup))Object.assign(dup,d);}
+ const keepN=[];
+ for(const n of names){
+  if(keepN.some(k=>k.name===n.name&&Math.abs(k.x-n.x)<0.03*W&&Math.abs(k.y-n.y)<0.03*H))continue;
+  keepN.push(n);}
+ /* is there more on this sheet than we managed to read? A bracketed value with
+    no partner is a line Tesseract lost; more rooms named than measured, on a
+    plan that plainly prints measurements, is the same thing. Either earns the
+    darkened rescue pass. */
+ const measured=keepN.filter(n=>!/^(Eaves|Balcony|Landing|Hall|WC|Store|Dressing room)$/.test(n.name)).length;
+ const printsNumbers=/\d\s*['’"]|\d[.,]\d\d?\s*m\b|\(\d[.,]\d\d\)/.test(text);
+ const wantMore=pb.unpaired.length>0||(measured>keep.length&&printsNumbers);
+ return {dims:keep,names:keepN,areaSqm:wfAreaFromText(text)||null,wantMore,unpaired:pb.unpaired.length};}
+
+/* Read the plan. Two passes over the same image, because Tesseract's page
+   layout analysis and its sparse-text mode fail on different sheets: layout mode
+   reads a three-storey sheet straight ACROSS, so one "line" holds a bedroom from
+   each floor and the sizes between them are lost, while sparse mode gives each
+   printed label its own line but stumbles on faint coloured type. Measured over
+   the fixtures the two together read every printed pair on every black-text
+   plan. A third pass over a darkened copy runs only when a reading is left
+   unpaired or rooms are named but not measured -- it rescues light green type
+   (nichecom) and costs a plain plan nothing. The lines are kept on the image
+   pack so the room-naming pass can reuse them instead of running its own OCR. */
 async function wfOcrPlanFacts(imgPack){
  if(typeof wfLoadTess!=='function')return null;
  try{
   await wfLoadTess();
-  /* plan text needs ~2x upscaling for the OCR engine (same trick as room naming) */
-  let cv=imgPack.canvas,f=1;
-  const k=Math.min(2,2600/Math.max(cv.width,cv.height));
-  if(k>1.05){const c2=document.createElement('canvas');
-   c2.width=Math.round(cv.width*k);c2.height=Math.round(cv.height*k);
-   const cx=c2.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,c2.width,c2.height);
-   cx.drawImage(cv,0,0,c2.width,c2.height);cv=c2;f=k;}
+  const src=imgPack.canvas,W=src.width,H=src.height;
+  const k=Math.max(1,Math.min(2,2600/Math.max(W,H)));
   const worker=await Tesseract.createWorker('eng');
   try{
-   const out=await worker.recognize(cv,{},{blocks:true,text:true});
-   const d=out&&out.data;
-   let lines=[];
-   if(d&&Array.isArray(d.lines))lines=d.lines;
-   else if(d&&Array.isArray(d.blocks))d.blocks.forEach(bl=>(bl.paragraphs||[]).forEach(pg=>(pg.lines||[]).forEach(l=>lines.push(l))));
-   const dims=[];
-   for(const ln of lines){
-    const t=(ln.text||'').trim();
-    /* 38 was the gate, and it was throwing away good measurements. On the owner's
-       Parkers 1-bed the hallway's "3.14 x 1.87 m" scores 26 and the bathroom's
-       "1.81 x 2.72 m" scores 33 -- both read PERFECTLY; what drags the line score
-       down is the box border and the leader line Tesseract picks up around them.
-       Low-confidence readings are carried through with their score attached and
-       are used only where the drawing itself agrees with them: they never touch
-       the scale (wfScaleFromPlanDims), and wfRoomsFromPlan only seats one on a
-       room whose traced extent already measures the same. */
-    if(!t||(ln.confidence||0)<20)continue;
-    const b=ln.bbox;if(!b)continue;
-    /* Two rooms printed side by side land on ONE OCR line -- on a Romans plan the
-       kitchen's "2.59m x 1.77m" and the bathroom's "1.77m x 1.69m" come back as a
-       single line, and giving both the LINE's centre drops both dimensions in the
-       gap between the two rooms, where they pin to nothing. Anchor each match on
-       the words it is actually made of, exactly as the room-name pass does. */
-    const hits=wfPlanDimsFromText(t);
-    if(!hits.length)continue;
-    const words=Array.isArray(ln.words)?ln.words:[];
-    const used=new Set();
-    for(const h of hits){
-     let bb=null;
-     if(words.length){
-      const key=String(h.m).split(/[xX\u00d7]/)[0].replace(/[^0-9.,]/g,'');
-      for(let wi=0;wi<words.length;wi++){
-       if(used.has(wi))continue;
-       const wt=(words[wi].text||'').replace(/[^0-9.,]/g,'');
-       if(key&&wt&&wt.indexOf(key)>=0){
-        used.add(wi);bb=words[wi].bbox||null;
-        /* widen over exactly the words this match is made of, and no further: on a
-           line carrying two rooms' dimensions, one word too many eats the next
-           room's first number and that room loses its position entirely */
-        const span=String(h.m).trim().split(/\s+/).length;
-        for(let wj=wi+1;wj<words.length&&wj<wi+span&&bb;wj++){
-         const w2=words[wj];if(!w2||!w2.bbox)break;
-         if(!/^[0-9xX\u00d7.,m'\"]+$/.test((w2.text||'').trim()))break;
-         used.add(wj);
-         bb={x0:Math.min(bb.x0,w2.bbox.x0),x1:Math.max(bb.x1,w2.bbox.x1),
-             y0:Math.min(bb.y0,w2.bbox.y0),y1:Math.max(bb.y1,w2.bbox.y1)};}
-        break;}}}
-     if(!bb&&hits.length===1)bb=b;
-     if(!bb)continue;
-     dims.push({a:h.a,b:h.b,conf:Math.round(ln.confidence||0),
-                x:(bb.x0+bb.x1)/(2*f),y:(bb.y0+bb.y1)/(2*f)});}}
-   /* Corroborate the doubtful metric readings against the feet-and-inches the
-      plan prints beside them (see wfPlanDimsImperialFromText). A confirmed
-      reading is as good as a confident one and is promoted to count as such. */
-   {const imps=[];
-    for(const ln of lines){
-     const b2=ln.bbox;if(!b2)continue;
-     for(const h of wfPlanDimsImperialFromText((ln.text||'').trim()))
-      imps.push({a:h.a,b:h.b,x:(b2.x0+b2.x1)/(2*f),y:(b2.y0+b2.y1)/(2*f)});}
-    const NEARX=0.10*cv.width/f,NEARY=0.06*cv.height/f,TOL=8;
-    for(const d of dims){
-     if(!(d.conf<38))continue;
-     for(const q of imps){
-      if(Math.abs(q.x-d.x)>NEARX||Math.abs(q.y-d.y)>NEARY)continue;
-      const ok=(Math.abs(q.a-d.a)<=TOL&&Math.abs(q.b-d.b)<=TOL)||
-               (Math.abs(q.b-d.a)<=TOL&&Math.abs(q.a-d.b)<=TOL);
-      if(ok){d.conf=100;d.confirmed=true;break;}}}}
-   /* room NAMES too, anchored the same way. One pass over the sheet gives the
-      whole plan in writing: what each room is called and how big it says it is. */
-   const names=[];
-   const IGN=/denotes|not to scale|illustrative|guarantee|approximate area|total floor|liability|inspection|produced for|powered by/i;
-   if(typeof wfRoomNamesFromText==='function'){
-    for(const ln of lines){
-     const t=(ln.text||'').trim();
-     if(!t||(ln.confidence||0)<38||IGN.test(t))continue;
-     const bb0=ln.bbox;if(!bb0)continue;
-     let nh=[];try{nh=wfRoomNamesFromText(t)||[];}catch(e){nh=[];}
-     if(!nh.length)continue;
-     const wds=Array.isArray(ln.words)?ln.words:[];
-     const usedN=new Set();
-     for(const h of nh){
-      let bb=null;
-      const w0=(String(h.m).match(/[A-Za-z]{3,}/)||[])[0];
-      if(w0&&wds.length){
-       for(let wi=0;wi<wds.length;wi++){
-        if(usedN.has(wi))continue;
-        const w2=wds[wi];
-        if(w2&&w2.text&&w2.text.toLowerCase().indexOf(w0.toLowerCase())>=0){
-         usedN.add(wi);bb=w2.bbox||null;break;}}}
-      if(!bb&&nh.length===1)bb=bb0;
-      if(!bb)continue;
-      names.push({name:h.name,color:h.color,x:(bb.x0+bb.x1)/(2*f),y:(bb.y0+bb.y1)/(2*f)});}}}
-   const area=wfAreaFromText((d&&d.text)||'');
-   if(window.wfTrace)window.wfTrace('read off the plan: '+dims.length+' room dimension(s)'+(area?', total '+area+' m2':''));
-   return {areaSqm:area||null,dims,names};
+   const passes=[];
+   const plain=wfOcrCanvas(src,k,false);
+   passes.push(await wfOcrLines(worker,plain,k,3));
+   passes.push(await wfOcrLines(worker,plain,k,11));
+   let facts=wfPlanReadings(passes,W,H);
+   if(facts.wantMore){
+    passes.push(await wfOcrLines(worker,wfOcrCanvas(src,k,true),k,11));
+    facts=wfPlanReadings(passes,W,H);}
+   imgPack.ocrLines=[].concat.apply([],passes.map(p=>p.lines));
+   if(window.wfTrace)window.wfTrace('read off the plan: '+facts.dims.length+' room dimension(s) in '+passes.length+' pass'+(passes.length===1?'':'es')+(facts.areaSqm?', total '+facts.areaSqm+' m2':''));
+   return {areaSqm:facts.areaSqm,dims:facts.dims,names:facts.names,passes:passes.length};
   }finally{try{worker.terminate();}catch(e){}}
  }catch(e){return null;}}
+
+/* The traced room a point stands in, and the nearest pixel of it. A label often
+   sits on its own ink and a leader dot is ink by definition, so the point itself
+   is usually unlabelled; look round it in widening rings. */
+function wfGiNear(mask,px,py,maxR){
+ const W=mask.W,H=mask.H,R=maxR||45;
+ if(px<0||py<0||px>=W||py>=H)return {gi:-1,x:px,y:py};
+ let gi=mask.gi[py*W+px];
+ if(gi>=0)return {gi,x:px,y:py};
+ for(let rad=5;rad<=R;rad+=5)
+  for(let a=0;a<16;a++){
+   const x=Math.round(px+rad*Math.cos(a*Math.PI/8)),y=Math.round(py+rad*Math.sin(a*Math.PI/8));
+   if(x<0||y<0||x>=W||y>=H)continue;
+   const g2=mask.gi[y*W+x];
+   if(g2>=0)return {gi:g2,x,y};}
+ return {gi:-1,x:px,y:py};}
+
+/* Two ways to measure a traced room against its printed size, and the plan says
+   which is right. The rectangles' EXTENT is the room's max extent, which is what
+   an agent prints -- but it also takes in whatever the flood leaked into: a strip
+   of gutter through a window gap, or the hall beyond a doorway it failed to seal.
+   The clear SPAN out from the label cannot leak, but on an L-shaped room it is the
+   width at the label, not the max. Measured over eight plans, extent alone ran 7%
+   small on average and span alone ran 10-14% big on the two L-shaped rooms. What
+   separates the two cases is the printed pair itself: a 5.69 x 3.74 m room has an
+   aspect of 1.52, and the measurement that reproduces it is measuring the room.
+   A merged living room and hall come out square when the room is not; a leaked
+   bedroom comes out long when it is nearly square; an L's span comes out square
+   when the room is long. Ties go to the span, which is the one that cannot leak. */
+function wfPickSpan(d,e,rb,cm){
+ const pa=Math.max(d.a,d.b)/Math.max(1,Math.min(d.a,d.b));
+ const ex=e?{w:(e[2]-e[0])/cm,h:(e[3]-e[1])/cm}:null;
+ const bx=(rb&&rb.x0!=null&&rb.x1!=null&&rb.y0!=null&&rb.y1!=null)?{w:rb.x1-rb.x0,h:rb.y1-rb.y0}:null;
+ const okE=ex&&ex.w>8&&ex.h>8,okB=bx&&bx.w>8&&bx.h>8;
+ if(!okE&&!okB)return null;
+ if(!okB)return {w:ex.w,h:ex.h,src:'ext'};
+ if(!okE)return {w:bx.w,h:bx.h,src:'box'};
+ const err=m=>Math.abs(Math.log((Math.max(m.w,m.h)/Math.min(m.w,m.h))/pa));
+ if(err(ex)+0.08<err(bx))return {w:ex.w,h:ex.h,src:'ext'};
+ return {w:bx.w,h:bx.h,src:'box'};}
 
 /* solve cm-per-pixel from printed room dimensions the tracer can pin to a room */
 function wfScaleFromPlanDims(trace,dims){
@@ -3569,15 +3803,49 @@ function wfScaleFromPlanDims(trace,dims){
   if(!e){e=[1e9,1e9,-1e9,-1e9];ext.set(r.gi,e);}
   e[0]=Math.min(e[0],r.x);e[1]=Math.min(e[1],r.y);
   e[2]=Math.max(e[2],r.x+r.w);e[3]=Math.max(e[3],r.y+r.d);}
- const est=[];
+ /* pin each reading to its room first: where SEVERAL readings land in one region
+    the tracer has merged rooms joined by an opening, and the region's extent is
+    the size of none of them. Measured on a nichecom 3-bed: the kitchen, the
+    reception and the family room all fell in one ground-floor region, each was
+    measured against the whole storey, and the three together dragged the median
+    scale 15% under -- at which the retrace then lost that storey altogether. In a
+    shared region a reading is measured against its own part of it. */
+ const pin=[];const perGi=new Map();
+ const run=wfWallRuns(mask);
  for(const d of dims){
   if(d.conf!=null&&d.conf<38)continue;   // never let a doubtful reading set the scale
   const px=Math.round(d.x),py=Math.round(d.y);
-  if(px<0||py<0||px>=mask.W||py>=mask.H)continue;
-  const gi=mask.gi[py*mask.W+px];
-  if(gi==null||gi<0)continue;
-  const e=ext.get(gi);if(!e)continue;
-  const wPx=(e[2]-e[0])/cm,hPx=(e[3]-e[1])/cm;
+  /* a label printed in a callout box beside the drawing is not standing in a
+     room, and a room a few pixels away is not the room it measures: the seating
+     pass follows its leader line, the scale pass simply leaves it out */
+  if(run&&px>=0&&py>=0&&px<mask.W&&py<mask.H&&wfWallBox(run,mask.W,mask.H,px,py,mask.ext).walls<2)continue;
+  const g=wfGiNear(mask,px,py,15);
+  if(g.gi<0)continue;
+  pin.push({d,g});perGi.set(g.gi,(perGi.get(g.gi)||0)+1);}
+ const est=[],sharedDone=new Set();
+ for(const P of pin){
+  const d=P.d,gi=P.g.gi;
+  let wPx,hPx;
+  const rb=wfRegionBox(mask,gi,P.g.x,P.g.y);
+  const bOk=rb.x0!=null&&rb.x1!=null&&rb.y0!=null&&rb.y1!=null;
+  const e=ext.get(gi);
+  /* a region the tracer kept no room for -- a sealed caption box, a legend -- is
+     not a room, whatever printed size happens to sit in it */
+  if(!e)continue;
+  if(perGi.get(gi)>1){
+   if(sharedDone.has(gi))continue;
+   sharedDone.add(gi);
+   const labels=pin.filter(Q=>Q.g.gi===gi).map(Q=>({d:Q.d,px:Q.g.x,py:Q.g.y}));
+   wfSharedAssign(mask,gi,labels,cm).forEach(v=>est.push(v.mine/v.span));
+   continue;}
+  else{
+   wPx=(e[2]-e[0])/cm;hPx=(e[3]-e[1])/cm;
+   const MODE=window.WF_SCALE_MODE||'aspect';
+   if(bOk){const bw=rb.x1-rb.x0,bh=rb.y1-rb.y0;
+    if(MODE==='box'&&bw>8&&bh>8){wPx=bw;hPx=bh;}
+    else if(MODE==='both'&&bw>8&&bh>8){est.push(Math.max(d.a,d.b)/Math.max(bw,bh));est.push(Math.min(d.a,d.b)/Math.min(bw,bh));}
+    else if(MODE==='auto'&&bw>8&&bh>8&&(Math.abs(bw-wPx)>0.15*Math.max(bw,wPx)||Math.abs(bh-hPx)>0.15*Math.max(bh,hPx))){wPx=bw;hPx=bh;}
+    else if(MODE==='aspect'){const pk=wfPickSpan(d,e,rb,cm);if(pk){wPx=pk.w;hPx=pk.h;}}}}
   if(wPx<8||hPx<8)continue;
   /* the printed pair is a max WxD in the plan's own order, which need not be the
      drawing's x then y -- pair long with long */
@@ -3596,6 +3864,9 @@ function wfScaleFromPlanDims(trace,dims){
 window.wfOcrPlanFacts=wfOcrPlanFacts;
 window.wfScaleFromPlanDims=wfScaleFromPlanDims;
 window.wfPlanDimsFromText=wfPlanDimsFromText;
+window.wfPlanBracketsFromText=wfPlanBracketsFromText;
+window.wfPlanDimsImperialFromText=wfPlanDimsImperialFromText;
+window.wfPlanReadings=wfPlanReadings;
 
 /* ---------- rooms built from the plan's own printed dimensions ----------
    The tracer measures rooms off pixels, and on a difficult sheet it measures them
@@ -3677,6 +3948,141 @@ function wfDimAgrees(d,tmax,ta){
  const alo=sure?0.4:0.5,ahi=sure?2:1.25;
  return pmax>=lo*tmax&&pmax<=hi*tmax&&pa>=alo*ta&&pa<=ahi*ta;}
 
+/* Giraffe360 sheets box the small rooms' labels up in the margin and run a leader
+   line from the box to a DOT inside the room. The dot is the plan pointing: "this
+   one". So find it, and read the label as if it were printed there -- which puts
+   the room where the plan puts it instead of on whichever traced room happens to
+   be nearest and about the right size (that seated an EweMove "Utility" on the
+   hallway at the other end of the flat).
+   A dot is a small solid disc: it is what survives the wall opening when the
+   caption's thin border and the leader itself do not, so it is a compact blob in
+   the WALL mask with nothing else of the wall mask around it. The leader is the
+   thin straight run of ink joined to it, and walking that run away from the dot
+   has to arrive at the label's box. Both tests are needed: a door-handle circle
+   or a light symbol is a disc too, but no line runs from it to the caption. */
+function wfLeaderDot(mask,px,py){
+ const W=mask.W,H=mask.H,wall=mask.wall,dark=mask.dark;
+ if(!wall||!dark)return null;
+ const R=Math.round(0.3*Math.max(W,H));
+ const x0=Math.max(1,px-R),x1=Math.min(W-2,px+R),y0=Math.max(1,py-R),y1=Math.min(H-2,py+R);
+ const at=(x,y)=>(x>=0&&y>=0&&x<W&&y<H)?wall[y*W+x]:0;
+ const ink=(x,y)=>{x=Math.round(x);y=Math.round(y);if(x<1||y<1||x>=W-1||y>=H-1)return 0;
+  const i=y*W+x;return dark[i]||dark[i-1]||dark[i+1]||dark[i-W]||dark[i+W];};
+ const cands=[];
+ for(let y=y0;y<=y1;y+=2)for(let x=x0;x<=x1;x+=2){
+  if(!at(x,y))continue;
+  let a=x,b=x,c=y,d=y;
+  while(a>0&&at(a-1,y)&&x-a<24)a--;while(b<W-1&&at(b+1,y)&&b-x<24)b++;
+  while(c>0&&at(x,c-1)&&y-c<24)c--;while(d<H-1&&at(x,d+1)&&d-y<24)d++;
+  const lw=b-a+1,lh=d-c+1;
+  if(lw<5||lw>22||lh<5||lh>22||Math.abs(lw-lh)>4)continue;
+  const cx=Math.round((a+b)/2),cy=Math.round((c+d)/2),r=Math.max(lw,lh)/2;
+  if(cands.some(q=>Math.abs(q.x-cx)<=4&&Math.abs(q.y-cy)<=4))continue;
+  /* nothing of the wall mask on a ring just outside the disc: a jamb stub or a
+     wall corner fails here, an isolated dot passes */
+  let clear=true;
+  for(let k=0;k<16&&clear;k++){const th=k*Math.PI/8,rr=r+4;
+   if(at(Math.round(cx+rr*Math.cos(th)),Math.round(cy+rr*Math.sin(th))))clear=false;}
+  if(!clear)continue;
+  cands.push({x:cx,y:cy,r});}
+ let best=null,bd=Infinity;
+ const NEAR=Math.max(80,0.12*Math.max(W,H));
+ for(const q of cands){
+  /* the leader leaves the dot in one direction: the ray with ink all along it */
+  let bth=-1,bn=0;
+  for(let k=0;k<60;k++){const th=k*Math.PI/30;let n=0;
+   for(let s=q.r+2;s<=q.r+20;s++)if(ink(q.x+s*Math.cos(th),q.y+s*Math.sin(th)))n++;
+   if(n>bn){bn=n;bth=th;}}
+  if(bn<15)continue;
+  /* ...and walking it must come out at the caption */
+  let s=q.r+2,miss=0,ex=q.x,ey=q.y;
+  for(;s<R;s++){const x=q.x+s*Math.cos(bth),y=q.y+s*Math.sin(bth);
+   if(ink(x,y)){miss=0;ex=x;ey=y;}else if(++miss>3)break;}
+  const len=Math.hypot(ex-q.x,ey-q.y);
+  if(len<12)continue;
+  const dd=Math.hypot(ex-px,ey-py);
+  if(dd>NEAR)continue;
+  if(dd<bd){bd=dd;best={x:q.x,y:q.y,len:Math.round(len)};}}
+ return best;}
+
+/* The extent of ONE room inside a traced region, measured from a point in it:
+   scan out to where the region stops or a wall begins. This is for a region that
+   holds several printed rooms -- a kitchen, a reception and a family room joined
+   by openings wider than a door -- where the region's own bounding box is the
+   shape of none of them. Text and thin drawn lines are a few pixels of not-room
+   and are stepped over; a wall is not. A band of rows is scanned and the median
+   taken, so the one row that runs through a doorway does not decide. */
+function wfRegionBox(mask,gi,px,py){
+ const W=mask.W,H=mask.H,g=mask.gi,wall=mask.wall,part=mask.part,ext=mask.ext,BAND=10;
+ const med=a=>{if(!a.length)return null;a.sort((u,v)=>u-v);return a[(a.length-1)>>1];};
+ /* a wall stops the scan whether it is thick enough to be in the wall mask or a
+    thin drawn partition (autotrace step 5b): the kitchen on a nichecom 3-bed is
+    parted from the reception by a single line, and a scan that walked through it
+    measured the kitchen as the width of the storey */
+ const stop=i=>(wall&&wall[i])||(part&&part[i])||(ext&&ext[i]);
+ const scan=(dir,horiz)=>{const o=[];
+  for(let k=-BAND;k<=BAND;k+=4){
+   const c=(horiz?py:px)+k;
+   if(horiz?(c<0||c>=H):(c<0||c>=W))continue;
+   let v=horiz?px:py,last=v,miss=0,onPage=false;
+   for(;dir<0?v>=0:(horiz?v<W:v<H);v+=dir){
+    const x=horiz?v:c,y=horiz?c:v,i=y*W+x;
+    if(stop(i)){onPage=!!(ext&&ext[i]);break;}
+    if(g[i]===gi){last=v;miss=0;}
+    else if(++miss>4)break;}
+   /* a scan that ran out to the PAGE went through a window: the glazing is too
+      thin to be wall, so the room's floor runs on through the wall's thickness.
+      Pull back by that thickness to where the wall's inner face would be. */
+   if(onPage&&mask.wallHalf>0){const t=Math.round(2*mask.wallHalf);
+    last=dir<0?Math.min(horiz?px:py,last+t):Math.max(horiz?px:py,last-t);}
+   o.push(last);}
+  return med(o);};
+ return {x0:scan(-1,true),x1:scan(1,true),y0:scan(-1,false),y1:scan(1,false)};}
+/* A region holding several printed rooms is rooms joined by an opening wider
+   than a door, and the clear span out from one label runs through that opening
+   into the next room: on a Romans 1-bed the kitchen's span downward is the
+   kitchen AND the lounge, 752 px for a room printed 1.77 m deep. The axis along
+   which the neighbouring label lies is the contested one; the other stops at the
+   room's own walls and is the only measurement worth having.
+   Which of the printed pair belongs to that axis cannot be read off the scale --
+   at a scale 20% out, a lounge 421 px across looks like its 4.12 m rather than
+   its 3.38, and that wrong pick then confirms itself pass after pass. What does
+   decide it is that rooms sharing a region share a scale: of every way of
+   assigning the pairs, the one whose per-room estimates agree with each other
+   is the drawing's. Returns, per label, the trusted axis, its span and the two
+   printed values in that order. */
+function wfSharedAssign(mask,gi,labels,cm){
+ const out=new Map();
+ const cand=[];
+ for(const L of labels){
+  const rb=wfRegionBox(mask,gi,L.px,L.py);
+  if(!rb||rb.x0==null||rb.x1==null||rb.y0==null||rb.y1==null)continue;
+  let ax='x',bd=Infinity;
+  for(const o of labels){if(o===L)continue;
+   const dx=Math.abs(o.px-L.px),dy=Math.abs(o.py-L.py),dd=dx*dx+dy*dy;
+   if(dd<bd){bd=dd;ax=dx>=dy?'y':'x';}}   // the neighbour lies along x: trust y
+  const span=ax==='x'?(rb.x1-rb.x0):(rb.y1-rb.y0);
+  if(!(span>8))continue;
+  cand.push({L,rb,axis:ax,span,e:[L.d.a/span,L.d.b/span]});}
+ if(!cand.length)return out;
+ const n=Math.min(cand.length,8);
+ let best=null,bs=Infinity,bm=Infinity;
+ for(let m=0;m<(1<<n);m++){
+  let lo=Infinity,hi=-Infinity,sum=0;
+  for(let i=0;i<n;i++){const v=Math.log(cand[i].e[(m>>i)&1]);if(v<lo)lo=v;if(v>hi)hi=v;sum+=v;}
+  const spread=hi-lo,miss=Math.abs(sum/n-Math.log(cm));
+  if(spread<bs-1e-9||(Math.abs(spread-bs)<=1e-9&&miss<bm)){bs=spread;bm=miss;best=m;}}
+ for(let i=0;i<cand.length;i++){
+  const c=cand[i],k=i<n?((best>>i)&1):(Math.abs(c.e[0]-cm)<=Math.abs(c.e[1]-cm)?0:1);
+  const mine=k?c.L.d.b:c.L.d.a,other=k?c.L.d.a:c.L.d.b;
+  out.set(c.L,{axis:c.axis,span:c.span,mine,other,box:c.rb});}
+ return out;}
+window.wfLeaderDot=wfLeaderDot;
+window.wfRegionBox=wfRegionBox;
+window.wfSharedAssign=wfSharedAssign;
+window.wfGiNear=wfGiNear;
+window.wfPickSpan=wfPickSpan;
+
 function wfRoomsFromPlan(trace,facts){
  if(!trace||!trace.ok||!trace.mask||!facts||!facts.dims||!facts.dims.length)return null;
  const mask=trace.mask,cm=trace.cmPerPx;
@@ -3705,20 +4111,10 @@ function wfRoomsFromPlan(trace,facts){
   if(!e)mext.set(g,[x,y,x,y]);
   else{if(x<e[0])e[0]=x;if(y<e[1])e[1]=y;if(x>e[2])e[2]=x;if(y>e[3])e[3]=y;}}
  const run=wfWallRuns(mask);
- /* which traced room each printed dimension is standing in. The label often sits
-    ON its own ink, so look around it before giving up. */
  const lab=[];
  for(const d of facts.dims){
-  const px=Math.round(d.x),py=Math.round(d.y);
+  let px=Math.round(d.x),py=Math.round(d.y);
   if(px<0||py<0||px>=W||py>=H)continue;
-  let gi=mask.gi[py*W+px];
-  if(gi<0){
-   search: for(let rad=5;rad<=45;rad+=5)
-    for(let a=0;a<16;a++){
-     const x=Math.round(px+rad*Math.cos(a*Math.PI/8)),y=Math.round(py+rad*Math.sin(a*Math.PI/8));
-     if(x<0||y<0||x>=W||y>=H)continue;
-     const g2=mask.gi[y*W+x];
-     if(g2>=0){gi=g2;break search;}}}
   /* A plan prints the room's name and then its size underneath it. Pairing them
      that way -- nearest name ABOVE, in roughly the same column -- is far surer
      than taking whichever name is closest, which on this sheet put "Kitchen" on
@@ -3741,23 +4137,28 @@ function wfRoomsFromPlan(trace,facts){
      in the corner of a building, is bounded by the building's own walls, while a
      callout is bounded on every side by page, its thin printed border having not
      survived the wall opening. */
-  let callout=false;
+  let callout=false,dot=null;
   if(run){const wb=wfWallBox(run,W,H,px,py,mask.ext);if(wb.walls<2)callout=true;}
-  lab.push({d,px,py,gi:callout?-1:(gi>=0?gi:-1),nm,callout});}
+  /* ...and a callout with a leader line is the plan pointing at the room. Read
+     the label from where the dot is. */
+  if(callout){dot=wfLeaderDot(mask,px,py);
+   if(dot){px=dot.x;py=dot.y;callout=false;}}
+  /* stand on the room itself, not on the ink of the label or the dot: the local
+     extent is scanned out from here, and a scan that starts on ink goes nowhere */
+  const g=wfGiNear(mask,px,py);
+  if(g.gi>=0){px=g.x;py=g.y;}
+  lab.push({d,px,py,gi:callout?-1:g.gi,nm,callout,dot});}
  if(!lab.length)return null;
- /* A callout is still the plan telling us a room's size -- it just says it from
-    the margin, with a line pointing at the room. Follow the pointing: the box is
-    drawn BESIDE the room it names, so the nearest traced room that is not already
-    spoken for, and whose own measured extent agrees with the printed pair, is the
-    room it belongs to. Both tests are needed. Distance alone would hand a EweMove
-    sheet's "Utility 1.05 x 1.92 m" -- a room that is not on this floor at all --
-    to whichever room happens to sit nearest the box; the size check throws it out,
-    because the nearest traced room there is 3.16 x 3.71 m. A callout that matches
+ /* A callout with no leader to follow is still the plan telling us a room's size.
+    The box is drawn BESIDE the room it names, so the nearest traced room that is
+    not already spoken for, and whose own measured extent agrees with the printed
+    pair, is the room it belongs to. Both tests are needed. Distance alone would
+    hand a EweMove sheet's "Utility 1.05 x 1.92 m" to whichever room happens to
+    sit nearest the box; the size check throws that out. A callout that matches
     nothing is not a room on this plan, and is dropped. */
  {const claimed=new Set(lab.filter(L=>!L.callout&&L.gi>=0).map(L=>L.gi));
   for(const L of lab){
    if(!L.callout)continue;
-   const pmax=Math.max(L.d.a,L.d.b),pa=L.d.a*L.d.b;
    let best=-1,bd=Infinity;
    ext.forEach((e,gi)=>{
     if(claimed.has(gi))return;
@@ -3770,6 +4171,7 @@ function wfRoomsFromPlan(trace,facts){
  if(!lab.length)return null;
  const byGi=new Map();
  lab.forEach(L=>{if(!byGi.has(L.gi))byGi.set(L.gi,[]);byGi.get(L.gi).push(L);});
+ const shared=new Map();
  const out=[];
  byGi.forEach((list,gi)=>{
   const e=gi>=0?ext.get(gi):null;
@@ -3777,10 +4179,34 @@ function wfRoomsFromPlan(trace,facts){
    /* The size is the plan's, never ours. All that is left to decide is where it
       sits, and the best evidence differs room by room: where the tracer found a
       clean room, its own extent is the truth; where it merged two rooms into one,
-      each printed room takes the end of that region its label sits in; where it
-      lost the room altogether, fall back to scanning out to the walls. */
-   let box=null,mode='';
-   if(e){box={x0:e[0],y0:e[1],x1:e[2],y1:e[3]};mode=list.length>1?'share':'traced';}
+      each printed room takes its own part of that region, measured out from its
+      label to the walls round it; where it lost the room altogether, fall back to
+      scanning out to the walls. */
+   let box=null,mode='',sa=null;
+   if(e&&list.length>1){
+    if(!shared.has(gi))shared.set(gi,wfSharedAssign(mask,gi,list,cm));
+    sa=shared.get(gi).get(L)||null;
+    const rb=sa?sa.box:null;
+    if(rb&&(rb.x1-rb.x0)*cm>30&&(rb.y1-rb.y0)*cm>30){box=rb;mode='share';}
+    else{box={x0:e[0],y0:e[1],x1:e[2],y1:e[3]};mode='share0';sa=null;}}
+   else if(e){
+    /* one label, one region -- but the region may still be more than the room
+       (a living room the flood joined to its hall put the room 47 cm too low,
+       centred in the pair). The same test that picks the scale's measurement
+       picks the seat: where the clear span is the room, seat in the span. */
+    const rb=wfRegionBox(mask,gi,L.px,L.py);
+    const pk=wfPickSpan(L.d,e,rb,cm);
+    /* ...and only where the span IS the room, on both axes: a span cut short by
+       a basin drawn against the wall, or running on over the stairs beside a
+       landing, seats the room off its wall; centred in the extent it is where
+       the plan draws it. */
+    let fits=false;
+    if(pk&&pk.src==='box'){const bw=(rb.x1-rb.x0)*cm,bh=(rb.y1-rb.y0)*cm;
+     const A=L.d.a,B=L.d.b;
+     const near=(u,v)=>Math.abs(u-v)<=0.15*Math.max(u,v);
+     fits=(near(bw,A)&&near(bh,B))||(near(bw,B)&&near(bh,A));}
+    if(fits){box=rb;mode='span';}
+    else{box={x0:e[0],y0:e[1],x1:e[2],y1:e[3]};mode='traced';}}
    else if(run){
     const b2=wfWallBox(run,W,H,L.px,L.py,mask.ext);
     /* fewer than two sides walled means this label is not standing in a room at
@@ -3798,18 +4224,19 @@ function wfRoomsFromPlan(trace,facts){
    const A=L.d.a,B=L.d.b;
    const e1=Math.abs(spanW-A)+Math.abs(spanH-B),e2=Math.abs(spanW-B)+Math.abs(spanH-A);
    let w=e1<=e2?A:B,h=e1<=e2?B:A;
+   if(mode==='share'&&sa){if(sa.axis==='x'){w=sa.mine;h=sa.other;}else{h=sa.mine;w=sa.other;}}
    /* ...and where the region itself clearly runs one way, that wins: see mext.
-      Not in 'share' mode, where the region is two rooms and its shape is neither's. */
-   if(mode!=='share'){const me=mext.get(gi);
+      Only for a region that is one room -- shared, its shape is nobody's. */
+   if(mode==='traced'){const me=mext.get(gi);
     if(me){const mw=(me[2]-me[0])*cm,mh=(me[3]-me[1])*cm;
      if(Math.max(mw,mh)>=1.15*Math.max(1,Math.min(mw,mh))&&(mh>mw)!==(h>w)){
       const t=w;w=h;h=t;}}}
    let x,y;
-   if(mode==='share'){
+   if(mode==='share0'){
     const cx=(box.x0+box.x1)/2,cy=(box.y0+box.y1)/2;
     x=(L.px<cx)?box.x0*cm:(box.x1*cm-w);
     y=(L.py<cy)?box.y0*cm:(box.y1*cm-h);
-   }else if(mode==='walls'){
+   }else if(mode==='walls'||mode==='share'||mode==='span'){
     /* The scan runs until it meets a wall, and past a doorway it keeps going --
        so the box is often bigger than the room. Centring the room in it is then
        wrong in both directions at once: it left a bedroom floating 46 cm clear of
@@ -3819,6 +4246,10 @@ function wfRoomsFromPlan(trace,facts){
     const seat=(lo,hi,want,at)=>{
      const span=(hi-lo)*cm;
      if(Math.abs(span-want)<=0.25*want)return lo*cm;
+     /* a span SMALLER than the stated size is a room the agent did not draw to
+        scale (a EweMove utility printed 1.05 x 1.92 m over a 0.6 x 0.8 m corner):
+        it overflows whichever way it is seated, so it overflows evenly */
+     if(span<want)return (lo+hi)*cm/2-want/2;
      return ((at-lo)<=(hi-at))?lo*cm:(hi*cm-want);};
     x=seat(box.x0,box.x1,w,L.px);
     y=seat(box.y0,box.y1,h,L.py);
@@ -3836,7 +4267,8 @@ function wfRoomsFromPlan(trace,facts){
     x:Math.round(x*10)/10,y:Math.round(y*10)/10,
     w:Math.round(w*10)/10,d:Math.round(h*10)/10,
     pw:Math.round(A*10)/10,pd:Math.round(B*10)/10,
-    lx:L.d.x,ly:L.d.y});}});
+    lx:L.d.x,ly:L.d.y,dot:L.dot?[L.dot.x,L.dot.y]:null,
+    box:[box.x0,box.y0,box.x1,box.y1].map(Math.round),ext:e?e.map(Math.round):null});}});
  if(out.length<2)return null;
  /* anything still unnamed takes a label that actually falls inside it -- never
     merely the nearest one, which is how a name jumps to the wrong room */
@@ -3931,6 +4363,8 @@ function wfApplyPlanRooms(trace,facts){
   const r={id:'pr'+(++i),name:b.name||'Room '+i,color:b.color||'plain',
    gi:9000+i,blk:b.blk||0,x:b.x,y:b.y,w:b.w,d:b.d,fromPlan:true};
   if(b.pw>0&&b.pd>0)r.pdim=[b.pw,b.pd];   // as PRINTED, for the label
+  r.pmode=b.mode;if(b.dot)r.pdot=b.dot;     // how it was seated, for the test rig
+  r.pbox=b.box;r.pext=b.ext;
   rooms.push(r);}
  for(const r of kept)rooms.push(r);
  /* A fitting belongs to whichever room it stands in now, and one that stands in
@@ -3942,9 +4376,12 @@ function wfApplyPlanRooms(trace,facts){
  const keep=[];
  for(const f of (trace.fittings||[])){
   const cx=f.x+f.w/2,cy=f.y+f.d/2;
+  /* the SMALLEST room it stands in: a studio's "Kitchen/Bedroom 6.20 x 4.90"
+     is the whole flat's max extent and covers the shower room too, and taking
+     the first match named the shower tray a kitchen unit */
   let hit=null;
   for(const r of rooms){
-   if(cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.d){hit=r;break;}}
+   if(cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.d&&(!hit||r.w*r.d<hit.w*hit.d))hit=r;}
   if(hit){f.gi=hit.gi;keep.push(f);}}
  trace.fittings=keep;
  trace.rooms=rooms;
@@ -3977,6 +4414,7 @@ async function wfTraceFloorUrl(meta,url,ix,blk){
  return {plan:mine?mine.plan:plan,parts,
   traced:!!(trace&&trace.ok),traceStats:trace&&trace.ok?trace.stats:null,
   traceMask:trace&&trace.ok?trace.mask:null,
+  ocrLines:(imgPack&&imgPack.ocrLines)||null,
   traceRender:!!(trace&&trace.ok&&trace.render),
   scaleSource:trace&&trace.ok?trace.scaleSource:'unknown',
   traceFail:trace&&!trace.ok?trace.reason:null};}
@@ -4042,6 +4480,7 @@ async function resolveListingLive(url,onStage,sharedMeta){
  return {listing:meta,plan,parts,openIx,sheetPlan:parts?sheetPlan:null,planId,portal,id:p.id,url,
   traced:!!(trace&&trace.ok),traceStats:trace&&trace.ok?trace.stats:null,
   traceMask:trace&&trace.ok?trace.mask:null,
+  ocrLines:(imgPack&&imgPack.ocrLines)||null,
   traceRender:!!(trace&&trace.ok&&trace.render),
   scaleSource:trace&&trace.ok?trace.scaleSource:'unknown',
   traceFail:trace&&!trace.ok?trace.reason:null};}
@@ -4063,6 +4502,7 @@ function detectPortal(url){url=(url||'').trim();if(!url)return null;let m;
 function traceSVG(still){const u=SAMPLE.underlay;const k=1;let o='';const vb='-40 -90 750 990';
  o+='<svg class="trace'+(still?' still':'')+'" viewBox="'+vb+'" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><defs><pattern id="lp-hatch" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="14" stroke="var(--muted)" stroke-width="2" opacity=".6"/></pattern><clipPath id="lp-clip"><rect x="-34" y="-84" width="714" height="960"/></clipPath></defs>';
  if(u&&u.src)o+='<image clip-path="url(#lp-clip)" href="'+u.src+'" x="'+u.x+'" y="'+u.y+'" width="'+(u.iw*u.cmPerPx)+'" height="'+(u.ih*u.cmPerPx)+'" preserveAspectRatio="none"/>';
+ if(!still)SAMPLE.rooms.forEach(r=>{o+='<rect class="pre" x="'+r.x+'" y="'+r.y+'" width="'+r.w+'" height="'+r.d+'"/>';});
  let d=0.9;SAMPLE.rooms.forEach((r,i)=>{o+='<rect class="tr" pathLength="1" x="'+r.x+'" y="'+r.y+'" width="'+r.w+'" height="'+r.d+'" style="--d:'+(d+i*0.22).toFixed(2)+'s"/>';});
  d+=SAMPLE.rooms.length*0.22;SAMPLE.openings.forEach((op,i)=>{const t=SAMPLE.wall;const tr='translate('+op.x+' '+op.y+') rotate('+op.rot+')';const dd=(d+i*0.12).toFixed(2)+'s';
   if(op.kind==='door'){const sg=op.flip?-1:1;o+='<g transform="'+tr+'"><path class="tr" pathLength="1" style="--d:'+dd+'" d="M 0 0 L 0 '+(sg*op.w)+' A '+op.w+' '+op.w+' 0 0 '+(sg>0?0:1)+' '+op.w+' 0"/></g>';}
@@ -4229,10 +4669,10 @@ async function switchFloor(r,ix){
   pipeShow(['Downloading plan '+(ix+1),'Tracing walls, rooms and doors','Ready']);pipeSet(0);
   const t=await wfTraceFloorUrl(r.listing,r.listing.floorplans[ix],ix);
   pipeSet(1);
-  r.plan=t.plan;r.traced=t.traced;r.traceStats=t.traceStats;r.traceMask=t.traceMask;
+  r.plan=t.plan;r.traced=t.traced;r.traceStats=t.traceStats;r.traceMask=t.traceMask;r.ocrLines=t.ocrLines||null;
   r.scaleSource=t.scaleSource;r.traceFail=t.traceFail;r.traceRender=t.traceRender;r.floorIx=ix;
   r.planId=r.basePlanId+(ix?'-f'+(ix+1):'');
-  wfPlanCache[r.basePlanId+':'+ix]={plan:t.plan,traced:t.traced,traceStats:t.traceStats,traceMask:t.traceMask,traceRender:t.traceRender,named:true};
+  wfPlanCache[r.basePlanId+':'+ix]={plan:t.plan,traced:t.traced,traceStats:t.traceStats,traceMask:t.traceMask,ocrLines:t.ocrLines||null,traceRender:t.traceRender,named:true};
   pipeSet(3);setTimeout(()=>{$('#lp-pipe').hidden=true;},400);
   canvas.innerHTML=livePlanSVG(r);
   result.innerHTML=liveResultCard(r);result.classList.add('show');
@@ -4260,8 +4700,8 @@ async function runLive(url,shared){
   if(r.floorIx)r.planId=r.basePlanId+'-f'+(r.floorIx+1);
   const srcs=wfFloorSources(r);
   wfExtrasSave(r.basePlanId,{floors:srcs.length>1?srcs:(r.listing.floorplans||[]).slice(0,8),photos:(r.listing.photos||[]).slice(0,14),title:r.listing.title||'',areaSqm:r.listing.areaSqm||0,price:r.listing.price||'',beds:r.listing.beds!=null?r.listing.beds:null});
-  if(r.parts&&r.parts.length>1)r.parts.forEach((p,i)=>{wfPlanCache[r.basePlanId+':'+i]={plan:p.plan,traced:r.traced,traceStats:r.traceStats,traceMask:r.traceMask,traceRender:r.traceRender,named:true};});
-  else wfPlanCache[r.basePlanId+':0']={plan:r.plan,traced:r.traced,traceStats:r.traceStats,traceMask:r.traceMask,traceRender:r.traceRender,named:true};
+  if(r.parts&&r.parts.length>1)r.parts.forEach((p,i)=>{wfPlanCache[r.basePlanId+':'+i]={plan:p.plan,traced:r.traced,traceStats:r.traceStats,traceMask:r.traceMask,ocrLines:r.ocrLines||null,traceRender:r.traceRender,named:true};});
+  else wfPlanCache[r.basePlanId+':0']={plan:r.plan,traced:r.traced,traceStats:r.traceStats,traceMask:r.traceMask,ocrLines:r.ocrLines||null,traceRender:r.traceRender,named:true};
   canvas.innerHTML=livePlanSVG(r);
   setTimeout(()=>{pipe.hidden=true;},600);
   $('#lp-devtitle').textContent='Floor plan · '+(r.listing.title||'your listing');
@@ -4313,10 +4753,10 @@ async function openTracedUpload(f){
  const openIx=parts?wfMainFloorIx(parts):0;
  const plan=parts?parts[openIx].plan:sheet;
  if(parts){
-  parts.forEach((p,i)=>{wfPlanCache[upId+':'+i]={plan:p.plan,traced:true,traceStats:trace.stats,traceMask:trace.mask,traceRender:!!trace.render,named:true};});
+  parts.forEach((p,i)=>{wfPlanCache[upId+':'+i]={plan:p.plan,traced:true,traceStats:trace.stats,traceMask:trace.mask,ocrLines:pack.ocrLines||null,traceRender:!!trace.render,named:true};});
   wfExtrasSave(upId,{floors:parts.map(p=>({b:p.blk})),photos:[],title:'Uploaded floor plan',areaSqm:0,price:'',beds:null});}
  await openPlan(upId+(openIx?'-f'+(openIx+1):''),plan,{fresh:true});
- if(trace&&trace.ok)wfNameRooms({plan,parts,planId:upId+(openIx?'-f'+(openIx+1):''),traced:true,traceMask:trace.mask});
+ if(trace&&trace.ok)wfNameRooms({plan,parts,planId:upId+(openIx?'-f'+(openIx+1):''),traced:true,traceMask:trace.mask,ocrLines:pack.ocrLines||null});
  if(trace&&trace.ok){toast('Traced '+trace.stats.roomGroups+' rooms and '+trace.stats.doors+' doors'+(parts?' across '+parts.length+' floors':'')+' — check the scale: Edit plan → Calibrate scale');}
  else{mode='plan';libTab='Plan';renderPanels();render();toast('Couldn’t trace this image automatically — set the scale and trace the rooms in Edit plan');}}
 function illSVG(n){const W=320,H=160;let o='<svg viewBox="0 0 320 160" xmlns="http://www.w3.org/2000/svg" style="font-family:var(--mono);font-size:10px">';
@@ -4558,9 +4998,9 @@ async function wfOpenFloor(base,ex,ix){
   try{t=await wfTraceFloorUrl({title:ex.title,areaSqm:ex.areaSqm},url,ix,blk);wfPlanCache[key]=t;}
   catch(e){toast('Couldn’t load floor plan '+(ix+1)+' — try again in a moment');return;}
   if(t.parts)t.parts.forEach((p,i)=>{const k2=base+':'+i;
-   if(!wfPlanCache[k2])wfPlanCache[k2]={plan:p.plan,traced:t.traced,traceStats:t.traceStats,traceMask:t.traceMask,traceRender:t.traceRender,named:false};});}
+   if(!wfPlanCache[k2])wfPlanCache[k2]={plan:p.plan,traced:t.traced,traceStats:t.traceStats,traceMask:t.traceMask,ocrLines:t.ocrLines||null,traceRender:t.traceRender,named:false};});}
  await openPlan(base+(ix?'-f'+(ix+1):''),t.plan,{fresh:false});
- if(t.traced&&!t.named){t.named=true;wfNameRooms({plan:t.plan,planId:base+(ix?'-f'+(ix+1):''),traced:true,traceMask:t.traceMask});}
+ if(t.traced&&!t.named){t.named=true;wfNameRooms({plan:t.plan,planId:base+(ix?'-f'+(ix+1):''),traced:true,traceMask:t.traceMask,ocrLines:t.ocrLines||null});}
  toast('Floor '+(ix+1)+(t.traced?'':' — trace it over the image in Edit plan'));}
 /* --- listing photos tab in the side panel --- */
 function wfRenderPhotosTab(base,ex){
@@ -4701,7 +5141,7 @@ async function wfOcrRoomNames(r){
  try{await wfLoadTess();}catch(e){return null;}
  /* plan text at planner resolution is too small for the OCR engine — upscale ~2x */
  let ocrSrc=r.plan.underlay.src,f=1;
- try{
+ if(!(Array.isArray(r.ocrLines)&&r.ocrLines.length))try{
   const img=new Image();await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=ocrSrc;});
   f=Math.min(2,2600/Math.max(img.width,img.height));
   if(f>1.05){const c2=document.createElement('canvas');c2.width=Math.round(img.width*f);c2.height=Math.round(img.height*f);
@@ -4710,7 +5150,11 @@ async function wfOcrRoomNames(r){
   else f=1;
  }catch(e){ocrSrc=r.plan.underlay.src;f=1;}
  let worker=null,lines=[];
- try{
+ /* the plan-reading pass (wfOcrPlanFacts) already ran the engine over this very
+    image, twice, and kept every line in plan pixels -- reuse them rather than pay
+    for a third pass. Only a plan that never went through it is read here. */
+ if(Array.isArray(r.ocrLines)&&r.ocrLines.length){lines=r.ocrLines;f=1;}
+ else try{
   worker=await Tesseract.createWorker('eng');
   const out=await worker.recognize(ocrSrc,{},{blocks:true,text:false});
   const d=out&&out.data;
@@ -4776,11 +5220,17 @@ async function wfOcrRoomNames(r){
       example calls its own merged room "Kitchen / living" for exactly this reason.
       WF_ROOM_RE runs primary rooms first, so the earlier rule leads. */
    const prev=giName.get(gi);
+   /* "Bedroom 2" and "Bedroom" in one room are the SAME label, read twice: the
+      naming pass now sees the lines of two OCR passes, and one of them can drop
+      the digit. Same family -> keep the more specific, never pair them up. */
+   const fam=n=>String(n||'').replace(/\s+\d+$/,'');
+   const same=prev&&fam(prev.name)===fam(hit.name);
    if(!prev)giName.set(gi,hit);
+   else if(same){if(hit.name.length>prev.name.length){hit.also=prev.also;giName.set(gi,hit);}}
    else if(hit.rank<prev.rank){
     if(prev.name!==hit.name)hit.also=prev.name;else if(prev.also)hit.also=prev.also;
     giName.set(gi,hit);}
-   else if(prev.name!==hit.name&&!prev.also)prev.also=hit.name;}}
+   else if(prev.name!==hit.name&&!prev.also&&fam(prev.also)!==fam(hit.name))prev.also=hit.name;}}
  if(!giName.size&&!floorHits.length)return null;
  /* second Bedroom -> Bedroom 2, and so on */
  const used={};
@@ -4837,16 +5287,25 @@ function wfFittingName(room,w,d){
   if(hi<=75&&lo>=40&&hi/lo<1.5)return 'Hob';
   return 'Kitchen unit';}
  if(bath){
-  if(hi>=150&&lo>=55&&lo<=95)return 'Bath';
-  if(hi>=65&&hi<=125&&lo>=55&&hi/lo<1.95)return 'Shower';
+  /* shape, not length: a bath clipped to its room's edge came out 1.24 m and
+     read as a shower. A tub is long and narrow, a tray is near square. */
+  if(hi>=120&&lo>=55&&lo<=95&&hi/lo>=1.7)return 'Bath';
+  if(hi>=65&&hi<=125&&lo>=55&&hi/lo<1.7)return 'Shower';
   return 'Bathroom fitting';}
  return null;}
-function wfNameFittings(items,giName){
+function wfNameFittings(items,giName,rooms){
  let n=0;
  for(const it of items||[]){
   if(!it||!it.locked||it.name!=='Fitting'||it.gi==null)continue;
-  const hit=giName.get(it.gi);if(!hit)continue;
-  const nm=wfFittingName(String(hit.finalName||hit.name||''),it.w,it.d);
+  /* the room's name: from the OCR pass, keyed by the tracer's region -- or, for
+     a room that came off the plan's own printed sizes (which carries a fresh id
+     and its name already), from the room itself. Without the second, no fitting
+     on a plan-sized layout was ever named. */
+  const hit=giName.get(it.gi);
+  let room=hit?String(hit.finalName||hit.name||''):'';
+  if(!room&&Array.isArray(rooms)){const rm=rooms.filter(r=>r&&r.gi===it.gi)[0];if(rm)room=String(rm.name||'');}
+  if(!room)continue;
+  const nm=wfFittingName(room,it.w,it.d);
   if(nm){it.name=nm;n++;}}
  return n;}
 function wfPatchOpenPlan(r,giName){
@@ -4856,7 +5315,7 @@ function wfPatchOpenPlan(r,giName){
   if(rm.gi==null)continue;const hit=giName.get(rm.gi);if(!hit)continue;
   if(!/^(Room \d+|Living space|Store)$/.test(rm.name))continue; // never stomp a user's rename
   rm.name=hit.finalName||hit.name;if(hit.color)rm.color=hit.color;n++;}
- n+=wfNameFittings(state.items,giName);
+ n+=wfNameFittings(state.items,giName,state.rooms);
  if(n&&plannerReady&&$('#app')&&!$('#app').hidden){computeIssues();render();renderPanels();}}
 function wfNameRooms(r){
  if(!r||!r.traced||!r.traceMask)return;
@@ -4879,15 +5338,26 @@ function wfNameRooms(r){
     if(fn[ix]){state.title=state.title.replace(/ · floor \d+$/,' · '+fn[ix].label);
      if(plannerReady&&$('#title'))$('#title').value=state.title;}}
    if(plannerReady&&$('#app')&&!$('#app').hidden)wfPlannerExtras();}
-  if(!giName.size){if(fn&&wfLastLive===r){$('#lp-result').innerHTML=liveResultCard(r);wireResultButtons(r);}return;}
+  if(!giName.size){
+   /* every room came off the plan already named: nothing to apply, but the
+      fittings in them still want their names */
+   let nf=0;
+   if(r.parts&&r.parts.length)r.parts.forEach(p=>{nf+=wfNameFittings(p.plan.items,giName,p.plan.rooms);});
+   else nf=wfNameFittings(r.plan.items,giName,r.plan.rooms);
+   if(nf)wfPatchOpenPlan(r,giName);
+   if(fn&&wfLastLive===r){$('#lp-result').innerHTML=liveResultCard(r);wireResultButtons(r);}return;}
   /* labels are keyed by room-group id, which is global to the sheet — so one OCR
      pass names every storey the sheet was split into, not just the open one */
-  let applied=0;
+  let applied=0,nf=0;
   if(r.parts&&r.parts.length)r.parts.forEach(p=>{applied+=wfApplyRoomNames(p.plan.rooms,giName);
-   wfNameFittings(p.plan.items,giName);});
-  else {applied=wfApplyRoomNames(r.plan.rooms,giName);wfNameFittings(r.plan.items,giName);}
-  if(!applied)return;
+   nf+=wfNameFittings(p.plan.items,giName,p.plan.rooms);});
+  else {applied=wfApplyRoomNames(r.plan.rooms,giName);nf=wfNameFittings(r.plan.items,giName,r.plan.rooms);}
+  /* rooms that came off the plan were named before this pass ran, so on most
+     plans nothing here renames a room -- but the fittings in them still have to
+     reach the open board, which only wfPatchOpenPlan does */
+  if(!applied&&!nf)return;
   wfPatchOpenPlan(r,giName);
+  if(!applied)return;
   if(wfLastLive===r){
    const canvas=$('#lp-canvas');if(canvas)canvas.innerHTML=livePlanSVG(r);
    const ch=$('#lp-result .chips');
