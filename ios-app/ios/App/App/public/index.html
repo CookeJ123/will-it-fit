@@ -3924,9 +3924,15 @@ function wfWallBox(run,W,H,px,py,ext){
   for(let k=-BAND;k<=BAND;k+=3){
    const c=(horiz?py:px)+k;
    if(horiz?(c<0||c>=H):(c<0||c>=W))continue;
-   for(let v=horiz?px:py;dir<0?v>=0:(horiz?v<W:v<H);v+=dir){
+   let hit=false,v=horiz?px:py;
+   for(;dir<0?v>=0:(horiz?v<W:v<H);v+=dir){
     const x=horiz?v:c,y=horiz?c:v;
-    if(at(x,y)){o.push(v);n++;if(run[y*W+x])w++;break;}}}
+    if(at(x,y)){o.push(v);n++;if(run[y*W+x])w++;hit=true;break;}}
+   /* off the edge of the image is page too: a room drawn hard against the top
+      of the sheet has its wall split by a window into pieces too short to be
+      runs, and the closing seals the few pixels above it against the exterior
+      flood -- so the scan met nothing and the room could not be seated */
+   if(!hit){o.push(dir<0?0:(horiz?W-1:H-1));n++;}}
   if(n&&w>0.5*n)walls++;
   return med(o);};
  const x0=scan(-1,true),x1=scan(1,true),y0=scan(-1,false),y1=scan(1,false);
@@ -4081,6 +4087,7 @@ window.wfLeaderDot=wfLeaderDot;
 window.wfRegionBox=wfRegionBox;
 window.wfSharedAssign=wfSharedAssign;
 window.wfGiNear=wfGiNear;
+window.wfDimAgrees=wfDimAgrees;
 window.wfPickSpan=wfPickSpan;
 
 function wfRoomsFromPlan(trace,facts){
@@ -4194,16 +4201,27 @@ function wfRoomsFromPlan(trace,facts){
        (a living room the flood joined to its hall put the room 47 cm too low,
        centred in the pair). The same test that picks the scale's measurement
        picks the seat: where the clear span is the room, seat in the span. */
-    const rb=wfRegionBox(mask,gi,L.px,L.py);
+    let rb=wfRegionBox(mask,gi,L.px,L.py);
+    /* a span may run past the room's printed size (a lounge whose 4.57 m max
+       is drawn deeper), never past the rectangles the tracer found for it: the
+       scan from a bedroom's label ran 29 px out through its doorway and seated
+       the room 67 cm high. Clamp to the extent. */
+    if(rb&&rb.x0!=null&&rb.x1!=null&&rb.y0!=null&&rb.y1!=null)
+     rb={x0:Math.max(rb.x0,e[0]),y0:Math.max(rb.y0,e[1]),x1:Math.min(rb.x1,e[2]),y1:Math.min(rb.y1,e[3])};
     const pk=wfPickSpan(L.d,e,rb,cm);
     /* ...and only where the span IS the room, on both axes: a span cut short by
        a basin drawn against the wall, or running on over the stairs beside a
        landing, seats the room off its wall; centred in the extent it is where
        the plan draws it. */
+    /* The span may run a little PAST the room (the lounge's span reaches the
+       kitchen wall, 22% more than its printed 4.57 m depth, and the room then
+       sits against that wall, clear of the kitchen it was overlapping when
+       centred in its region); it must not fall much SHORT of it (that is a
+       basin or a bath in the way). So: each axis within -15% .. +25%. */
     let fits=false;
-    if(pk&&pk.src==='box'){const bw=(rb.x1-rb.x0)*cm,bh=(rb.y1-rb.y0)*cm;
+    if(rb&&rb.x0!=null&&rb.x1!=null&&rb.y0!=null&&rb.y1!=null){const bw=(rb.x1-rb.x0)*cm,bh=(rb.y1-rb.y0)*cm;
      const A=L.d.a,B=L.d.b;
-     const near=(u,v)=>Math.abs(u-v)<=0.15*Math.max(u,v);
+     const near=(span,want)=>span>=0.85*want&&span<=1.25*want;
      fits=(near(bw,A)&&near(bh,B))||(near(bw,B)&&near(bh,A));}
     if(fits){box=rb;mode='span';}
     else{box={x0:e[0],y0:e[1],x1:e[2],y1:e[3]};mode='traced';}}
@@ -4225,9 +4243,20 @@ function wfRoomsFromPlan(trace,facts){
    const e1=Math.abs(spanW-A)+Math.abs(spanH-B),e2=Math.abs(spanW-B)+Math.abs(spanH-A);
    let w=e1<=e2?A:B,h=e1<=e2?B:A;
    if(mode==='share'&&sa){if(sa.axis==='x'){w=sa.mine;h=sa.other;}else{h=sa.mine;w=sa.other;}}
-   /* ...and where the region itself clearly runs one way, that wins: see mext.
+   /* A printed number that matches a measured span to within a few per cent is
+      saying which axis it lies on, and that settles the orientation before any
+      shape rule gets a vote. A propertybox lounge printed 5.49 x 4.57 spans
+      5.52 m across the drawing: 5.49 is the width, whatever the region's shape
+      says. Its region ran taller than wide (it takes in the strip beside the
+      kitchen) and the shape rule below turned the room on its side. */
+   let pinned=false;
+   if(mode!=='share'){
+    const c=[[Math.abs(spanW-A)/A,A,B],[Math.abs(spanW-B)/B,B,A],[Math.abs(spanH-A)/A,B,A],[Math.abs(spanH-B)/B,A,B]];
+    c.sort((p,q)=>p[0]-q[0]);
+    if(c[0][0]<=0.05&&c[1][0]>0.05){w=c[0][1];h=c[0][2];pinned=true;}}
+   /* ...else, where the region itself clearly runs one way, that wins: see mext.
       Only for a region that is one room -- shared, its shape is nobody's. */
-   if(mode==='traced'){const me=mext.get(gi);
+   if(mode==='traced'&&!pinned){const me=mext.get(gi);
     if(me){const mw=(me[2]-me[0])*cm,mh=(me[3]-me[1])*cm;
      if(Math.max(mw,mh)>=1.15*Math.max(1,Math.min(mw,mh))&&(mh>mw)!==(h>w)){
       const t=w;w=h;h=t;}}}
@@ -5058,9 +5087,11 @@ const WF_ROOM_RE=[
  [/\butility\b|\blaundry\b/i,'Utility','tile'],
  [/\bstore\b|\bstorage\b|\bcupboard\b|\bairing\b|\bpantry\b|\blarder\b/i,'Store','dark'],
  [/\bgarage\b/i,'Garage','dark'],
+ [/\bworkshop\b|\bshed\b|\boutbuilding\b|\bsummer\s*house\b/i,'Workshop','dark'],
  [/\bconservatory\b|\bgarden room\b|\bsun\s*room\b|\borangery\b/i,'Conservatory','oak'],
  [/\bsnug\b/i,'Snug','oak'],
  [/\bdressing\b/i,'Dressing room','plain'],
+ [/\bloft\s*(?:room|space)?\b|\battic\b/i,'Loft room','plain'],
  [/\beaves\b|\brestricted\b|\blimited use\b/i,'Eaves','dark'],
  [/\bbalcony\b|\bterrace\b/i,'Balcony','plain'],
 ];
@@ -5077,7 +5108,7 @@ const WF_FLOOR_RE=[
  [/\bthird\s+floor\b/i,'Third Floor','3'],
  [/\bfourth\s+floor\b/i,'Fourth Floor','4'],
  [/\bbasement\b/i,'Basement','B'],
- [/\b(?:loft|attic)\b/i,'Loft','L'],
+ [/\b(?:loft|attic)\b(?!\s*(?:room|bed|space))/i,'Loft','L'],   /* 'Loft Room' is a room, not a storey */
 ];
 /* Reading order across the sheet is not storey order — a sheet can print the coach
    house first, or the lower ground last. Once the captions are known the tabs can be
