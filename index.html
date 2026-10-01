@@ -2710,6 +2710,40 @@ function autotraceFloorplan(img, opts){
  for(const r of out){const e=giBox.get(r.gi);
   if(!e)giBox.set(r.gi,{x0:r.x,y0:r.y,x1:r.x+r.w,y1:r.y+r.d,a:r.w*r.d});
   else{e.x0=Math.min(e.x0,r.x);e.y0=Math.min(e.y0,r.y);e.x1=Math.max(e.x1,r.x+r.w);e.y1=Math.max(e.y1,r.y+r.d);e.a+=r.w*r.d;}}
+ /* A storey is drawn with WALLS, and a wall is a long straight run of INK --
+    a continuous dark line of LR px or more, in either direction. A paragraph
+    of print has none: letters have gaps, so no line of type is dark for 64 px
+    without a break. The footer of a propertybox sheet ("Total floor area
+    119.5 m2 (1,286 sq.ft.) approx" over three lines of disclaimer) seeded
+    rooms of its own and came out as a fourth floor of a three-storey house.
+    Measured on the raw ink, not the wall mask: the wall opening turns bold
+    type into a 196 px blob (a false wall) and breaks the thin walls of a
+    Bath townhouse sheet into fragments (a false paragraph -- two storeys of
+    it lost). Any block without such a run is print: every group in it is
+    dropped, whatever its area. */
+ const isStorey=new Map();
+ if(blockOf&&nBlocks>1&&!renderMode){
+  const LR=Math.max(24,Math.round(0.05*Math.max(W,H)));
+  const runH=new Map(),runV=new Map();
+  const mark=(p0,p1,step,into)=>{for(let p=p0;p<p1;p+=step){const b=blockOf[p];if(b>=0)into.set(b,true);}};
+  for(let y=0;y<H;y++){let st=-1;
+   for(let x=0;x<=W;x++){const on=x<W&&dark[idx(x,y)];
+    if(on){if(st<0)st=x;}
+    else{if(st>=0&&x-st>=LR)mark(idx(st,y),idx(x,y),1,runH);st=-1;}}}
+  for(let x=0;x<W;x++){let st=-1;
+   for(let y=0;y<=H;y++){const on=y<H&&dark[idx(x,y)];
+    if(on){if(st<0)st=y;}
+    else{if(st>=0&&y-st>=LR)mark(idx(x,st),idx(x,y),W,runV);st=-1;}}}
+  runH.forEach((v,b)=>isStorey.set(b,true));
+  runV.forEach((v,b)=>isStorey.set(b,true));
+  const printBlk=new Set();
+  giBlk.forEach((b,g)=>{if(!isStorey.get(b))printBlk.add(g);});
+  if(opts.debug){const seenB=new Set();giBlk.forEach((b,g)=>{if(seenB.has(b))return;seenB.add(b);console.log('  block',b,'storey',!!isStorey.get(b),'runH',!!runH.get(b),'runV',!!runV.get(b),'LR',LR);});}
+  if(printBlk.size&&printBlk.size<giBlk.size){
+   if(opts.debug)console.log('  blocks with no ink run: dropping groups',[...printBlk].join(','));
+   out=out.filter(r=>!printBlk.has(r.gi));
+   printBlk.forEach(g=>{giBlk.delete(g);giBox.delete(g);});
+   for(let i=rooms2.length-1;i>=0;i--)if(printBlk.has(rooms2[i].gi))rooms2.splice(i,1);}}
  let blkOrder=null;
  if(giBlk.size>1){
   /* a block is a storey only if it holds a real amount of room: the leftovers are
@@ -3048,7 +3082,7 @@ function autotraceFloorplan(img, opts){
      itself: a caller building rooms from the plan's own printed dimensions needs
      to know where the walls are, so it can seat a room of a known size against
      them rather than guess its position. */
-  mask:{gi:gmask,W,H,wall:wallMask,ext:extMask,dark:renderMode?null:dark,part:partLines,wallHalf},
+  mask:{gi:gmask,W,H,wall:wallMask,ext:extMask,dark:renderMode?null:dark,part:partLines,wallHalf,blk:blockOf},
   floors:blkOrder?blkOrder.size:1, // storeys printed on this one sheet
   stats:{roomGroups:new Set(roomsFinal.map(r=>r.name)).size,rects:roomsFinal.length,
    doors:doors.filter(o=>o.kind==='door').length,windows:doors.filter(o=>o.kind==='window').length,
@@ -4032,7 +4066,15 @@ function wfDimAgrees(d,tmax,ta){
  const sure=!(d.conf!=null&&d.conf<38);
  const lo=sure?0.6:0.85,hi=sure?1.6:1.15;
  const alo=sure?0.4:0.5,ahi=sure?2:1.25;
- return pmax>=lo*tmax&&pmax<=hi*tmax&&pa>=alo*ta&&pa<=ahi*ta;}
+ if(!(pmax>=lo*tmax&&pmax<=hi*tmax&&pa>=alo*ta&&pa<=ahi*ta))return false;
+ /* a reading with a digit put back by guesswork ("247m" for 2.47) can keep the
+    long side and the area within bounds while the SHAPE is wrong: a kitchen
+    printed 3.47 x 3.26 was read 2.47 x 3.30 and seated. The traced region's
+    aspect has to agree too. */
+ if(d.repaired){const tmin=ta/tmax,pmin=Math.min(d.a,d.b);
+  const pr=pmax/Math.max(1,pmin),tr=tmax/Math.max(1,tmin);
+  if(Math.abs(Math.log(pr/tr))>0.2)return false;}
+ return true;}
 
 /* Giraffe360 sheets box the small rooms' labels up in the margin and run a leader
    line from the box to a DOT inside the room. The dot is the plan pointing: "this
@@ -4207,10 +4249,16 @@ function wfRoomsFromPlan(trace,facts){
      than taking whichever name is closest, which on this sheet put "Kitchen" on
      the bathroom's numbers because the two rooms are printed side by side. */
   let nm=null,nb=1e9;
+  /* and on the same storey: three floors side by side put a first-floor
+     "Bathroom" 196 px to the right of a ground-floor size, close enough to
+     be taken as its name */
+  const blkAt=(x,y)=>{if(!mask.blk)return -2;x=Math.round(x);y=Math.round(y);if(x<0||y<0||x>=W||y>=H)return -2;return mask.blk[y*W+x];};
+  const dBlk=blkAt(d.x,d.y);
   for(const n of (facts.names||[])){
    if(n.used)continue;
    const dx=Math.abs(n.x-d.x),dy=d.y-n.y;
    if(dy<=0||dy>0.13*H||dx>0.16*W)continue;
+   if(dBlk>=0){const nBlk=blkAt(n.x,n.y);if(nBlk>=0&&nBlk!==dBlk)continue;}
    const cost=dx+0.5*dy;
    if(cost<nb){nb=cost;nm=n;}}
   if(nm)nm.used=true;
@@ -4682,14 +4730,15 @@ function livePlanSVG(r){const plan=r.sheetPlan||r.plan;const u=plan.underlay;
  return o+'</svg>';}
 function liveResultCard(r){
  const chips=[];
- if(r.listing.beds!=null)chips.push(r.listing.beds+' bed'+(r.listing.subType?' '+r.listing.subType.toLowerCase():''));
- else if(r.listing.subType)chips.push(r.listing.subType);
- if(r.listing.price)chips.push(r.listing.price);
+ /* Only what the plan itself supports. The agent's price and bedroom count
+    came off the listing page and were wrong on the owner's own test (£400,000
+    against a listed £410,000, 4 beds against 3), and the tracer's room, door
+    and window counts read as claims -- "13 rooms" on a 3-bed -- when they are
+    only what it found. None of them help decide whether the sofa fits. */
+ if(r.listing.subType)chips.push(r.listing.subType);
  if(r.listing.community)chips.push('shared by the community');
  if(r.listing.areaSqm)chips.push((Math.round(r.listing.areaSqm*10)/10)+' m²'+(r.listing.areaEstimated?' (est.)':''));
  else if(r.traceStats)chips.push('~'+r.traceStats.areaM2+' m² traced');
- if(r.traceStats)chips.push(r.traceStats.roomGroups+' room'+(r.traceStats.roomGroups===1?'':'s')+' · '+r.traceStats.doors+' door'+(r.traceStats.doors===1?'':'s')
-  +(r.traceStats.windows?' · '+r.traceStats.windows+' window'+(r.traceStats.windows===1?'':'s'):''));
  if(r.listing.floorplanCount>1)chips.push('plan '+((r.floorIx||0)+1)+' of '+r.listing.floorplanCount);
  const srcs=wfFloorSources(r);
  const sheet=!!(r.parts&&r.parts.length>1);
