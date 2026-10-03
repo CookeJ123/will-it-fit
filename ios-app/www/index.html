@@ -1915,15 +1915,64 @@ function autotraceFloorplan(img, opts){
    nf++;}}
  const rc=Math.max(6,Math.round(0.012*Math.max(W,H)));
  const barrier=erode(dilate(barrier0,rc),rc); // closing seals archways/drawing breaks
+ /* The page has a colour, and the outside stays on it. A room whose outer wall
+    is a run of bifold doors is drawn with two thin diagonals and no line
+    across the opening, so the flood walked in off the page and a 32 m2
+    kitchen/diner came out as "outside"; the utility room and WC went the same
+    way through their external doors. On a plan that tints its rooms (this
+    one: cream, tan, blue on white) the floor is simply not page-coloured, so
+    the flood is held at the tint. The tolerance is read off the border: a
+    clean white page gives a tight one, a scanned page with a vignette gives a
+    loose one and the test quietly stands down -- it must never seal the page
+    itself. Plans with white rooms on a white page are untouched. */
+ let pr=255,pg=255,pb=255,pT=18;
+ {const R=[],G=[],B=[];
+  const take=(x,y)=>{const j=idx(x,y)*4;if(barrier0[idx(x,y)])return;R.push(px[j]);G.push(px[j+1]);B.push(px[j+2]);};
+  for(let x=0;x<W;x+=3){take(x,0);take(x,H-1);take(x,Math.min(H-1,2));take(x,Math.max(0,H-3));}
+  for(let y=0;y<H;y+=3){take(0,y);take(W-1,y);take(Math.min(W-1,2),y);take(Math.max(0,W-3),y);}
+  const med=a=>{if(!a.length)return 255;a.sort((u,v)=>u-v);return a[a.length>>1];};
+  if(R.length>40){pr=med(R.slice());pg=med(G.slice());pb=med(B.slice());
+   let sd=0;for(let k=0;k<R.length;k++){const d=Math.max(Math.abs(R[k]-pr),Math.abs(G[k]-pg),Math.abs(B[k]-pb));sd+=d*d;}
+   sd=Math.sqrt(sd/R.length);pT=Math.max(18,Math.min(60,Math.round(3*sd)));}}
+ const onPage=i=>{const j=i*4;return Math.abs(px[j]-pr)<=pT&&Math.abs(px[j+1]-pg)<=pT&&Math.abs(px[j+2]-pb)<=pT;};
+ if(opts.debug)console.log('page colour',pr,pg,pb,'tolerance',pT);
  const exterior=new Uint8Array(N);
  qh=0;qt=0;
- for(let x=0;x<W;x++){for(const y of [0,H-1]){const i=idx(x,y);if(!barrier[i]&&!exterior[i]){exterior[i]=1;q[qt++]=i;}}}
- for(let y=0;y<H;y++){for(const x of [0,W-1]){const i=idx(x,y);if(!barrier[i]&&!exterior[i]){exterior[i]=1;q[qt++]=i;}}}
+ for(let x=0;x<W;x++){for(const y of [0,H-1]){const i=idx(x,y);if(!barrier[i]&&!exterior[i]&&onPage(i)){exterior[i]=1;q[qt++]=i;}}}
+ for(let y=0;y<H;y++){for(const x of [0,W-1]){const i=idx(x,y);if(!barrier[i]&&!exterior[i]&&onPage(i)){exterior[i]=1;q[qt++]=i;}}}
  while(qh<qt){const i=q[qh++];const x=i%W,y=(i/W)|0;
-  if(x>0&&!barrier[i-1]&&!exterior[i-1]){exterior[i-1]=1;q[qt++]=i-1;}
-  if(x<W-1&&!barrier[i+1]&&!exterior[i+1]){exterior[i+1]=1;q[qt++]=i+1;}
-  if(y>0&&!barrier[i-W]&&!exterior[i-W]){exterior[i-W]=1;q[qt++]=i-W;}
-  if(y<H-1&&!barrier[i+W]&&!exterior[i+W]){exterior[i+W]=1;q[qt++]=i+W;}}
+  if(x>0&&!barrier[i-1]&&!exterior[i-1]&&onPage(i-1)){exterior[i-1]=1;q[qt++]=i-1;}
+  if(x<W-1&&!barrier[i+1]&&!exterior[i+1]&&onPage(i+1)){exterior[i+1]=1;q[qt++]=i+1;}
+  if(y>0&&!barrier[i-W]&&!exterior[i-W]&&onPage(i-W)){exterior[i-W]=1;q[qt++]=i-W;}
+  if(y<H-1&&!barrier[i+W]&&!exterior[i+W]&&onPage(i+W)){exterior[i+W]=1;q[qt++]=i+W;}}
+ /* What the colour hold kept back is a POCKET: tinted, reachable from the page
+    were colour ignored. A kitchen with bifold doors is one (walled on three
+    sides, page on the fourth); so is an agent's tinted watermark box in the
+    middle of the sheet (page on every side), which then seeded rooms of its
+    own. Flood the pockets once more and measure what bounds each: a pocket
+    whose edge is mostly page rather than ink is not a room with an open
+    wall, it is a box on the page, and it goes back to the outside. */
+ if(pT<60){
+  const pk=new Int32Array(N);pk.fill(-1);let np=0;
+  const stats=[];
+  for(let s0=0;s0<N;s0++){
+   if(exterior[s0]||barrier[s0]||pk[s0]>=0||onPage(s0))continue;
+   /* a tinted pixel not reached by the page flood: is it in a pocket, i.e.
+      reachable from the page across tint alone? Flood it over non-barrier
+      pixels, counting what the flood touches. */
+   let n=0,edgeExt=0,edgeBar=0,touchesPage=false;
+   qh=0;qt=0;q[qt++]=s0;pk[s0]=np;
+   while(qh<qt){const i=q[qh++];n++;const x=i%W,y=(i/W)|0;
+    for(const nb of [x>0?i-1:-1,x<W-1?i+1:-1,y>0?i-W:-1,y<H-1?i+W:-1]){
+     if(nb<0)continue;
+     if(exterior[nb]){edgeExt++;touchesPage=true;continue;}
+     if(barrier[nb]){edgeBar++;continue;}
+     if(pk[nb]<0){pk[nb]=np;q[qt++]=nb;}}}
+   stats.push({n,edgeExt,edgeBar,touchesPage});np++;}
+  let restored=0;
+  for(let i=0;i<N;i++){const p=pk[i];if(p<0)continue;const st=stats[p];
+   if(st.touchesPage&&st.edgeExt>0.5*(st.edgeExt+st.edgeBar)){exterior[i]=1;restored++;}}
+  if(opts.debug)console.log('pockets',np,'restored px',restored);}
 
  /* ---- 4b. PRINT islands. A paragraph of small marks is type, not structure:
     the agent's disclaimer, the logo, a caption. The closing above (radius rc)
@@ -1981,13 +2030,15 @@ function autotraceFloorplan(img, opts){
   const barrierB=dilate(barrier0,rb);
   const extB=new Uint8Array(N);
   qh=0;qt=0;
-  for(let x=0;x<W;x++){for(const y of [0,H-1]){const i=idx(x,y);if(!barrierB[i]&&!extB[i]){extB[i]=1;q[qt++]=i;}}}
-  for(let y=0;y<H;y++){for(const x of [0,W-1]){const i=idx(x,y);if(!barrierB[i]&&!extB[i]){extB[i]=1;q[qt++]=i;}}}
+  /* the same page-colour hold as the exterior flood, so a tinted room with an
+     open outer wall stays inside its storey's block */
+  for(let x=0;x<W;x++){for(const y of [0,H-1]){const i=idx(x,y);if(!barrierB[i]&&!extB[i]&&onPage(i)){extB[i]=1;q[qt++]=i;}}}
+  for(let y=0;y<H;y++){for(const x of [0,W-1]){const i=idx(x,y);if(!barrierB[i]&&!extB[i]&&onPage(i)){extB[i]=1;q[qt++]=i;}}}
   while(qh<qt){const i=q[qh++];const x=i%W,y=(i/W)|0;
-   if(x>0&&!barrierB[i-1]&&!extB[i-1]){extB[i-1]=1;q[qt++]=i-1;}
-   if(x<W-1&&!barrierB[i+1]&&!extB[i+1]){extB[i+1]=1;q[qt++]=i+1;}
-   if(y>0&&!barrierB[i-W]&&!extB[i-W]){extB[i-W]=1;q[qt++]=i-W;}
-   if(y<H-1&&!barrierB[i+W]&&!extB[i+W]){extB[i+W]=1;q[qt++]=i+W;}}
+   if(x>0&&!barrierB[i-1]&&!extB[i-1]&&onPage(i-1)){extB[i-1]=1;q[qt++]=i-1;}
+   if(x<W-1&&!barrierB[i+1]&&!extB[i+1]&&onPage(i+1)){extB[i+1]=1;q[qt++]=i+1;}
+   if(y>0&&!barrierB[i-W]&&!extB[i-W]&&onPage(i-W)){extB[i-W]=1;q[qt++]=i-W;}
+   if(y<H-1&&!barrierB[i+W]&&!extB[i+W]&&onPage(i+W)){extB[i+W]=1;q[qt++]=i+W;}}
   blockOf=new Int32Array(N);blockOf.fill(-1);
   nBlocks=0;
   for(let s=0;s<N;s++){
@@ -2629,7 +2680,17 @@ function autotraceFloorplan(img, opts){
    if(alive.has(ga)&&alive.has(gb)){realDoor.add(ga);realDoor.add(gb);}}
   if(!opts.noLegendRule)for(const r of roomsOut){
    if(!A.connected.has(r.gi)||realDoor.has(r.gi)||drop.has(r.gi))continue;
-   if(walledSides(r.rects[0])<2){drop.add(r.gi);if(opts.debug)console.log('  unwalled group with no real door g',r.gi,'area m2',(r.area*cmPerPx*cmPerPx/10000).toFixed(1),'rect',JSON.stringify(r.rects[0]));}}}
+   if(walledSides(r.rects[0])<2){drop.add(r.gi);if(opts.debug)console.log('  unwalled group with no real door g',r.gi,'area m2',(r.area*cmPerPx*cmPerPx/10000).toFixed(1),'rect',JSON.stringify(r.rects[0]));}}
+  /* And a group walled on NO side is not a room, whatever its doors say. A
+     sheet's colour key -- a thin-outlined box of swatches and labels in the
+     margin (Newnham Lane) -- seeds a core per swatch, finds a "door" between
+     two of them, and so stands as a room with a real door; but a scan out of
+     its first rectangle meets page on all four sides. A real room, even one
+     bounded by partitions too thin to survive the opening, meets wall on at
+     least one. */
+  if(!opts.noLegendRule)for(const r of roomsOut){
+   if(drop.has(r.gi))continue;
+   if(walledSides(r.rects[0])===0){drop.add(r.gi);if(opts.debug)console.log('  group walled on no side g',r.gi,'area m2',(r.area*cmPerPx*cmPerPx/10000).toFixed(1),'rect',JSON.stringify(r.rects[0]));}}}
  /* TRIED AND REVERTED: sparing a doorless group that is room-sized, so that a
     real room whose only doorway measures under the 46 cm door bar is not deleted
     outright. It is the right instinct -- a Romans 1-bed loses its whole bedroom
@@ -2738,6 +2799,23 @@ function autotraceFloorplan(img, opts){
   runV.forEach((v,b)=>isStorey.set(b,true));
   const printBlk=new Set();
   giBlk.forEach((b,g)=>{if(!isStorey.get(b))printBlk.add(g);});
+  /* ...and per ROOM, because print is not always a block of its own: the
+     footer of a Savills-style sheet ("FLOOR AREA 2394 SQ FT ... INCLUDING
+     GARAGE") sits close enough under the ground floor to join its block, and
+     came out as a 10.99 x 2.28 m "Garage 2". A room's own box, widened by a
+     wall's thickness, holds its walls: a continuous ink run at least as long
+     as the shorter of LR and most of the box. A strip of type has none; the
+     tall letters of a watermark are clipped by the strip they cross. */
+  {const pad=Math.round(2*wallHalf+3);
+   giBox.forEach((gb,g)=>{
+    if(printBlk.has(g))return;
+    const x0=Math.max(0,Math.round(gb.x0/cmPerPx)-pad),y0=Math.max(0,Math.round(gb.y0/cmPerPx)-pad);
+    const x1=Math.min(W-1,Math.round(gb.x1/cmPerPx)+pad),y1=Math.min(H-1,Math.round(gb.y1/cmPerPx)+pad);
+    const need=Math.min(LR,Math.round(0.7*Math.max(x1-x0,y1-y0)));
+    let ok=false;
+    for(let y=y0;y<=y1&&!ok;y++){let run=0;for(let x=x0;x<=x1;x++){if(dark[idx(x,y)]){if(++run>=need){ok=true;break;}}else run=0;}}
+    for(let x=x0;x<=x1&&!ok;x++){let run=0;for(let y=y0;y<=y1;y++){if(dark[idx(x,y)]){if(++run>=need){ok=true;break;}}else run=0;}}
+    if(!ok){printBlk.add(g);if(opts.debug)console.log('  no ink run in its own box: g',g,(x1-x0)+'x'+(y1-y0),'need',need);}});}
   if(opts.debug){const seenB=new Set();giBlk.forEach((b,g)=>{if(seenB.has(b))return;seenB.add(b);console.log('  block',b,'storey',!!isStorey.get(b),'runH',!!runH.get(b),'runV',!!runV.get(b),'LR',LR);});}
   if(printBlk.size&&printBlk.size<giBlk.size){
    if(opts.debug)console.log('  blocks with no ink run: dropping groups',[...printBlk].join(','));
@@ -2796,7 +2874,13 @@ function autotraceFloorplan(img, opts){
    else{nm='Room '+(n2);col='plain';}
    if(nm!=='Living space'&&nm!=='Store')n2++;
    giMeta.set(e.g,{name:nm,color:col});});}
- const roomsFinal=out.map(r=>({id:'r'+(ri++),name:giMeta.get(r.gi).name,color:giMeta.get(r.gi).color,gi:r.gi,blk:blkOf(r.gi),
+ /* how many sides of its first rectangle meet wall, for the plan reader: its
+    own callout test scans out from the LABEL and calls fewer than two walled
+    sides a caption box, which misread a bedroom whose left and top are mostly
+    window (Newnham Lane: "Bedroom 2" then seated itself on the landing). The
+    tracer's whole-side sweep sees the wall between the windows. */
+ const giWalled=new Map();for(const r of rooms2)giWalled.set(r.gi,walledSides(r.rects[0]));
+ const roomsFinal=out.map(r=>({id:'r'+(ri++),name:giMeta.get(r.gi).name,color:giMeta.get(r.gi).color,gi:r.gi,blk:blkOf(r.gi),walled:giWalled.get(r.gi),
   x:Math.round(r.x*10)/10,y:Math.round(r.y*10)/10,w:Math.round(r.w*10)/10,d:Math.round(r.d*10)/10}));
 
  /* ---- 16. doors -> planner openings ---- */
@@ -3821,8 +3905,13 @@ function wfPlanReadings(passes,W,H){
   if(!dup){keep.push(d);continue;}
   if(score(d)>score(dup))Object.assign(dup,d);}
  const keepN=[];
+ /* two passes read the same label, and one can drop its digit: "Bedroom 5" and
+    "Bedroom" a pixel apart are one name, and the fuller one is it -- the room
+    was coming out as "Bedroom" because the shorter reading sat a pixel nearer */
+ const famN=s=>String(s||'').replace(/\s+\d+$/,'');
  for(const n of names){
-  if(keepN.some(k=>k.name===n.name&&Math.abs(k.x-n.x)<0.03*W&&Math.abs(k.y-n.y)<0.03*H))continue;
+  const k=keepN.find(k=>famN(k.name)===famN(n.name)&&Math.abs(k.x-n.x)<0.03*W&&Math.abs(k.y-n.y)<0.03*H);
+  if(k){if(String(n.name).length>String(k.name).length){k.name=n.name;k.color=n.color;k.rank=n.rank;}continue;}
   keepN.push(n);}
  /* is there more on this sheet than we managed to read? A bracketed value with
     no partner is a line Tesseract lost; more rooms named than measured, on a
@@ -3926,13 +4015,14 @@ function wfScaleFromPlanDims(trace,dims){
     shared region a reading is measured against its own part of it. */
  const pin=[];const perGi=new Map();
  const run=wfWallRuns(mask);
+ const walledOf=wfWalledOf(trace);
  for(const d of dims){
   if(d.conf!=null&&d.conf<38)continue;   // never let a doubtful reading set the scale
   const px=Math.round(d.x),py=Math.round(d.y);
   /* a label printed in a callout box beside the drawing is not standing in a
      room, and a room a few pixels away is not the room it measures: the seating
      pass follows its leader line, the scale pass simply leaves it out */
-  if(run&&px>=0&&py>=0&&px<mask.W&&py<mask.H&&wfWallBox(run,mask.W,mask.H,px,py,mask.ext).walls<2)continue;
+  if(run&&px>=0&&py>=0&&px<mask.W&&py<mask.H&&!wfInWalledRoom(mask,walledOf,px,py)&&wfWallBox(run,mask.W,mask.H,px,py,mask.ext).walls<2)continue;
   const g=wfGiNear(mask,px,py,15);
   if(g.gi<0)continue;
   pin.push({d,g});perGi.set(g.gi,(perGi.get(g.gi)||0)+1);}
@@ -4240,6 +4330,7 @@ function wfRoomsFromPlan(trace,facts){
   if(!e)mext.set(g,[x,y,x,y]);
   else{if(x<e[0])e[0]=x;if(y<e[1])e[1]=y;if(x>e[2])e[2]=x;if(y>e[3])e[3]=y;}}
  const run=wfWallRuns(mask);
+ const walledOf=wfWalledOf(trace);
  const lab=[];
  for(const d of facts.dims){
   let px=Math.round(d.x),py=Math.round(d.y);
@@ -4273,7 +4364,8 @@ function wfRoomsFromPlan(trace,facts){
      callout is bounded on every side by page, its thin printed border having not
      survived the wall opening. */
   let callout=false,dot=null;
-  if(run){const wb=wfWallBox(run,W,H,px,py,mask.ext);if(wb.walls<2)callout=true;}
+  if(run){const wb=wfWallBox(run,W,H,px,py,mask.ext);
+   if(wb.walls<2&&!wfInWalledRoom(mask,walledOf,px,py))callout=true;}
   /* ...and a callout with a leader line is the plan pointing at the room. Read
      the label from where the dot is. */
   if(callout){dot=wfLeaderDot(mask,px,py);
@@ -4442,6 +4534,69 @@ window.wfRoomsFromPlan=wfRoomsFromPlan;
 window.wfWallRuns=wfWallRuns;
 window.wfWallBox=wfWallBox;
 
+/* The tracer's own count of walled sides per group (see autotrace, walledSides:
+   nine rays across each whole side of the room's first rectangle). The callout
+   test here scans out from one point, the label, and a label beside a window
+   sees page where the room has wall: Newnham Lane's "Bedroom 2" is printed by
+   the bay, its scan met wall on one side only, and the room was taken for a
+   caption box and seated on the landing. A label standing in a group the tracer
+   found walled on two sides is in a room. The lookup is tight -- a caption box
+   really is beside a room, and reaching across to it would undo the test. */
+function wfWalledOf(trace){
+ const m=new Map();
+ for(const r of ((trace&&trace.rooms)||[])){if(r.gi!=null&&r.walled!=null&&!m.has(r.gi))m.set(r.gi,r.walled);}
+ return m;}
+function wfInWalledRoom(mask,walledOf,px,py){
+ if(!walledOf||!walledOf.size)return false;
+ const g=wfGiNear(mask,px,py,6);
+ return g.gi>=0&&walledOf.get(g.gi)>=2;}
+
+/* A sheet's COLOUR KEY is a room to the tracer: a column of swatches and room
+   names in the margin, sealed from the page by the closing, walled on one side
+   where it leans on the drawing, with a "door" where its corner meets a bay.
+   Newnham Lane's came out as a 2.31 x 4.22 m room floating above the sitting
+   room, and the product would have named it off its own labels. What a key is,
+   nothing else on a plan is: several DIFFERENT room names in one traced group,
+   no printed size among them, and the names it lists are the names printed on
+   the rooms elsewhere. An open-plan "Kitchen / Dining / Living" label is three
+   names in one group too, but it has a size under it on a plan that prints
+   sizes, and on one that does not its names are not repeated elsewhere. */
+function wfDropKeyBox(trace,facts){
+ if(!trace||!trace.ok||!trace.mask||!facts||!Array.isArray(facts.names)||facts.names.length<3)return;
+ const mask=trace.mask,W=mask.W,H=mask.H;
+ const fam=n=>String(n.name||'').replace(/\s+\d+$/,'').toLowerCase();
+ const byGi=new Map();
+ for(const n of facts.names){
+  const px=Math.round(n.x),py=Math.round(n.y);
+  if(px<0||py<0||px>=W||py>=H)continue;
+  const g=wfGiNear(mask,px,py,10).gi;
+  if(g<0)continue;
+  if(!byGi.has(g))byGi.set(g,[]);byGi.get(g).push(n);}
+ const sized=new Set();
+ for(const d of (facts.dims||[])){
+  const px=Math.round(d.x),py=Math.round(d.y);
+  if(px<0||py<0||px>=W||py>=H)continue;
+  const g=wfGiNear(mask,px,py,10).gi;if(g>=0)sized.add(g);}
+ const drop=new Set();
+ byGi.forEach((list,g)=>{
+  if(sized.has(g))return;
+  const fams=new Set(list.map(fam));
+  if(fams.size<3)return;
+  let elsewhere=0;
+  fams.forEach(f=>{if(facts.names.some(n=>list.indexOf(n)<0&&fam(n)===f))elsewhere++;});
+  if(elsewhere<2)return;
+  drop.add(g);
+  for(const n of list)n.used=true;});
+ if(!drop.size)return;
+ let lost=0;
+ trace.rooms=(trace.rooms||[]).filter(r=>{if(r.gi!=null&&drop.has(r.gi)){lost+=r.w*r.d/10000;return false;}return true;});
+ trace.fittings=(trace.fittings||[]).filter(f=>!(f.gi!=null&&drop.has(f.gi)));
+ const gi=mask.gi;for(let i=0;i<gi.length;i++)if(gi[i]>=0&&drop.has(gi[i]))gi[i]=-1;
+ if(trace.stats&&typeof trace.stats.areaM2==='number')trace.stats.areaM2=Math.max(0,Math.round((trace.stats.areaM2-lost)*10)/10);
+ trace.keyBoxes=drop.size;
+ if(window.wfTrace)window.wfTrace('the sheet’s colour key was left out');}
+window.wfDropKeyBox=wfDropKeyBox;
+
 /* trace, then re-trace against whatever the plan itself says */
 async function wfTraceFromPlan(imgPack,im,trace){
  const facts=await wfOcrPlanFacts(imgPack);
@@ -4468,6 +4623,7 @@ async function wfTraceFromPlan(imgPack,im,trace){
    cur=t2;
    if(moved<0.01)break;}
   if(best){best.planDims=n;best.scaleSource='plandims';
+   wfDropKeyBox(best,facts);
    wfApplyPlanRooms(best,facts);
    if(facts.areaSqm)best.ocrAreaSqm=facts.areaSqm;
    if(window.wfTrace)window.wfTrace('scale from the plan’s printed room sizes ('+n+' readings)');
@@ -4475,8 +4631,8 @@ async function wfTraceFromPlan(imgPack,im,trace){
  if(facts.areaSqm){
   let t3=null;
   try{t3=autotraceFloorplan(im,{areaCm2:facts.areaSqm*10000});}catch(e){t3=null;}
-  if(t3&&t3.ok){t3.ocrAreaSqm=facts.areaSqm;t3.scaleSource='plan';wfApplyPlanRooms(t3,facts);return t3;}}
- if(trace&&trace.ok)wfApplyPlanRooms(trace,facts);
+  if(t3&&t3.ok){t3.ocrAreaSqm=facts.areaSqm;t3.scaleSource='plan';wfDropKeyBox(t3,facts);wfApplyPlanRooms(t3,facts);return t3;}}
+ if(trace&&trace.ok){wfDropKeyBox(trace,facts);wfApplyPlanRooms(trace,facts);}
  return trace;}
 
 /* Swap the tracer's guess at each room for the size the plan states. The rooms
@@ -5218,6 +5374,8 @@ const WF_ROOM_RE=[
  [/\bstore\b|\bstorage\b|\bcupboard\b|\bairing\b|\bpantry\b|\blarder\b/i,'Store','dark'],
  [/\bgarage\b/i,'Garage','dark'],
  [/\bworkshop\b|\bshed\b|\boutbuilding\b|\bsummer\s*house\b/i,'Workshop','dark'],
+ [/\bstudio\b|\bannexe?\b|\bgym\b|\bgames\s*room\b/i,'Studio','plain'],
+ [/\bsauna\b|\bsteam\s*room\b/i,'Sauna','tile'],
  [/\bconservatory\b|\bgarden room\b|\bsun\s*room\b|\borangery\b/i,'Conservatory','oak'],
  [/\bsnug\b/i,'Snug','oak'],
  [/\bdressing\b/i,'Dressing room','plain'],
